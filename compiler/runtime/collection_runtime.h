@@ -6,11 +6,11 @@
 /*
  * Shared types and ABI for List<T> and Map<K,V>.
  *
- * Spec: docs/specs/0004-TypeSystem.md#collection-types
+ * Spec: docs/specs/language/0004-TypeSystem.md#collection-types
  * Implements [TYPE-LIST], [TYPE-MAP], [TYPE-MAP-LOOKUP], [TYPE-MAP-OPS].
  *
  * This ABI is what the builtin collection surface of
- * docs/specs/0012-Built-InFunctions.md lowers to: [BUILTIN-LIST] and
+ * docs/specs/runtime/0012-Built-InFunctions.md lowers to: [BUILTIN-LIST] and
  * [BUILTIN-MAP]. The `*_length` entry points back both [BUILTIN-COLLECTION-LENGTH] and
  * [BUILTIN-COLLECTION-ISEMPTY] (`isEmpty` is `length == 0`, folded at codegen).
  *

@@ -1,238 +1,126 @@
-const fs = require('fs');
-const path = require('path');
-const { execFileSync } = require('child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 
-const specSourceDir = path.resolve(__dirname, '../../docs/specs');
-const specDestDir = path.resolve(__dirname, '../src/spec');
+const repo = path.resolve(__dirname, '../..');
+const source = path.join(repo, 'docs/specs');
+const destination = path.resolve(__dirname, '../src/spec');
+const sections = require('../../docs/specs/sections.json');
+const metadataFiles = new Set(['README.md', 'index.md']);
+const slugOf = (file) => path.basename(file, '.md').toLowerCase();
+const urlOf = (file) => `/spec/${slugOf(file)}/`;
 
-// README.md in docs/specs/ is a meta-doc for engineers, not a spec section.
-// Skip it so it doesn't end up as a /spec/readme/ page on the website. The
-// site's /spec/ index is generated from the page list at the end of this
-// script, so a source index.md (should one ever appear) is skipped too.
-const SKIP_FILES = new Set(['README.md', 'index.md']);
-
-// Ensure destination directory exists
-if (!fs.existsSync(specDestDir)) {
-  fs.mkdirSync(specDestDir, { recursive: true });
+function specFiles(directory, section) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) return specFiles(file, section);
+    return entry.name.endsWith('.md') && !metadataFiles.has(entry.name) ? [{ file, section }] : [];
+  });
 }
 
-// Helper function to extract title from markdown content
-function extractTitle(content, filename) {
-  const lines = content.split('\n');
-
-  // Look for H1 headers first
-  for (const line of lines) {
-    if (line.startsWith('# ')) {
-      let title = line.substring(2).trim();
-      // Remove section numbers like "1. " from the beginning
-      title = title.replace(/^\d+\.\s*/, '');
-      return title;
+function collectSpecs() {
+  const allowed = new Set(sections.map((section) => section.slug));
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    if (entry.isDirectory() && !allowed.has(entry.name)) throw new Error(`Unclassified spec folder: ${entry.name}`);
+    if (entry.isFile() && entry.name.endsWith('.md') && !metadataFiles.has(entry.name)) {
+      throw new Error(`Move ${entry.name} into its specification subject folder`);
     }
   }
-
-  // Look for H2 headers with section numbers
-  for (const line of lines) {
-    if (line.startsWith('## ')) {
-      let title = line.substring(3).trim();
-      // Remove section numbers like "1. " from the beginning
-      title = title.replace(/^\d+\.\s*/, '');
-      return title;
-    }
-  }
-
-  // Extract from filename as fallback
-  const fileTitle = filename.replace(/\.md$/, '').replace(/^\d+-/, '').replace(/([A-Z])/g, ' $1').trim();
-  return fileTitle.charAt(0).toUpperCase() + fileTitle.slice(1);
+  return sections.flatMap((section) => specFiles(path.join(source, section.slug), section));
 }
 
-// Helper function to clean content for individual spec pages
-function cleanSpecContent(content, filename) {
-  // Rewrite cross-references so they resolve on the website. The spec markdown
-  // uses repo-relative links (e.g. `0004-TypeSystem.md`, `../plans/x.md`) that
-  // are valid on GitHub but 404 on the site, where specs live at
-  // `/spec/<slug>/`. Without this every inter-spec link is a broken link.
-
-  // Sibling spec pages: `0004-TypeSystem.md[#anchor]` -> `/spec/0004-typesystem/[#anchor]`
-  content = content.replace(
-    /\]\((\d{4}-[A-Za-z0-9._-]+)\.md(#[^)]*)?\)/g,
-    (_m, slug, anchor) => `](/spec/${slug.toLowerCase()}/${anchor || ''})`
-  );
-
-  // Plan / design docs aren't published to the site: point them at the repo.
-  content = content.replace(
-    /\]\((?:\.\.\/)+(?:docs\/)?plans\/([A-Za-z0-9._-]+\.md)(#[^)]*)?\)/g,
-    (_m, file, anchor) =>
-      `](https://github.com/Nimblesite/osprey/blob/main/docs/plans/${file}${anchor || ''})`
-  );
-
-  // Any remaining repo-relative links (source files, shipwright.json, etc.)
-  // climb to the repo root from docs/specs/. Send them to the repo on GitHub.
-  content = content.replace(
-    /\]\((?:\.\.\/){2,}([^)#]+)(#[^)]*)?\)/g,
-    (_m, repoPath, anchor) =>
-      `](https://github.com/Nimblesite/osprey/blob/main/${repoPath}${anchor || ''})`
-  );
-
-  return content.trim();
+function titleOf(content, file) {
+  const heading = content.match(/^# (.+)$/m);
+  if (!heading) throw new Error(`Specification has no title: ${file}`);
+  return heading[1].replace(/\s*[—-]?\s*\[.*?\]\s*$/, '').trim();
 }
 
-// Helper function to generate URL-friendly slug from filename
-function generateSlug(filename) {
-  // Remove the .md extension and convert to lowercase
-  return filename.replace(/\.md$/, '').toLowerCase();
-}
-
-// The generated pages are gitignored (never committed), so Eleventy's
-// `date: "git Last Modified"` on the OUTPUT file would fall back to build
-// time. Read the last commit date of the SOURCE spec instead, so /spec/
-// sitemap lastmod and JSON-LD reflect when the spec actually changed — not
-// when the site was built. Returns null when git is unavailable; the page
-// then falls back to src/spec/spec.11tydata.json.
-function specGitDate(filename) {
+function gitDate(file) {
   try {
-    const iso = execFileSync('git', ['log', '-1', '--format=%cI', '--', filename], {
-      cwd: specSourceDir,
-      encoding: 'utf8',
-    }).trim();
-    return iso || null;
-  } catch (error) {
+    return execFileSync('git', ['log', '-1', '--format=%cI', '--', file], { cwd: repo, encoding: 'utf8' }).trim() || null;
+  } catch {
     return null;
   }
 }
 
-// Helper function to create front matter for spec pages
-function createSpecFrontMatter(title, slug, description = '', date = null) {
-  const dateLine = date ? `date: "${date}"\n` : '';
-  // Render spec bodies as pure Markdown, NOT through Nunjucks. Specs are
-  // documentation, not templates: a code sample containing `{{ ... }}` (e.g. a
-  // GitHub Actions `${{ toJSON(inputs) }}` expression) would otherwise be parsed
-  // as a Nunjucks tag and fail the build. The `page` layout is still Nunjucks.
-  return `---
-layout: page
-title: "${title}"
-description: "${description}"
-${dateLine}tags: ["specification", "reference", "documentation"]
-author: "Christian Findlay"
-permalink: "/spec/${slug}/"
-templateEngineOverride: md
----
-
-`;
+function resolveLink(target, file, pages) {
+  if (/^(?:[a-z][\w+.-]*:|\/|#)/i.test(target)) return target;
+  const [local, anchor = ''] = target.split('#');
+  const absolute = path.resolve(path.dirname(file), local);
+  const page = pages.get(absolute);
+  if (page) return `${page.permalink}${anchor ? `#${anchor}` : ''}`;
+  const category = sections.find((section) => absolute === path.join(source, section.slug, 'README.md'));
+  if (category) return `/spec/${category.slug}/${anchor ? `#${anchor}` : ''}`;
+  if (absolute === path.join(source, 'README.md')) return '/spec/';
+  const relative = path.relative(repo, absolute).split(path.sep).join('/');
+  if (relative.startsWith('../')) throw new Error(`Link escapes repository in ${file}: ${target}`);
+  return `https://github.com/Nimblesite/osprey/blob/main/${relative}${anchor ? `#${anchor}` : ''}`;
 }
 
-try {
-  console.log('📁 Creating spec directory structure...');
+const cleanContent = (content, file, pages) => content.replace(
+  /\]\(([^)\s]+)\)/g, (_match, target) => `](${resolveLink(target, file, pages)})`,
+).trim();
 
-  // Remove previously generated spec pages first. Without this, renamed or
-  // renumbered source files leave orphan pages behind (e.g. an old
-  // 0015-http.md lingering after HTTP moved to 0014), producing duplicate
-  // content. Every .md here is generated output (and gitignored), including
-  // index.md, which is rebuilt from scratch at the end of this script.
-  for (const existing of fs.readdirSync(specDestDir)) {
-    if (existing.endsWith('.md')) {
-      fs.unlinkSync(path.join(specDestDir, existing));
-    }
+function frontMatter(title, permalink, description, date = null) {
+  const data = { layout: 'page', title, description, permalink, templateEngineOverride: 'md' };
+  if (date) data.date = date;
+  return `---\n${Object.entries(data).map(([key, value]) => `${key}: ${JSON.stringify(value)}`).join('\n')}\ntags: [specification, reference]\n---\n\n`;
+}
+
+function pagesFrom(specs) {
+  const seen = new Set();
+  return specs.map(({ file, section }) => {
+    const slug = slugOf(file);
+    if (seen.has(slug)) throw new Error(`Duplicate specification URL: ${slug}`);
+    seen.add(slug);
+    const content = fs.readFileSync(file, 'utf8');
+    return { file, section, slug, content, title: titleOf(content, file), permalink: urlOf(file), date: gitDate(file) };
+  }).sort((left, right) => left.slug.localeCompare(right.slug));
+}
+
+function writePage(page, pages) {
+  const { title, permalink, date, section, file, content, slug } = page;
+  const head = frontMatter(title, permalink, `Osprey ${section.title}: ${title}`, date);
+  const breadcrumb = `[Specifications](/spec/) / [${section.title}](/spec/${section.slug}/)\n\n`;
+  fs.writeFileSync(path.join(destination, `${slug}.md`), head + breadcrumb + cleanContent(content, file, pages) + '\n');
+}
+
+function writeSection(section, pages) {
+  const members = pages.filter((page) => page.section.slug === section.slug);
+  if (!members.length) throw new Error(`Empty specification category: ${section.slug}`);
+  const head = frontMatter(section.title, `/spec/${section.slug}/`, section.description);
+  const links = members.map((page) => `- [${page.title}](${page.permalink})`).join('\n');
+  const kind = section.kind === 'core' ? 'Core language and compiler' : 'Supporting systems';
+  const body = `[All specifications](/spec/) / ${kind}\n\n# ${section.title}\n\n${section.description}\n\n${links}\n`;
+  fs.writeFileSync(path.join(destination, `${section.slug}.md`), head + body);
+}
+
+function sectionLinks(kind) {
+  return sections.filter((section) => section.kind === kind).map((section) =>
+    `- [${section.title}](/spec/${section.slug}/) — ${section.description}`,
+  ).join('\n');
+}
+
+function writeIndex() {
+  const head = frontMatter('Osprey specifications', '/spec/', 'Language and compiler contracts, separated from platform, tooling and ecosystem contracts.');
+  const body = `# Osprey specifications\n\nChoose a subject. Platform applications and development tools have their own contracts; they are not part of the core language specification.\n\n## Core language and compiler\n\n${sectionLinks('core')}\n\n## Supporting systems\n\n${sectionLinks('support')}\n\n## Contract and delivery\n\nThese documents define required behavior. A specification is not evidence that a feature has shipped. Each contract records its limits; [feature status](/status/) and the linked delivery plans distinguish implemented behavior from unfinished work.\n`;
+  fs.writeFileSync(path.join(destination, 'index.md'), head + body);
+}
+
+function generate() {
+  const pages = pagesFrom(collectSpecs());
+  const lookup = new Map(pages.map((page) => [page.file, page]));
+  fs.mkdirSync(destination, { recursive: true });
+  for (const file of fs.readdirSync(destination)) {
+    if (file.endsWith('.md')) fs.unlinkSync(path.join(destination, file));
   }
+  pages.forEach((page) => writePage(page, lookup));
+  sections.forEach((section) => writeSection(section, pages));
+  writeIndex();
+  console.log(`Published ${pages.length} contracts in ${sections.length} separate specification subjects.`);
+}
 
-  // Read all spec files (skipping meta-docs like README.md)
-  const specFiles = fs.readdirSync(specSourceDir)
-    .filter(file => file.endsWith('.md') && !SKIP_FILES.has(file));
-  const specPages = [];
-
-  // Process each spec file
-  for (const file of specFiles) {
-    const sourcePath = path.join(specSourceDir, file);
-    let content = fs.readFileSync(sourcePath, 'utf8');
-    const title = extractTitle(content, file);
-    const slug = generateSlug(file);
-    const date = specGitDate(file);
-
-    content = cleanSpecContent(content, file);
-    const destFile = `${slug}.md`;
-    const permalink = `/spec/${slug}/`;
-    const destPath = path.join(specDestDir, destFile);
-
-    const frontMatter = createSpecFrontMatter(
-      title, slug, `Osprey Language Specification: ${title}`, date
-    );
-    fs.writeFileSync(destPath, frontMatter + content, 'utf8');
-
-    specPages.push({
-      file,
-      slug,
-      title,
-      permalink,
-      date,
-      order: file.match(/^(\d+)/) ? parseInt(file.match(/^(\d+)/)[1]) : 999
-    });
-
-    console.log(`✅ Processed ${file} → ${destFile} (${permalink}) - "${title}"`);
-  }
-
-  // Sort pages by order number
-  specPages.sort((a, b) => a.order - b.order);
-
-  // Build the spec index from scratch — like every page here it is generated
-  // output (gitignored), so there is nothing on disk to read back. Its date is
-  // the newest source-spec commit: the TOC changed when its newest entry did.
-  const indexPath = path.join(specDestDir, 'index.md');
-  const indexDate = specPages
-    .map((page) => page.date)
-    .filter(Boolean)
-    .sort((a, b) => new Date(a) - new Date(b))
-    .pop() || null;
-
-  // Create a simple introduction and table of contents only
-  const newIndexContent = `# Osprey Language Specification
-
-**Author:** Christian Findlay
-
-## Table of Contents
-
-${specPages.map(page => `${page.order}. [${page.title}](${page.permalink})`).join('\n')}
-
-## About This Specification
-
-This specification defines the complete syntax and semantics of the Osprey programming language. Each section is available as a separate page for easy navigation and reference.
-
-The Osprey language is designed for elegance, safety, and performance, emphasizing:
-
-- **Typed algebraic effects** with lexical handlers; complete static coverage checking remains in progress
-- **Named arguments** for multi-parameter functions to improve readability
-- **Strong type inference** (Hindley-Milner) to reduce boilerplate while maintaining safety
-- **String interpolation** for convenient text formatting
-- **Pattern matching** for elegant conditional logic
-- **Immutable-by-default** variables and persistent collections
-- **Fast HTTP/HTTPS servers and clients** with built-in streaming support
-- **C interoperability** via a typed foreign function interface
-
-## Implementation Status
-
-🚧 **NOTE**: The Osprey language and compiler are actively under development. This specification represents the design goals and planned features. Please refer to individual sections for current implementation status.
-`;
-
-  // Write updated index with front matter
-  const indexFrontMatter = `---
-layout: page
-title: "Osprey Language Specification"
-description: "Complete language specification and syntax reference for the Osprey programming language"
-${indexDate ? `date: "${indexDate}"\n` : ''}tags: ["specification", "reference", "documentation"]
-author: "Christian Findlay"
-permalink: "/spec/"
----
-
-`;
-
-  fs.writeFileSync(indexPath, indexFrontMatter + newIndexContent, 'utf8');
-
-  console.log('✅ Created clean spec index with table of contents');
-  console.log(`📊 Processed ${specFiles.length} spec files:`);
-  console.log(`   - Main index: /spec/`);
-  specPages.forEach(page => {
-    console.log(`   - ${page.order}. ${page.title}: ${page.permalink}`);
-  });
-
-} catch (error) {
-  console.error('❌ Failed to copy spec files:', error.message);
-  process.exit(1);
-} 
+module.exports = { cleanContent, titleOf, resolveLink, pagesFrom };
+if (require.main === module) {
+  try { generate(); } catch (error) { console.error(error.message); process.exit(1); }
+}

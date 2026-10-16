@@ -15,50 +15,35 @@ Osprey's handlers changed shape over the last month. A handler is now a value yo
 ## A handler is a value
 
 ```osprey
-effect Store { load: fn(string) -> string }
-fn greeting(id) = "Hello, " + perform Store.load(id)
-
-let database = handler Store { load id => "Ada (row ${id})" }
-let fixture = handler Store { load _ => "Test User" }
-
-print("${database(|| => greeting("42"))} / ${fixture(|| => greeting("42"))}")
+{{ draftExample.default | safe }}
 ```
 
 ```text
-Hello, Ada (row 42) / Hello, Test User
+{{ draftExample.output }}
 ```
 
-`handler` builds a value; creating it runs nothing. `database(work)` installs the handler, calls `work`, and returns its result. Pass a function rather than its result, because the work must start after the handler is installed. `greeting` is the same code in production and in the test, with no service object passed through it.
+`handler` builds a value; creating it runs nothing. `disk(saveDraft)` installs the implementation before calling `saveDraft`. The first handler really writes the draft; the second simulates an unavailable storage service. The same save logic turns the result into a saved or retry message. Neither it nor its callers need to carry a storage object through every layer.
 
 The ML flavor spells the same program with layout and currying:
 
 ```osprey-ml
-effect Store
-    load : string => string
-greeting id = "Hello, " + perform Store.load id
-
-database = handler Store
-    load id => "Ada (row ${id})"
-fixture = handler Store
-    load _ => "Test User"
-
-print "${database (\() => greeting "42")} / ${fixture (\() => greeting "42")}"
+{{ draftExample.ml | safe }}
 ```
 
 ```text
-Hello, Ada (row 42) / Hello, Test User
+{{ draftExample.output }}
 ```
 
 ## A missing handler is a compile error
 
 ```osprey
-effect Store { load: fn(string) -> string }
-fn greeting(id) = "Hello, " + perform Store.load(id)
-print(greeting("42"))
+effect Drafts { save: fn(string, string) -> Result<int, Error> }
+fn saveDraft() = perform Drafts.save("draft.txt", "Ship it.")
+print(saveDraft())
 ```
 
 ```text
-unhandled effect operations at program entry: Store.load; add a matching `handle`
+unhandled effect operations at program entry: Drafts.save; add a matching `handle`
 ```
 
 The checker follows requests through helpers, lambdas passed to higher-order functions and fibers. Editor hover, signature help and generated API docs list the operations a function's callers must provide, including ones requested deep inside its helpers.
@@ -138,18 +123,21 @@ Osprey used to infer the mode by searching an arm for `resume`, so a `resume` in
 ## `return` transforms the answer
 
 ```osprey
-effect Store { load: fn(string) -> string }
-fn greeting(id) = "Hello, " + perform Store.load(id)
+effect Drafts { save: fn(string, string) -> Result<int, Error> }
+fn saveDraft() = match perform Drafts.save("draft.txt", "Ship it.") {
+    Success _ => "Saved"
+    Error { message } => "Retry: ${message}"
+}
 
-let report = handler Store {
-    load _ => "Ada"
+let report = handler Drafts {
+    save _ text => Success { value: byteLength(text) }
     return message => "Report: ${message}"
 }
-print(report(|| => greeting("42")))
+print(report(saveDraft))
 ```
 
 ```text
-Report: Hello, Ada
+Report: Saved
 ```
 
 The `return` clause rewrites normal completion. A control arm that abandons the work skips it.

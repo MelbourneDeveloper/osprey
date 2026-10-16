@@ -6,6 +6,10 @@ Scripts for building the Osprey website.
 
 Run `node scripts/render-flight.mjs` from `website/` to reproduce the original wireframe osprey film and its static poster in `src/assets/motion/`. The geometry lives in `flight-scene.js`; Playwright's Chromium records an eight-second VP9 WebM loop. These authored media assets ship with the site, so normal builds need no rendering step. The browser decodes the film without running its canvas renderer. Playback pauses offscreen and in background tabs; reduced-motion and data-saving preferences use the poster until the visitor requests playback.
 
+## Browser runtime assets
+
+The build publishes Prism and SQLite from the website’s locked npm dependencies, together with their licenses. The WebAssembly studio loads them locally; its browser acceptance test blocks the old CDN and still runs the database workflow.
+
 ## Scripts
 
 ### `generate-docs.sh`
@@ -24,7 +28,7 @@ toolchain.
 Adds ML examples to generated reference pages. Set `mlTwins: manual` in a hand-authored guide to preserve its complete examples; `mlTwins: false` omits generated twins.
 
 ### `copy-spec.js`
-Copies the language specification from `docs/specs/` to the website source.
+Publishes the subject folders in `docs/specs/` using their shared `sections.json` metadata. Language and compiler contracts have their own indexes; runtime, platforms, tools, ecosystem and applications are separate. Existing per-document URLs remain stable. Inter-contract links resolve to the published page, while source links point to GitHub. Unclassified folders, flat contract files and colliding URLs fail the build.
 
 ### `update-playground.js`
 Syncs the playground editor content from

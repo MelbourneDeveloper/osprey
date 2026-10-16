@@ -1,5 +1,5 @@
-//! Effect-selected execution ([STAGE-BACKEND], docs/specs/0017-AlgebraicEffects.md;
-//! [GPU-DEVICE], docs/specs/0034-GPUComputation.md).
+//! Effect-selected execution ([STAGE-BACKEND], docs/specs/language/0017-AlgebraicEffects.md;
+//! [GPU-DEVICE], docs/specs/runtime/0034-GPUComputation.md).
 //!
 //! One model performs a static `Tensor` effect and never names a buffer type.
 //! A handler over lists and a handler over GPU buffers each discharge it at

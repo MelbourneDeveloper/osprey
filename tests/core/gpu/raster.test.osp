@@ -3,7 +3,7 @@
 // pure kernel dispatched over `gpuIota(width * height)` — the flat pixel grid —
 // and layers composite with a single elementwise pass ([GPU-IOTA], [GPU-MAP],
 // [GPU-ZIPWITH], [GPU-FILTER], [GPU-FOLD], [GPU-SCAN], [GPU-GET], [GPU-DEVICE]
-// — docs/specs/0034-GPUComputation.md). Shading is fixed-point integer
+// — docs/specs/runtime/0034-GPUComputation.md). Shading is fixed-point integer
 // arithmetic — the workload a fragment shader actually runs — and the kernels
 // reach recursive helpers and vertices captured by an inline lambda, both of
 // which prove [GPU-KERNEL-FORM]'s claim that a kernel is gated on purity, not

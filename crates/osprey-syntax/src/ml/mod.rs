@@ -2,8 +2,8 @@
 //! that lowers to the same canonical [`osprey_ast::Program`] as the Default
 //! frontend, after which the two are indistinguishable ([FLAVOR-BOUNDARY]).
 //!
-//! Surface reference: `docs/specs/0024-MLFlavorSyntax.md`. Boundary and
-//! lowering contract: `docs/specs/0023-LanguageFlavors.md`.
+//! Surface reference: `docs/specs/language/0024-MLFlavorSyntax.md`. Boundary and
+//! lowering contract: `docs/specs/language/0023-LanguageFlavors.md`.
 //!
 //! Clean three-stage frontend with a parse/lower seam ([FLAVOR-FRONTEND]):
 //! 1. [`lexer`] turns source into a layout-resolved [`token`] stream (the

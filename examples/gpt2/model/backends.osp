@@ -65,8 +65,8 @@ module Backends {
     }
 
     /// GPU buffers: each operation is a kernel, a product or a loader of the
-    /// GPU surface, and `device` reports which backend executes them. Products
-    /// dispatch to Metal or OpenCL when `OSPREY_GPU` selects a device.
+    /// GPU surface, and `device` reports which backend executes them. Kernels
+    /// and products run on Metal or OpenCL when `OSPREY_GPU` selects a device.
     export fn onGpu(work) = {
         handle static Tensor<GpuBuffer<float>> {
             build n f => gpuIota(n) |> gpuMap(f)

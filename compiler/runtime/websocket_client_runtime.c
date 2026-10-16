@@ -1,7 +1,7 @@
 #include "http_shared.h"
 
 // Native text-frame client transport [BUILTIN-WEBSOCKET-CLIENT]
-// (docs/specs/0015-WebSockets.md). The language surface exposes no receive
+// (docs/specs/runtime/0015-WebSockets.md). The language surface exposes no receive
 // callback, so incoming client frames are never surfaced.
 
 static bool valid_websocket_id(int64_t ws_id) {

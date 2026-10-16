@@ -1,6 +1,6 @@
 // Osprey sampling CPU profiler — registry, sample store, stack-walk, raw dump.
 // Implements [PROF-ACTIVATE-ENV], [PROF-COLLECT-REGISTRY],
-// [PROF-COLLECT-UNWIND], [PROF-RAW-FORMAT] (docs/specs/0028-Profiler.md).
+// [PROF-COLLECT-UNWIND], [PROF-RAW-FORMAT] (docs/specs/tooling/0028-Profiler.md).
 #include "profiler_runtime.h"
 
 #if defined(_WIN32) || defined(__wasm__)

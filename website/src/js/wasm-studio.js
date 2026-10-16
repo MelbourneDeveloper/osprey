@@ -11,8 +11,8 @@ const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt
 
 const OSP_WASM = "/wasm/build/studio.osp.wasm";
 const OSP_SRC = "/wasm/studio.osp";
-const SQLJS = "https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/";
-const PRISM = "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/";
+const SQLJS = "/assets/vendor/sqlite/";
+const PRISM = "/assets/vendor/prism/";
 
 const PRESETS = [
   { label: "revenue by region", sql: "SELECT region, SUM(qty * price) AS revenue, SUM(qty) AS units\nFROM sales GROUP BY region ORDER BY revenue DESC;" },
@@ -23,7 +23,7 @@ const PRESETS = [
 
 const state = { SQL: null, db: null, ddl: "", seed: "" };
 
-// ── deps loaded from CDN (Prism core + SQL grammar; sql.js) ─────────────────
+// Runtime libraries ship with the site so startup needs no third-party host.
 function loadScript(src) {
   return new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${src}"]`)) return resolve();
@@ -36,8 +36,8 @@ function loadScript(src) {
 }
 
 async function initPrism() {
-  await loadScript(PRISM + "components/prism-core.min.js");
-  await loadScript(PRISM + "components/prism-sql.min.js");
+  await loadScript(PRISM + "prism-core.min.js");
+  await loadScript(PRISM + "prism-sql.min.js");
   window.Prism.languages.osprey = OSPREY_GRAMMAR;
 }
 
@@ -183,7 +183,7 @@ async function boot() {
     setBanner("ok", `Database ready — Osprey seeded ${state.seed.split("\n").length} rows. Add data or write a query.`);
     runQuery();
   } catch (err) {
-    setBanner("warn", `SQLite could not load from the CDN: <code>${esc(err.message || err)}</code>.`);
+    setBanner("warn", `SQLite could not load: <code>${esc(err.message || err)}</code>.`);
   }
 }
 

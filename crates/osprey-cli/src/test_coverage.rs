@@ -1,6 +1,6 @@
 //! Line coverage for `osprey test --coverage`. Implements
 //! [TESTING-COVERAGE-CLI], [TESTING-COVERAGE-DUMP] and [TESTING-COVERAGE-JSON]
-//! (docs/specs/0027-TestingFramework.md).
+//! (docs/specs/language/0027-TestingFramework.md).
 //!
 //! One suite at a time: find where its instrumented binary dropped its dump,
 //! read the dump STRICTLY, fold it into the merged report, and print the rate.

@@ -13,8 +13,21 @@
 // inside the already-required "Build, Format & Analyse" job, so it blocks a
 // merge without changing the pinned required-check list.
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 const MAKEFILE = 'Makefile'
+
+// GNU make resolves includes from the invocation directory. Follow every
+// fragment so splitting recipes cannot hide an unguarded node invocation.
+const readMakefiles = (file, seen = new Set()) => {
+  const path = resolve(file)
+  if (seen.has(path)) return ''
+  seen.add(path)
+  return readFileSync(path, 'utf8').split('\n').map((line) => {
+    const include = line.match(/^include\s+(.+)$/)
+    return include ? include[1].trim().split(/\s+/).map((child) => readMakefiles(child, seen)).join('\n') : line
+  }).join('\n')
+}
 
 // Subproject directory -> the make variable holding its install stamp. A recipe
 // running a node tool in one of these must list that variable as a prerequisite.
@@ -93,7 +106,7 @@ const violationsFor = (rule) =>
     .filter((dir) => !rule.prereqs.includes(`$(${GUARDED.get(dir)})`))
     .map((dir) => `${rule.names}: runs a node tool in ${dir}/ but does not require $(${GUARDED.get(dir)})`)
 
-const rules = parseRules(foldContinuations(readFileSync(MAKEFILE, 'utf8'))).filter(
+const rules = parseRules(foldContinuations(readMakefiles(MAKEFILE))).filter(
   (rule) => rule.names !== INSTALL_RULE,
 )
 

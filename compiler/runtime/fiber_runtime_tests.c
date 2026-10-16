@@ -2,7 +2,7 @@
 // [CONCURRENCY-YIELD], [CONCURRENCY-SLEEP], [CONCURRENCY-DETERMINISTIC], the
 // env-carrying spawn forms, and the process bridge — plus the pthread
 // transition in [MEM-FIBER-ISOLATION].
-// Spec: docs/specs/0011-LightweightFibersAndConcurrency.md.
+// Spec: docs/specs/language/0011-LightweightFibersAndConcurrency.md.
 #include "test_death.h"
 
 #include <assert.h>
@@ -253,7 +253,7 @@ void test_fiber_process_bridge(void) {
 // --- [CONCURRENCY-CHANNEL] -------------------------------------------------
 // "Channel(capacity) creates a FIFO channel whose positive integer capacity is
 // the number of buffered values"; send blocks while full, recv blocks while
-// empty (docs/specs/0011-LightweightFibersAndConcurrency.md).
+// empty (docs/specs/language/0011-LightweightFibersAndConcurrency.md).
 
 enum {
   CHANNEL_CAP = 2,

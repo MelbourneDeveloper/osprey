@@ -9,7 +9,7 @@
 #endif
 
 // Native text-frame server transport [BUILTIN-WEBSOCKET-SERVER]
-// (docs/specs/0015-WebSockets.md). Lifecycle: [BUILTIN-WEBSOCKET-LIFECYCLE].
+// (docs/specs/runtime/0015-WebSockets.md). Lifecycle: [BUILTIN-WEBSOCKET-LIFECYCLE].
 
 // Global variable for runtime lifecycle
 static volatile int keep_runtime_running = 1;

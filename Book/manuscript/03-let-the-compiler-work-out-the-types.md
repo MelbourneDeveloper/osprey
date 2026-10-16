@@ -264,7 +264,7 @@ The Flight Log now carries a small, checked group of facts. Chapter 4 uses those
 
 ### Authoritative sources
 
-- Osprey [Type System](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0004-TypeSystem.md): Hindley–Milner inference, record fields, `[TYPE-ANY]`, `[TYPE-ANNOTATION-CHECK]`, and `[TYPE-ANNOTATION-REDUNDANT]`.
-- Osprey [Syntax](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0003-Syntax.md) and [Function Calls](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0005-FunctionCalls.md): record construction and Default-flavor calls.
-- Osprey [String Interpolation](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0006-StringInterpolation.md): rendering values inside strings.
+- Osprey [Type System](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0004-TypeSystem.md): Hindley–Milner inference, record fields, `[TYPE-ANY]`, `[TYPE-ANNOTATION-CHECK]`, and `[TYPE-ANNOTATION-REDUNDANT]`.
+- Osprey [Syntax](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0003-Syntax.md) and [Function Calls](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0005-FunctionCalls.md): record construction and Default-flavor calls.
+- Osprey [String Interpolation](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0006-StringInterpolation.md): rendering values inside strings.
 - Executable source, exact output, and the compiler-rejection example in `examples/chapter-03/`, checked with the edition's development compiler. The development version remains unpinned for publication; build identity is recorded in `evidence.json`.

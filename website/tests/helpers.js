@@ -14,6 +14,7 @@ const PAGES = [
   { name: "docs-type", path: "/docs/types/string/", kind: "prose" },
   { name: "blog-index", path: "/blog/", kind: "listing" },
   { name: "blog-post", path: "/blog/2026-05-17-persistent-collections/", kind: "prose" },
+  { name: "blog-gpt2", path: "/blog/2026-10-12-gpt2-on-the-gpu-surface/", kind: "prose" },
   {
     name: "blog-semver-post",
     path: "/blog/2026-07-25-semver-is-all-lies-please-stop/",

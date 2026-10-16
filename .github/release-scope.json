@@ -6,7 +6,8 @@
     "webcompiler/**",
     "Cargo.toml",
     "Cargo.lock",
-    "Makefile"
+    "Makefile",
+    "scripts/make/**"
   ],
   "vsix": [
     "vscode-extension/**"
@@ -30,12 +31,11 @@
     ".deslop.toml",
     ".gitignore",
     ".dockerignore",
-    "clippy.toml",
-    "rustfmt.toml",
+    ".clippy.toml",
+    ".rustfmt.toml",
     "coverage-thresholds.json",
     "opencode.json",
     "osprey.code-workspace",
-    "pull_request_template.md",
     "test_output.txt"
   ]
 }

@@ -4,7 +4,7 @@
 //! its payload string while an Error stays visible as `Error(<message>)`
 //! [TESTING-EQUALITY]. Implements [TESTING-CODEGEN], [TESTING-BUILTIN-TEST],
 //! [TESTING-BUILTIN-EXPECT], [TESTING-BUILTIN-CHECK]
-//! (docs/specs/0027-TestingFramework.md).
+//! (docs/specs/language/0027-TestingFramework.md).
 
 use crate::builder::Codegen;
 use crate::error::{CodegenError, Result};

@@ -9,50 +9,42 @@ tags: [algebraic-effects, handlers, applications]
 
 An algebraic effect is a typed request for work: read configuration, save an account, write a log. A handler supplies the implementation while a function runs. Application code can make those requests without passing service objects through every intermediate function.
 
-## The same function, different implementations
+## Save a draft, even when storage fails
+
+An editor must show whether a draft was saved and offer a retry when storage is unavailable. The save logic requests storage; the handler chooses how that request reaches the outside world.
 
 ```osprey
-effect Account { name: fn() -> string }
-fn greeting() = "Hello, " + perform Account.name()
-
-let ada = handler Account { name => "Ada" }
-let grace = handler Account { name => "Grace" }
-
-print("${ada(greeting)} / ${grace(greeting)}")
-// Hello, Ada / Hello, Grace
+{{ draftExample.default | safe }}
 ```
 
-`Account.name` declares the operation's arguments and result. `perform` requests it. `handler` creates a reusable value; creating it runs nothing. `ada(greeting)` installs `ada`, calls `greeting`, and returns its answer. A call to `greeting` with no matching handler is a compile error.
+This prints `{{ draftExample.output }}`. `disk` really writes `Ship it.` to `draft.txt`. `offline` returns a predictable failure without accessing the file system. Both run exactly the same `saveDraft` function. The `Result` says whether this request succeeded; the effect says which storage capability the surrounding application must provide.
 
-Pass the function, not its result: `greeting()` would run before `ada` could answer. Wrap work that takes arguments: `ada(|| => greetCustomer(customer))`. The `redundant-callback` warning flags wrappers that only forward, such as `ada(|| => greeting())`.
+`Drafts.save` declares the operation's arguments and result. `perform` requests it. Creating a `handler` runs no work. `disk(saveDraft)` installs the disk implementation before calling `saveDraft`. Calling `saveDraft()` without a matching handler is a compile error, even through intermediate helpers.
+
+Pass the function, not its result: `saveDraft()` would run before `disk` could answer. Wrap work that takes arguments, such as `disk(|| => saveCustomerDraft(customer))`. A real editor can install its storage handler once around an event loop, so its UI and validation helpers need no storage parameters.
 
 The same example in ML flavor:
 
 ```osprey-ml
-effect Account
-    name : Unit => string
-
-greeting () = "Hello, " + perform Account.name ()
-
-ada = handler Account
-    name => "Ada"
-grace = handler Account
-    name => "Grace"
-
-print "${ada greeting} / ${grace greeting}"
+{{ draftExample.ml | safe }}
 ```
+
+On a mobile app, a value handler can describe a save command for the native host; its completion arrives as another event. This small native example writes synchronously. It does not pretend that a synchronous return awaits a browser or mobile operation.
 
 ## Handle the rest of a block
 
 Use `handle` when a handler is local to one block:
 
 ```osprey
-effect Account { name: fn() -> string }
-fn greeting() = "Hello, " + perform Account.name()
+effect Drafts { save: fn(string, string) -> Result<int, Error> }
+fn saveDraft() = match perform Drafts.save("draft.txt", "Ship it.") {
+    Success _ => "Saved"
+    Error { message } => "Retry: ${message}"
+}
 
 let message = {
-    handle Account { name => "Ada" }
-    greeting()
+    handle Drafts { save _ _ => Error { message: "offline" } }
+    saveDraft()
 }
 print(message)
 ```
@@ -64,39 +56,44 @@ Handler arms run outside their own handler, so an arm can forward the same opera
 ## Record work in a test
 
 ```osprey
-effect Log { write: fn(string) -> Unit }
-fn acceptOrder() = perform Log.write("Order accepted")
-
-let terminal = handler Log { write message => print(message) }
-terminal(acceptOrder)
+effect Drafts { save: fn(string, string) -> Result<int, Error> }
+fn saveDraft() = match perform Drafts.save("draft.txt", "Ship it.") {
+    Success _ => "Saved"
+    Error { message } => "Retry: ${message}"
+}
 
 mut captured = ""
-let recording = handler Log { write message => { captured = message } }
-recording(acceptOrder)
-print(captured)
+let recording = handler Drafts {
+    save _ text => {
+        captured = text
+        Success { value: byteLength(text) }
+    }
+}
+let saved = recording(saveDraft)
+print("${saved}: ${captured}")
 ```
 
-Production prints the message; the test records it. A function can return a handler that captures configuration or state. Every arm is type-checked, even arms the work never calls.
+The test records exactly what the editor asked storage to save and returns a successful byte count. No file is written. A function can return a handler that captures configuration or state. Every arm is type-checked, even arms the work never calls.
 
 ## Select static interpretation
 
 A value handler can be selected for compilation with `static`:
 
 ```osprey
-effect Read { value: fn() -> int }
+effect DraftConfig { autosaveSeconds: fn() -> int }
 fn relay(callback) -> int !e = callback()
-fn work() !Read = perform Read.value()
+fn work() !DraftConfig = perform DraftConfig.autosaveSeconds()
 
 let answer = {
-    handle static Read { value => 41 }
+    handle static DraftConfig { autosaveSeconds => 30 }
     relay(work)
 }
 print(answer)
 ```
 
-This prints `41`. `handle static` removes the handled effect's dispatch during compilation; ordinary calls and computation remain. Static handlers accept value operations only, and their arms cannot call runtime builtins such as `print`.
+This prints `30`. `handle static` removes the handled effect's dispatch during compilation; ordinary calls and computation remain. Static handlers accept value operations only, and their arms cannot call runtime builtins such as `print`.
 
-`!Read` declares an allowed effect and `!e` passes the callback's requirements through `relay`. Most code leaves both inferred. Open rows like `!e` are a closed-program prototype; effect rows are not yet part of function types.
+`!DraftConfig` declares an allowed effect and `!e` passes the callback's requirements through `relay`. Most code leaves both inferred. Open rows like `!e` are a closed-program prototype; effect rows are not yet part of function types.
 
 ## Choose value or control operations explicitly
 
@@ -121,14 +118,17 @@ The declaration chooses the mode, never the presence of `resume` in an arm. Dyna
 A handler can also transform normal completion with a `return` clause:
 
 ```osprey
-effect Account { name: fn() -> string }
-fn greeting() = "Hello, " + perform Account.name()
+effect Drafts { save: fn(string, string) -> Result<int, Error> }
+fn saveDraft() = match perform Drafts.save("draft.txt", "Ship it.") {
+    Success _ => "Saved"
+    Error { message } => "Retry: ${message}"
+}
 
-let report = handler Account {
-    name => "Ada"
+let report = handler Drafts {
+    save _ text => Success { value: byteLength(text) }
     return message => "Report: ${message}"
 }
-print(report(greeting))
+print(report(saveDraft))
 ```
 
 ## Arithmetic needs a policy

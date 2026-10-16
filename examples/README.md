@@ -10,7 +10,7 @@ Start with algebraic effects: declare an operation, request it with `perform`, a
 | [iPhone counter](ios/README.md) | A native logging callback behind a value effect |
 | [GPT-2](gpt2/README.md) | The published GPT-2 weights, generation and a training step written once against a static `Tensor` effect and run by two handlers — host lists or the GPU surface, on the CPU or on Metal or OpenCL — with identical output on the CPU, checked against a pure-Python reference |
 
-`handler E { ... }` creates a callable implementation; `h(work)` installs it while the callback runs. `handle E { ... }` handles the rest of its block. Both forms work in Default (`.osp`) and ML (`.ospml`) syntax. See the [effects contract](../docs/specs/0017-AlgebraicEffects.md) and [current limits](../docs/plans/0016-algebraic-effects-and-handlers.md).
+`handler E { ... }` creates a callable implementation; `h(work)` installs it while the callback runs. `handle E { ... }` handles the rest of its block. Both forms work in Default (`.osp`) and ML (`.ospml`) syntax. See the [effects contract](../docs/specs/language/0017-AlgebraicEffects.md) and [current limits](../docs/plans/0016-algebraic-effects-and-handlers.md).
 
 ## Flavor convention
 
@@ -50,7 +50,7 @@ proving both flavors print the same bytes.
 
 [Issue Inbox](mobile/README.md) has been exercised on a physical iPhone 16 and an Android ARM64 emulator. Its Osprey modules own the application UI and behavior; SwiftUI and Android hosts render the UI tree and execute platform commands. The [screenshots and run instructions](mobile/README.md) include issue details, local notes, priorities, and SQLite cache recovery.
 
-See the [iOS target](../docs/specs/0038-iOSTarget.md), [Android target](../docs/specs/0039-AndroidTarget.md), and [shared application boundary](../docs/specs/0040-ReactiveMobileApplications.md). WebAssembly and mobile C ABI targets reject unsupported capabilities, including resumable effects, during compilation.
+See the [iOS target](../docs/specs/platforms/0038-iOSTarget.md), [Android target](../docs/specs/platforms/0039-AndroidTarget.md), and [shared application boundary](../docs/specs/applications/0040-ReactiveMobileApplications.md). WebAssembly and mobile C ABI targets reject unsupported capabilities, including resumable effects, during compilation.
 
 ## Paired flavor tests (`../tests/flavors/`)
 
@@ -94,7 +94,7 @@ breaks CI. Never add one without confirming it is actually rejected.
   ML frontend with no extension/marker conflict, and the marker path and
   `--flavor ml` produce byte-identical diagnostics. The `ml_*.ospo` fixtures pin
   the ML-specific rejection paths: removed `handle ... in/do` forms
-  ([`[FLAVOR-ML-HANDLER]`](../docs/specs/0024-MLFlavorSyntax.md)), offside-rule
+  ([`[FLAVOR-ML-HANDLER]`](../docs/specs/language/0024-MLFlavorSyntax.md)), offside-rule
   violations `[FLAVOR-ML-LAYOUT]`, unterminated `(** … *)`
   `[FLAVOR-ML-COMMENTS]`, `->` where a clause needs `=>` `[FLAVOR-ML-MATCH]`, and
   Default-flavor spellings (`{ … }` records, the `?` sigil) that the ML lexer

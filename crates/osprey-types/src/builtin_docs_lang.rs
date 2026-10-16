@@ -174,7 +174,7 @@ pub(crate) static CORE: &[BuiltinDoc] = &[
 ];
 
 /// Testing framework built-in documentation [TESTING-BUILTINS]
-/// (docs/specs/0027-TestingFramework.md). Prose only — types come from the
+/// (docs/specs/language/0027-TestingFramework.md). Prose only — types come from the
 /// authoritative scheme in `builtins.rs`, joined by name.
 pub(crate) static TESTING: &[BuiltinDoc] = &[
     builtin_doc!(
@@ -450,7 +450,7 @@ pub(crate) static FUNCTIONAL: &[BuiltinDoc] = &[
 /// `lists` built-in documentation. Prose only — types come from the
 /// authoritative scheme in `builtins.rs`, joined by name.
 ///
-/// List surface from docs/specs/0012-Built-InFunctions.md:
+/// List surface from docs/specs/runtime/0012-Built-InFunctions.md:
 /// [BUILTIN-LIST],
 /// [BUILTIN-LIST-GET], [BUILTIN-LIST-APPEND], [BUILTIN-LIST-PREPEND],
 /// [BUILTIN-LIST-CONCAT], [BUILTIN-LIST-REVERSE], [BUILTIN-LIST-CONTAINS] and
@@ -515,7 +515,7 @@ pub(crate) static LISTS: &[BuiltinDoc] = &[
 /// `maps` built-in documentation. Prose only — types come from the
 /// authoritative scheme in `builtins.rs`, joined by name.
 ///
-/// Map surface from docs/specs/0012-Built-InFunctions.md:
+/// Map surface from docs/specs/runtime/0012-Built-InFunctions.md:
 /// [BUILTIN-MAP],
 /// [BUILTIN-MAP-GET], [BUILTIN-MAP-SET], [BUILTIN-MAP-REMOVE],
 /// [BUILTIN-MAP-MERGE], [BUILTIN-MAP-CONTAINS] and [BUILTIN-COLLECTION-LENGTH].
@@ -581,7 +581,7 @@ pub(crate) static MAPS: &[BuiltinDoc] = &[
 /// GPU computation built-in documentation. Prose only — types come from the
 /// authoritative scheme in `builtins.rs`, joined by name.
 ///
-/// GPU surface from docs/specs/0034-GPUComputation.md: [GPU-BUFFER-FROM-LIST],
+/// GPU surface from docs/specs/runtime/0034-GPUComputation.md: [GPU-BUFFER-FROM-LIST],
 /// [GPU-BUFFER-TO-LIST], [GPU-BUFFER-LENGTH], [GPU-MAP], [GPU-FOLD],
 /// [GPU-ZIPWITH], [GPU-IOTA], [GPU-GET], [GPU-SCAN], [GPU-FILTER],
 /// [GPU-DEVICE].

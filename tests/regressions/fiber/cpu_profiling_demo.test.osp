@@ -17,7 +17,7 @@ fn exactArithmetic(work) = {
     work()
 }
 
-// CPU profiling showcase (docs/specs/0028-Profiler.md). Run it normally with
+// CPU profiling showcase (docs/specs/tooling/0028-Profiler.md). Run it normally with
 // the harness, or profile it:
 //
 //   osprey cpu_profiling_demo.osp --profile

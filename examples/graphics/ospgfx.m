@@ -1,6 +1,6 @@
 // Osprey -> macOS graphics bridge: a Cocoa window backed by a Metal layer,
 // exposed as a flat C ABI for Osprey's FFI ([FFI-LINK-DIRECTIVES], [FFI-PTR] —
-// docs/specs/0019-ForeignFunctionInterface.md).
+// docs/specs/compiler/0019-ForeignFunctionInterface.md).
 //
 // The division of labour is the same one every real-time renderer uses. Osprey
 // is the host: it owns the window, the clock, and the scene state it recomputes

@@ -1,0 +1,44 @@
+[
+  {
+    "slug": "language",
+    "title": "Language",
+    "description": "Syntax, types, expressions, effects and module semantics.",
+    "kind": "core"
+  },
+  {
+    "slug": "compiler",
+    "title": "Compiler",
+    "description": "Target lowering, generated ABIs and debug artifacts.",
+    "kind": "core"
+  },
+  {
+    "slug": "runtime",
+    "title": "Runtime libraries",
+    "description": "Built-in library contracts and execution services.",
+    "kind": "support"
+  },
+  {
+    "slug": "platforms",
+    "title": "Platform integration",
+    "description": "WASI/browser hosts, iOS and Android applications.",
+    "kind": "support"
+  },
+  {
+    "slug": "tooling",
+    "title": "Developer tooling",
+    "description": "Language server, editor, documentation and test tools.",
+    "kind": "support"
+  },
+  {
+    "slug": "ecosystem",
+    "title": "Packages and automation",
+    "description": "Package registry, evidence and GitHub automation.",
+    "kind": "support"
+  },
+  {
+    "slug": "applications",
+    "title": "Application frameworks",
+    "description": "Reactive mobile application and host protocols.",
+    "kind": "support"
+  }
+]

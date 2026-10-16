@@ -1,5 +1,5 @@
 // Assertion-driven tests for the coverage collector [TESTING-COVERAGE-RUNTIME]
-// (docs/specs/0027-TestingFramework.md). A failed assert aborts the binary.
+// (docs/specs/language/0027-TestingFramework.md). A failed assert aborts the binary.
 // POSIX-only test harness (fork/waitpid); the unit under test is portable C11.
 #include <assert.h>
 #include <dlfcn.h>

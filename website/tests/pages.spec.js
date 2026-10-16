@@ -11,6 +11,57 @@ const OSPREY_CODE = /<code([^>]*)class="language-osprey(?:-ml)?"[^>]*>([\s\S]*?)
 const COMMENT_TOKEN = /<span class="token comment">[\s\S]*?<\/span>/g;
 const OSPREY_BLOCKS = "pre > code.language-osprey, pre > code.language-osprey-ml";
 
+const brokenSpecLinks = (sources) => {
+  const origin = "https://spec.test";
+  const pages = new Map(sources.map(([url, html]) => [url, new DOMParser().parseFromString(html, "text/html")]));
+  return [...pages].flatMap(([from, document]) => [...document.querySelectorAll("a[href]")].flatMap((link) => {
+    const url = new URL(link.getAttribute("href"), origin + from);
+    if (url.origin !== origin || !url.pathname.startsWith("/spec/")) return [];
+    const target = pages.get(url.pathname);
+    const found = target && (!url.hash || target.getElementById(decodeURIComponent(url.hash.slice(1))));
+    return found ? [] : [`${from} -> ${url.pathname}${url.hash}`];
+  }));
+};
+
+test("every specification link and section anchor resolves", async ({ page }) => {
+  const subjects = fs.readdirSync(path.join(SITE, "spec"), { withFileTypes: true }).filter((entry) => entry.isDirectory());
+  const sources = ["", ...subjects.map((entry) => entry.name)].map((slug) => [
+    `/spec/${slug ? `${slug}/` : ""}`, fs.readFileSync(path.join(SITE, "spec", slug, "index.html"), "utf8"),
+  ]);
+  expect(sources.length).toBeGreaterThan(40);
+  expect(await page.evaluate(brokenSpecLinks, sources)).toEqual([]);
+});
+
+test("specification links resolve across subject folders and duplicate URLs are rejected", () => {
+  const { resolveLink, pagesFrom } = require("../scripts/copy-spec.js");
+  const root = path.resolve("../docs/specs");
+  const file = path.join(root, "platforms/0038-iOSTarget.md");
+  const compiler = path.join(root, "compiler/iOSCodegen.md");
+  const pages = new Map([[compiler, { permalink: "/spec/ioscodegen/" }]]);
+  expect(resolveLink("../compiler/iOSCodegen.md#ios-host-abi", file, pages)).toBe("/spec/ioscodegen/#ios-host-abi");
+  expect(resolveLink("../README.md", file, pages)).toBe("/spec/");
+  expect(resolveLink("../../../crates/osprey-cli/src/ios.rs", file, pages)).toBe("https://github.com/Nimblesite/osprey/blob/main/crates/osprey-cli/src/ios.rs");
+  expect(resolveLink("https://example.com/#host", file, pages)).toBe("https://example.com/#host");
+  expect(() => resolveLink("../../../../outside", file, pages)).toThrow("Link escapes repository");
+  const spec = { file, section: { slug: "platforms", title: "Platform integration" } };
+  expect(() => pagesFrom([spec, spec])).toThrow("Duplicate specification URL");
+});
+
+test("specifications separate the language from hosts, tools and applications", async ({ page }) => {
+  await page.goto("/spec/");
+  for (const category of ["language", "compiler", "runtime", "platforms", "tooling", "ecosystem", "applications"]) {
+    await expect(page.locator(`main a[href="/spec/${category}/"]`).first()).toBeVisible();
+  }
+  await page.goto("/spec/language/");
+  await expect(page.locator('main a[href="/spec/0017-algebraiceffects/"]')).toBeVisible();
+  await expect(page.locator('main a[href="/spec/0033-ospreygithubaction/"], main a[href="/spec/0038-iostarget/"], main a[href="/spec/0039-androidtarget/"]')).toHaveCount(0);
+  await page.goto("/spec/platforms/");
+  await expect(page.locator('main a[href="/spec/0038-iostarget/"]')).toBeVisible();
+  await expect(page.locator('main a[href="/spec/0039-androidtarget/"]')).toBeVisible();
+  await page.goto("/spec/0038-iostarget/");
+  await expect(page.locator('main a[href="/spec/ioscodegen/"]')).toBeVisible();
+});
+
 // A block is unhighlighted when it has no tokens or an ML `(* … *)` comment
 // outside a comment token. The /wasm/ studio fills #src-code at runtime; the
 // browser check below waits for its tokens.

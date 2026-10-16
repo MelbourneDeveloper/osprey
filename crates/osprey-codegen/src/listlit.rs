@@ -7,7 +7,7 @@
 //!
 //! Implements the indexing spellings of [BUILTIN-LIST-GET] (`list[index]`, the
 //! `get(list, index)` equivalent) and [BUILTIN-MAP-GET] (`map[key]`, which
-//! delegates to the map runtime) — docs/specs/0012-Built-InFunctions.md.
+//! delegates to the map runtime) — docs/specs/runtime/0012-Built-InFunctions.md.
 
 use crate::builder::Codegen;
 use crate::cast::coerce_to;

@@ -1013,7 +1013,7 @@ impl Checker {
     /// pinned.
     ///
     /// A kernel's parameter types flow from the buffer and the seed
-    /// [GPU-KERNEL-ELEM-TYPING] (docs/specs/0034-GPUComputation.md) because of
+    /// [GPU-KERNEL-ELEM-TYPING] (docs/specs/runtime/0034-GPUComputation.md) because of
     /// this order. Inferring a lambda body before its parameter slot is known
     /// leaves bare arithmetic (`a + v`) with two unconstrained operands, which
     /// int-defaults for want of a numeric class — so

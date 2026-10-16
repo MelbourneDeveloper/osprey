@@ -22,7 +22,7 @@ fn exactArithmetic(work) = {
 // Proves user-constructed Error payloads propagate through match, exercising a
 // nested match (parseInt's Result -> range check) and string interpolation of
 // the threaded rejection reason. Iteration is recursion (Osprey has no loops).
-// Spec: docs/specs/0012-Built-InFunctions.md [ERR-PAYLOAD]
+// Spec: docs/specs/runtime/0012-Built-InFunctions.md [ERR-PAYLOAD]
 
 /// Plausible-age bounds as named constants (zero-arg fns are in scope
 /// everywhere; top-level `let`s are not visible inside fn bodies).

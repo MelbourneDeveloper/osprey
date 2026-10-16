@@ -6,7 +6,7 @@
 //! Everything in this module is flavor-neutral — the [`Flavor`] selector, the
 //! [`Parsed`] result, and the dispatch that routes source to a flavor's
 //! frontend. Past lowering, nothing may tell the flavors apart
-//! ([FLAVOR-BOUNDARY], docs/specs/0023-LanguageFlavors.md). `parse_program` is
+//! ([FLAVOR-BOUNDARY], docs/specs/language/0023-LanguageFlavors.md). `parse_program` is
 //! the public entry; errors are collected, never fatal, so the frontend never
 //! panics on bad input and always produces a best-effort AST.
 
@@ -60,7 +60,7 @@ pub struct SyntaxError {
 /// language core. Every flavor converges on the same canonical [`Program`]
 /// before any semantic analysis runs, so nothing past lowering may inspect
 /// which flavor produced a program. Implements [FLAVOR-BOUNDARY],
-/// [FLAVOR-FRONTEND] (docs/specs/0023-LanguageFlavors.md).
+/// [FLAVOR-FRONTEND] (docs/specs/language/0023-LanguageFlavors.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Flavor {
     /// C-style braces, parens-and-named-argument calls, explicit currying. The
@@ -161,7 +161,7 @@ pub(crate) fn flavor_from_extension(path: &str) -> Option<Flavor> {
 /// file marker > extension > Default. A marker and extension that disagree are a
 /// hard error rather than a silent guess, so the CLI and the editor agree on the
 /// same frontend for the same file. Implements [FLAVOR-SELECT]
-/// (docs/specs/0023-LanguageFlavors.md).
+/// (docs/specs/language/0023-LanguageFlavors.md).
 ///
 /// # Errors
 /// Returns the disagreement message when a marker and the extension select

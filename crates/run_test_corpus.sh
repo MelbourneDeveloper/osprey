@@ -115,28 +115,16 @@ source "${0:A:h}/corpus_backends.sh"
 
 run_worker() {
   local memory=$1 resultdir=$2 index=$3 file=$4
-  local errfile=$resultdir/$index.stderr out=$resultdir/$index.stdout
-  local run_code
+  local errfile=$resultdir/$index.stderr out=$resultdir/$index.stdout run_code
   case $TARGET in
-    wasm32)
-      run_wasm "$file" "$out" "$errfile" "$resultdir/$index.wasm"
-      run_code=$?
-      [[ $run_code -eq $SKIP_CODE ]] && run_code=$SKIP_STATUS
-      ;;
-    ios-sim)
-      run_ios "$file" "$out" "$errfile" "$resultdir/$index.work"
-      run_code=$?
-      [[ $run_code -eq $SKIP_CODE ]] && run_code=$SKIP_STATUS
-      ;;
-    android-*)
-      run_android "$file" "$out" "$errfile" "$resultdir/$index.work" "$index"
-      run_code=$?
-      [[ $run_code -eq $SKIP_CODE ]] && run_code=$SKIP_STATUS
-      ;;
-    *)
-      $BIN "$file" --run --quiet --memory="$memory" >"$out" 2>"$errfile" </dev/null
-      run_code=$?
-      ;;
+    wasm32) run_wasm "$file" "$out" "$errfile" "$resultdir/$index.wasm" ;;
+    ios-sim) run_ios "$file" "$out" "$errfile" "$resultdir/$index.work" ;;
+    android-*) run_android "$file" "$out" "$errfile" "$resultdir/$index.work" "$index" ;;
+    *) run_native "$file" "$out" "$errfile" "$resultdir/$index.work" "$memory" ;;
+  esac
+  run_code=$?
+  case $TARGET in
+    wasm32|ios-sim|android-*) [[ $run_code -eq $SKIP_CODE ]] && run_code=$SKIP_STATUS ;;
   esac
   print -r -- "$run_code" >"$resultdir/$index.status"
 }

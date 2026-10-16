@@ -65,9 +65,9 @@
       "compilerSha256": "e213e1e7e8bd0d7c5a6e6baac7e1ba9475e3b49115a979ce6e5a5576364ba29f",
       "platform": "linux-x86_64",
       "specifications": [
-        "../docs/specs/0003-Syntax.md",
-        "../docs/specs/0004-TypeSystem.md",
-        "../docs/specs/0007-PatternMatching.md"
+        "../docs/specs/language/0003-Syntax.md",
+        "../docs/specs/language/0004-TypeSystem.md",
+        "../docs/specs/language/0007-PatternMatching.md"
       ],
       "checks": [
         "2 runnable programs match exact output; 2 rejection fixtures match exact compiler diagnostics",
@@ -204,8 +204,8 @@
       "status": "resolved-2026-10-04",
       "topic": "Integer arithmetic contract differs between the recorded development binary and current specifications",
       "specifications": [
-        "../docs/specs/0004-TypeSystem.md",
-        "../docs/specs/0013-ErrorHandling.md"
+        "../docs/specs/language/0004-TypeSystem.md",
+        "../docs/specs/language/0013-ErrorHandling.md"
       ],
       "specified": "Current specifications give plain integer multiplication type int; checkedMul explicitly returns Result.",
       "chapter3Scope": "Chapter3 displays the integer input fields separately and makes no arithmetic-result claim.",

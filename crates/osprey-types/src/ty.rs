@@ -49,7 +49,7 @@ pub mod names {
     /// The opaque foreign pointer type used for C interop.
     pub const PTR: &str = "Ptr";
     /// The dense scalar buffer for GPU computation [GPU-BUFFER]
-    /// (docs/specs/0034-GPUComputation.md).
+    /// (docs/specs/runtime/0034-GPUComputation.md).
     pub const GPU_BUFFER: &str = "GpuBuffer";
 }
 

@@ -1,6 +1,6 @@
 //! Spec-driven assertions for **declaration-site variance**
 //! ([TYPE-VARIANCE-DECL], [TYPE-VARIANCE-POSITIONS], [TYPE-VARIANCE-ASSIGN],
-//! docs/specs/0004-TypeSystem.md).
+//! docs/specs/language/0004-TypeSystem.md).
 //!
 //! Position checking is the crisp half: "fields and function results are OUTPUT
 //! positions; function parameters flip the polarity (INPUT); a nested

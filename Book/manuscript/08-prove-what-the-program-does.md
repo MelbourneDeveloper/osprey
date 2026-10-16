@@ -298,6 +298,6 @@ In Chapter 9, the Flight Log begins asking for work beyond a pure calculation. A
 
 ### Authoritative sources
 
-- Osprey [Testing Framework](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0027-TestingFramework.md): `[TESTING-BUILTIN-TEST]`, `[TESTING-BUILTIN-EXPECT]`, `[TESTING-EQUALITY]`, `[TESTING-TAP]`, `[TESTING-EXIT]`, and `[TESTING-CLI-RUN]`.
-- Osprey [Pattern Matching](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0007-PatternMatching.md) and [Error Handling](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0013-ErrorHandling.md): exhaustive cases, `Result`, and preservation of error payloads.
+- Osprey [Testing Framework](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0027-TestingFramework.md): `[TESTING-BUILTIN-TEST]`, `[TESTING-BUILTIN-EXPECT]`, `[TESTING-EQUALITY]`, `[TESTING-TAP]`, `[TESTING-EXIT]`, and `[TESTING-CLI-RUN]`.
+- Osprey [Pattern Matching](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0007-PatternMatching.md) and [Error Handling](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0013-ErrorHandling.md): exhaustive cases, `Result`, and preservation of error payloads.
 - Executable sources, exact output, and the rejection fixture in `examples/chapter-08/`. The chapter's deliberately false expectation and temporary behavior changes were also run and confirmed to fail; edition verification is recorded in `evidence.json`.

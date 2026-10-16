@@ -1,5 +1,5 @@
 //! Device emission for extracted GPU kernels — implements [GPU-BACKEND-DEVICE]
-//! (docs/specs/0034-GPUComputation.md).
+//! (docs/specs/runtime/0034-GPUComputation.md).
 //!
 //! Every kernel [`crate::gpu_kernel`] lifts is also compiled to the shared
 //! device dialect (`compiler/runtime/gpu_f64.metal` and its two companions),

@@ -30,7 +30,7 @@ fn exactArithmetic(work) = {
 //   * walking a string of several number tokens separated by non-digits and
 //     printing each scanned value (a real multi-token lexer loop)
 //
-// Spec: docs/specs/0012-Built-InFunctions.md (Cursor Access)
+// Spec: docs/specs/runtime/0012-Built-InFunctions.md (Cursor Access)
 
 /// ASCII '0' and '9' as named constants (zero-arg fns are in scope everywhere;
 /// top-level `let`s are not visible inside fn bodies).

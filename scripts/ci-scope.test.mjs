@@ -9,11 +9,12 @@ import { classify } from './ci-scope.mjs'
 const cases = [
   ['book chapter and runnable example', ['Book/manuscript/04.md', 'Book/examples/chapter-04/main.osp'], false, true, false],
   ['benchmark tooling and data', ['benchmarks/run.sh', 'benchmarks/results/results.json'], false, false, true],
-  ['specification prose', ['docs/specs/0007-PatternMatching.md'], false, false, false],
+  ['specification prose', ['docs/specs/language/0007-PatternMatching.md'], false, false, false],
   ['repository prose', ['README.md', 'CLAUDE.md'], false, false, false],
   ['compiler source', ['crates/osprey-codegen/src/lib.rs'], true, false, false],
   ['runtime source', ['compiler/runtime/random_runtime.c'], true, false, false],
   ['build orchestration', ['Makefile'], true, false, false],
+  ['included build rules', ['scripts/make/runtime.mk'], true, false, false],
   ['changed CI classifier', ['scripts/ci-scope.mjs'], true, false, false],
   ['changed CI workflow', ['.github/workflows/ci.yml'], true, false, false],
   ['unknown future component', ['new-compiler/main.py'], true, false, false],

@@ -29,4 +29,4 @@ handler and its `perform`s resolve to the server's handlers) and **across fiber
 boundaries** (an effect performed in a `spawn`ed fiber is handled in the
 spawner). Swap the handlers in `main` and the same routes/UI run against a mock
 — the logic above never changes. See
-[`docs/specs/0017-AlgebraicEffects.md`](../../docs/specs/0017-AlgebraicEffects.md).
+[`docs/specs/language/0017-AlgebraicEffects.md`](../../docs/specs/language/0017-AlgebraicEffects.md).

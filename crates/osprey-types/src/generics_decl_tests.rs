@@ -1,7 +1,7 @@
 //! Spec-driven assertions for **declared generics**: the binder and the
 //! construction site ([TYPE-GENERICS-DECL], [GENERICS-CTOR-ARITY],
-//! [TYPE-GENERICS-FN], docs/specs/0004-TypeSystem.md; ML spellings in
-//! [FLAVOR-ML-GENERICS], docs/specs/0024-MLFlavorSyntax.md).
+//! [TYPE-GENERICS-FN], docs/specs/language/0004-TypeSystem.md; ML spellings in
+//! [FLAVOR-ML-GENERICS], docs/specs/language/0024-MLFlavorSyntax.md).
 //!
 //! The call site is stated separately in `generics_apply_tests.rs`; this module
 //! covers the two positions that already ship, and the permutations of each

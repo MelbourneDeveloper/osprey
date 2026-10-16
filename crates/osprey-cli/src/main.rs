@@ -7,7 +7,7 @@
 //! cases as JSON (`--list-tests`, [TESTING-LIST]), or print a built-in's
 //! signature as markdown (`--hover <name>`). `--profile` runs under the
 //! sampling CPU profiler and prints a report ([PROF-CLI-RUN],
-//! docs/specs/0028-Profiler.md). `osprey test` discovers and runs
+//! docs/specs/tooling/0028-Profiler.md). `osprey test` discovers and runs
 //! test suites ([TESTING-CLI-RUN], `test_cmd`). Every compiling mode gates on Hindley-Milner
 //! type inference first — an ill-typed program never reaches codegen — and on
 //! the capability sandbox (`--sandbox`, `--no-http`, `--no-websocket`,

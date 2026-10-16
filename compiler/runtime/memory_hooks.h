@@ -4,7 +4,7 @@
 // program selected. General retain/release are no-ops in default/GC; the
 // default backend still reclaims codegen-proved unique values. Implements the
 // C-runtime half of [GC-ARC-PERCEUS] under the [MEM-BACKENDS] ABI
-// (docs/specs/0018-MemoryManagement.md).
+// (docs/specs/compiler/0018-MemoryManagement.md).
 #ifndef OSPREY_MEMORY_HOOKS_H
 #define OSPREY_MEMORY_HOOKS_H
 

@@ -4,7 +4,7 @@
 // and recomputes the scene every frame in its own fixed-point arithmetic. The
 // GPU is the rasteriser: `base.metal` shades every pixel from the parameter
 // slots pushed below ([FFI-LINK-DIRECTIVES], [FFI-PTR] —
-// docs/specs/0019-ForeignFunctionInterface.md).
+// docs/specs/compiler/0019-ForeignFunctionInterface.md).
 //
 // The fixed-point trigonometry here exists exactly once. A scene is not a copy
 // of this file: it is a title, the name of a fragment entry in the shared Metal

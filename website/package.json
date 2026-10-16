@@ -1,6 +1,6 @@
 {
   "name": "osprey-website",
-  "version": "0.2.0",
+  "version": "0.0.0-dev",
   "description": "Official website for the Osprey Programming Language",
   "main": "index.js",
   "scripts": {
@@ -37,6 +37,8 @@
     "markdown-it": "^14.3.2",
     "markdown-it-anchor": "^9.2.1",
     "mermaid": "^11.17.2",
+    "prismjs": "^1.30.0",
+    "sql.js": "^1.15.0",
     "typediagram-core": "^0.13.0"
   },
   "dependencies": {

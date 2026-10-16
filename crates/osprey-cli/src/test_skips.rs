@@ -1,6 +1,6 @@
 //! TAP skip diagnostics for `osprey test`. Implements
 //! [TESTING-SKIP-WARNING-RUN], [TESTING-SKIP-REASON] and [TESTING-TAP-AMBIGUITY]
-//! (docs/specs/0027-TestingFramework.md).
+//! (docs/specs/language/0027-TestingFramework.md).
 //!
 //! A skipped case is a case that did not run, and a run that says nothing about
 //! it reads exactly like a run where it passed. Every `# SKIP` directive is

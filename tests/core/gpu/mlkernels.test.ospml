@@ -3,7 +3,7 @@
 // activations, a softmax-shaped pipeline, dense layers, matrix-vector products
 // via gather, and a gradient-descent training loop ([GPU-KERNEL-FORM],
 // [GPU-MAP], [GPU-ZIPWITH], [GPU-FOLD], [GPU-SCAN], [GPU-FILTER], [GPU-IOTA],
-// [GPU-GET], [GPU-CONVERT] — docs/specs/0034-GPUComputation.md).
+// [GPU-GET], [GPU-CONVERT] — docs/specs/runtime/0034-GPUComputation.md).
 //
 // The capture is the load-bearing shape. [GPU-KERNEL-FORM] names "a closure
 // capturing enclosing locals (a folded scalar piped back into a gpuMap)" as a

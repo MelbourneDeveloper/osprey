@@ -1,5 +1,5 @@
 //! Buffer construction and host transfer for the GPU surface
-//! (docs/specs/0034-GPUComputation.md): `toGpu` in its three lowerings —
+//! (docs/specs/runtime/0034-GPUComputation.md): `toGpu` in its three lowerings —
 //! literal [GPU-BUFFER-LITERAL], iterator fusion [GPU-BUFFER-FUSE] and list
 //! copy [GPU-BUFFER-FROM-LIST] — and `fromGpu` [GPU-BUFFER-TO-LIST]. These are
 //! the host↔device boundary; the combinators that run kernels live in the

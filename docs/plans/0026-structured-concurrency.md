@@ -5,7 +5,7 @@
 `crates/osprey-codegen` + native runtime (`fiber_runtime.c`,
 `effects_coro.c`)
 **Status:** design spec written; **no implementation started**
-**Spec:** [0036-StructuredConcurrency.md](../specs/0036-StructuredConcurrency.md)
+**Spec:** [0036-StructuredConcurrency.md](../specs/language/0036-StructuredConcurrency.md)
 
 ## Summary
 
@@ -13,7 +13,7 @@ One mechanism carries the whole design: a suspended fiber is a continuation a
 handler holds, so cancellation is *declining to resume* plus finalizers, and
 serialization is *resuming one performer at a time*. Both halves grow from
 shipped behavior — the thread-as-continuation resume runtime and the
-[EFFECTS-FIBER-PERFORM](../specs/0017-AlgebraicEffects.md#resuming-handlers)
+[EFFECTS-FIBER-PERFORM](../specs/language/0017-AlgebraicEffects.md#resuming-handlers)
 round-trip serialization — rather than adding a parallel subsystem.
 
 ## Existing seams this builds on
@@ -63,13 +63,13 @@ round-trip serialization — rather than adding a parallel subsystem.
 
 - **WebAssembly:** everything here rides the pthread/continuation runtime, so
   it is native-only at first — the same boundary resume already has
-  ([0022](../specs/0022-WebAssemblyTarget.md)). Spec 0036 claims must stay
+  ([0022](../specs/compiler/0022-WebAssemblyTarget.md)). Spec 0036 claims must stay
   qualified until a wasm story exists.
 - **Deterministic mode** is sequential; `cancel` before the victim's driving
   `await` must still dequeue it, and turn order must be spawn order, or
   goldens diverge between modes.
 - **Staged effects:** retain captured-state ownership and alias evidence through
-  discharge ([Algebraic Effects](../specs/0017-AlgebraicEffects.md)). Erased
+  discharge ([Algebraic Effects](../specs/language/0017-AlgebraicEffects.md)). Erased
   dispatch is absent from the runtime turn graph; residual memory access still
   requires the same synchronization or exclusivity proof.
 - **Memory backends:** the differential harness runs every corpus program

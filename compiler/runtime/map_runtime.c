@@ -9,9 +9,9 @@
  * algebra (hashing, assoc, lookup, remove) lives in map_runtime_hamt.c.
  *
  * Implements [TYPE-MAP], [TYPE-MAP-LOOKUP], [TYPE-MAP-OPS] from
- * docs/specs/0004-TypeSystem.md.
+ * docs/specs/language/0004-TypeSystem.md.
  *
- * Backs the map builtins of docs/specs/0012-Built-InFunctions.md — [BUILTIN-MAP],
+ * Backs the map builtins of docs/specs/runtime/0012-Built-InFunctions.md — [BUILTIN-MAP],
  * [BUILTIN-MAP-GET], [BUILTIN-MAP-SET], [BUILTIN-MAP-REMOVE],
  * [BUILTIN-MAP-MERGE], [BUILTIN-MAP-CONTAINS] and [BUILTIN-COLLECTION-LENGTH].
  * The iterator below backs [BUILTIN-MAP-KEYS] and [BUILTIN-MAP-VALUES].

@@ -9,8 +9,8 @@
 # Local `make ci` and hosted CI use the same installer and fail when measured
 # duplication exceeds the ceiling below (deslop exits 3).
 [threshold]
-# The ceiling is 6.1%, as committed on main with arithmetic effects. Run
-# `make _deslop` before pushing so the locally measured verdict matches CI.
+# Run `make _deslop` before pushing so the locally measured verdict matches CI.
+# The current ceiling and comparable measurements are recorded below.
 #
 # The drop came from a round of real dedup: `analysis.rs`'s outline and hover
 # statement walkers became ONE walker parameterised by whether it descends into
@@ -42,7 +42,10 @@
 # offenders are the `builtin_docs_*` documentation TABLES (repeated data rows,
 # not logic — see the [category=data] note deslop prints) and structural-only
 # CST-walk shapes that don't factor without obscuring intent.
-max_duplication_percent = 6.1
+# 2026-10-16: latest Deslop 0.38.0 measures 3460/114390 LOC (3.0247%).
+# The same version measured main at 3460/114342 LOC (3.0260%).
+# Ratchet down after the structural cleanup; use the same CLI on both trees.
+max_duplication_percent = 3.03
 
 [defaults]
 exclude = [

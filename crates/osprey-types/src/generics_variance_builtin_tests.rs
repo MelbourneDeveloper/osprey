@@ -1,6 +1,6 @@
 //! The **built-in variance table** of [TYPE-VARIANCE-ASSIGN], asserted through
 //! the assignment sites rather than read off the declaration
-//! ([TYPE-VARIANCE-COERCION], docs/specs/0004-TypeSystem.md).
+//! ([TYPE-VARIANCE-COERCION], docs/specs/language/0004-TypeSystem.md).
 //!
 //! "Built-in constructors' declared variance: `Result<out T, out E>`,
 //! `List<out T>`, `Fiber<out T>`, `Map<K, out V>` (keys invariant); `Channel<T>`

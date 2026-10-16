@@ -32,7 +32,7 @@
     {
       "title": "Language",
       "items": [
-        { "text": "Language specification", "url": "/spec/" },
+        { "text": "Language specification", "url": "/spec/language/" },
         { "text": "Feature status", "url": "/status/" },
         { "text": "Keywords", "url": "/docs/keywords/" }
       ]

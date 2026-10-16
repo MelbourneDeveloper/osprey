@@ -1,6 +1,6 @@
 use super::{b, i, mono, poly, res, s, Type, TypeEnv};
 
-/// The GPU computation surface (docs/specs/0034-GPUComputation.md). Element
+/// The GPU computation surface (docs/specs/runtime/0034-GPUComputation.md). Element
 /// scalarity is a call-site representation constraint [GPU-BUFFER-ELEM]
 /// (`builtin_constraints`); kernel purity is proven by the effect checker
 /// [GPU-KERNEL-PURE] (`effect_rows`).

@@ -1,6 +1,6 @@
 //! The host-backend lowerings that make a trained model runnable: `gpuMatMul`
 //! [GPU-MATMUL], `gpuLoad` [GPU-BUFFER-LOAD] and `gpuLoadTensor`
-//! [GPU-BUFFER-TENSOR] (docs/specs/0034-GPUComputation.md). Each is one call
+//! [GPU-BUFFER-TENSOR] (docs/specs/runtime/0034-GPUComputation.md). Each is one call
 //! into `compiler/runtime/gpu_host.c` that returns a float buffer or NULL,
 //! wrapped as `Result<GpuBuffer<float>, Error>` whose `Error` carries the
 //! reason the runtime recorded — a missing file, an unknown tensor, a shape the

@@ -1,0 +1,8 @@
+# Osprey documentation
+
+- [Repository map](contributing/repository-map.md): compiler pipeline, build rules and where changes belong.
+- [Specifications](specs/README.md): normative language and engineering contracts.
+- [Active plans](plans/README.md): delivery status and remaining work.
+- [Language guides](../website/src/docs/index.md): using Osprey.
+- [Release process](RELEASING.md): building and publishing releases.
+- [Historical reviews](reviews/): findings against the revisions named in each review.

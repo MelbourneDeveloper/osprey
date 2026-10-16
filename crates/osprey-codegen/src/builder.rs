@@ -380,7 +380,7 @@ impl Codegen {
 /// Attribute group applied to every generated function: keep frame pointers in
 /// ALL functions (Darwin's default drops them in leaves), so the profiler's
 /// async frame-pointer chain walk is valid from any sample point. Implements
-/// [PROF-CODEGEN-FP], docs/specs/0028-Profiler.md; cost is ~1% (arm64 reserves
+/// [PROF-CODEGEN-FP], docs/specs/tooling/0028-Profiler.md; cost is ~1% (arm64 reserves
 /// x29 for the frame chain by ABI anyway).
 /// Mirrors `OSP_MAX_OPERATION_IDS` in `compiler/runtime/effects_runtime.h`: the
 /// size of the runtime's per-operation evidence table.

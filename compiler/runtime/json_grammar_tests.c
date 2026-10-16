@@ -1,6 +1,6 @@
 // The JSON string and number grammars: everything they accept and everything
 // they must refuse [BUILTIN-JSON-STRING] [BUILTIN-JSON-NUMBER]
-// (docs/specs/0012-Built-InFunctions.md). Second translation unit of the json
+// (docs/specs/runtime/0012-Built-InFunctions.md). Second translation unit of the json
 // suite; see json_tests_shared.h for why it is separate.
 #include <stdint.h>
 #include <stdio.h>

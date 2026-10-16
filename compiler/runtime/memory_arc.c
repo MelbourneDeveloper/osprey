@@ -1,6 +1,6 @@
 // Perceus ARC backend for Osprey — the swappable `@osp_alloc` implementation
 // selected at link time by `osprey --memory=arc`. Implements [MEM-BACKENDS]
-// and [GC-ARC-PERCEUS] (docs/specs/0018-MemoryManagement.md).
+// and [GC-ARC-PERCEUS] (docs/specs/compiler/0018-MemoryManagement.md).
 //
 // Algorithm: precise reference counting after Reinking, Xie, de Moura & Leijen,
 // "Perceus: Garbage Free Reference Counting with Reuse", MSR-TR-2020-42

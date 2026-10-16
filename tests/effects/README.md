@@ -1,6 +1,6 @@
 # Algebraic effect tests
 
-These Default (`.osp`) and ML (`.ospml`) suites exercise the current effects implementation. Each pair shares an expected output. Start with the [runnable guide](../../examples/handlers/README.md); the [specification](../../docs/specs/0017-AlgebraicEffects.md) defines the contract and [plan 0016](../../docs/plans/0016-algebraic-effects-and-handlers.md) tracks unfinished work.
+These Default (`.osp`) and ML (`.ospml`) suites exercise the current effects implementation. Each pair shares an expected output. Start with the [runnable guide](../../examples/handlers/README.md); the [specification](../../docs/specs/language/0017-AlgebraicEffects.md) defines the contract and [plan 0016](../../docs/plans/0016-algebraic-effects-and-handlers.md) tracks unfinished work.
 
 ## Request work and choose its implementation
 

@@ -221,6 +221,6 @@ fn unimplemented_abort(effect: &str, operation: &str) -> String {
     format!(
         "`{effect}.{operation}` is declared `abort`, but abandoning a region does not yet unwind it: \
 the discarded frames' owned operands are not released \
-(docs/specs/0017-AlgebraicEffects.md, EFFECTS-FINALIZATION)"
+(docs/specs/language/0017-AlgebraicEffects.md, EFFECTS-FINALIZATION)"
     )
 }

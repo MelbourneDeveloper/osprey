@@ -1,144 +1,101 @@
 <p align="center">
-  <img src="website/src/assets/images/logo.png" alt="Osprey logo" width="160" />
+  <img src="website/src/assets/images/logo.png" alt="Osprey logo" width="120" />
 </p>
 
-# Osprey Programming Language
+# Osprey
 
-Osprey is a functional language built around **algebraic effects**: application code requests an operation, and a handler supplies its implementation. Use the same logic with a real database, an in-memory test, or a different platform service.
+A functional language built around **algebraic effects**, inferred types and native compilation. Write your application logic once; handlers connect it to storage, platform services and deterministic tests.
 
-Types and effect requirements are inferred. Osprey compiles through LLVM to native binaries, WebAssembly, and C ABI libraries for iOS and Android. It is alpha software.
+Osprey is alpha software. It compiles through LLVM to native binaries, WebAssembly and C ABI libraries for iOS and Android.
 
-## Choose the implementation where the work runs
+## Save a draft. Test an offline failure.
+
+An editor needs the same save logic to work with real storage and a simulated failure:
 
 ```osprey
-effect Log { write: fn(string) -> Unit }
-
-fn placeOrder() = {
-    perform Log.write("Order accepted")
-    "accepted"
+effect Drafts { save: fn(string, string) -> Result<int, Error> }
+fn saveDraft() = match perform Drafts.save("draft.txt", "Ship it.") {
+    Success _ => "Saved"
+    Error { message } => "Retry: ${message}"
 }
 
-let console = handler Log { write message => print(message) }
-mut captured = ""
-let recording = handler Log { write message => { captured = message } }
+let disk = handler Drafts {
+    save path text => writeFile(path, text)
+}
+let offline = handler Drafts {
+    save _ _ => Error { message: "offline" }
+}
 
-let live = console(placeOrder)
-let tested = recording(placeOrder)
-print("${live}, ${tested}; recorded: ${captured}")
+print("${disk(saveDraft)} / ${offline(saveDraft)}")
 ```
 
-`placeOrder` asks to log without taking a logger parameter. `console` and `recording` are ordinary callable handler values. Each takes the work to run so its implementation is installed **before** the work performs an operation. The compiler rejects a call whose required operations have no handler.
-
-The same example in ML flavor:
-
-```osprey-ml
-effect Log
-    write : string => Unit
-
-placeOrder () =
-    perform Log.write "Order accepted"
-    "accepted"
-
-console = handler Log
-    write message => print message
-mut captured = ""
-recording = handler Log
-    write message => captured := message
-
-live = console placeOrder
-tested = recording placeOrder
-print "${live}, ${tested}; recorded: ${captured}"
+```text
+Saved / Retry: offline
 ```
 
-Use `handle E { ... }` inside a block to handle the rest of that block. Value operations return to their caller; operations declared `control` can resume or stop the remaining computation. `handle static E` removes effect dispatch during compilation. See the [effects guide](website/src/docs/algebraic-effects.md), [runnable comparisons](examples/handlers/README.md), and [implementation status](docs/plans/0016-algebraic-effects-and-handlers.md).
+`disk` really writes the file. `offline` simulates unavailable storage without touching the file system. `saveDraft` handles the outcome while its handler supplies the storage capability. UI and validation helpers can call it without passing storage objects through each layer. The compiler rejects calls with no matching handler.
 
-## Applications using effects
+Read the [effects guide, including the ML version](https://www.ospreylang.dev/docs/effects/), or [try Osprey online](https://www.ospreylang.dev/playground/).
 
-| Application | What the handlers provide |
-| --- | --- |
-| [Talon Bank: web, iOS, and Android](examples/projects/modules/README.md) | SQLite storage, audit logging, request metrics, and platform rendering handlers around shared screens and behavior |
-| [Issue Inbox for iOS and Android](examples/mobile/README.md) | SQL and HTTP command descriptions for native hosts, with replaceable test implementations |
-| [iPhone counter](examples/ios/README.md) | A Swift logging callback behind an Osprey effect |
+## Get started
 
-Issue Inbox shares its state transitions, screen tree, GitHub decoding, SQLite statements, search, bookmarks, and notes across both platforms. SwiftUI and Android hosts render the screen and execute platform commands.
-
-<p align="center">
-  <img src="website/src/assets/images/mobile/issue-inbox-ios.png" alt="Issue Inbox with live GitHub issues on an iPhone simulator" width="280" />
-  <img src="website/src/assets/images/mobile/issue-inbox-android.png" alt="Issue Inbox restored from SQLite on an Android emulator" width="280" />
-</p>
-
-## Language features
-
-- **Algebraic effects:** reusable handlers, inferred requirements, explicit control operations, and static handler selection.
-- **Inferred types:** algebraic data types and exhaustive pattern matching; expected failures use `Result`.
-- **Two syntax flavors:** braces and `fn` in `.osp`, or layout and currying in `.ospml`. Project modules can mix them.
-- **Isolated fibers:** typed message passing without a separate `async fn` kind.
-- **Memory choices:** the default non-reclaiming allocator, tracing GC (`--memory=gc`), or Perceus reference counting (`--memory=arc`) on native builds.
-
-Integer arithmetic returns plain values and requests the `Arith` effect on overflow or a zero divisor. The application chooses a policy; an unhandled fault is a compile error. See [arithmetic effects](docs/specs/0037-ArithmeticEffects.md).
-
-Dynamic control operations currently require the native target. WebAssembly and mobile support value handlers and static discharge, but reject dynamic resumption. Generalized effect rows, reusable continuations, and other remaining work are tracked in [plan 0016](docs/plans/0016-algebraic-effects-and-handlers.md).
-
-## Installation
-
-Osprey invokes `clang` to compile and link native programs. Install LLVM/clang
-before installing the compiler.
+Install LLVM/clang, then install Osprey:
 
 ```bash
-# macOS
-xcode-select --install
+# macOS or Linux, with Homebrew
 brew install nimblesite/tap/osprey
 
-# Debian/Ubuntu; lld is also used for WebAssembly
-sudo apt-get install -y clang llvm lld
-brew install nimblesite/tap/osprey
-
-# Windows
+# Windows, with Scoop
 scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
 scoop install osprey
 ```
 
-Homebrew's LLVM package is keg-only. If Osprey cannot find clang, add
-`$(brew --prefix llvm)/bin` to `PATH` or set
-`OSPREY_CC=$(brew --prefix llvm)/bin/clang`.
+```bash
+osprey program.osp --run
+osprey program.osp --check
+osprey program.osp --target=wasm32 --compile -o program.wasm
+```
 
-See the [installation guide](https://www.ospreylang.dev/docs/installation/) for
-platform-specific verification and troubleshooting.
+See the [installation guide](https://www.ospreylang.dev/docs/installation/) for LLVM setup, supported platforms and verification.
 
-## Build and test
+## Find your way around
+
+| Start here | What you will find |
+| --- | --- |
+| [examples/](examples/README.md) | Runnable programs, Talon Bank, Issue Inbox and GPT-2 |
+| [crates/](crates) | Rust compiler, type checker, code generation, formatter, language server and debugger |
+| [compiler/runtime/](compiler/runtime) | C runtime and GPU adapters |
+| [tree-sitter-osprey/](tree-sitter-osprey) | Default-flavor grammar |
+| [tests/](tests) | Default and ML language suites with shared golden output |
+| [docs/](docs/README.md) | Specifications, delivery plans and contributor architecture |
+| [website/](website) | Language guides, reference pages and public website |
+| [vscode-extension/](vscode-extension/README.md), [webcompiler/](webcompiler) | Editor integration and online compiler |
+| [scripts/](scripts/README.md) | Build rules, validation, platform tooling and packaging support |
+| [Book/](Book/README.md), [benchmarks/](benchmarks/README.md) | The Osprey book and measured comparisons |
+
+The [repository map](docs/contributing/repository-map.md) explains the compilation pipeline, build entry points and where a change belongs. The [contributing guide](CONTRIBUTING.md) covers setup and coordination.
+
+## Build and verify
 
 ```bash
+make setup
 make build
 make test
-make lint
 make ci
-make install
 ```
 
-The compiler binary is written to `target/release/osprey`.
+Run these from the repository root. The compiler is written to `target/release/osprey`. Build rules live in `scripts/make/`; the root Makefile is their entry point.
 
-```bash
-osprey program.osp --check
-osprey program.osp --compile -o program
-osprey program.osp --run
-osprey program.osp --target=wasm32 --compile -o program.wasm
-osprey examples/mobile/inbox --target=ios --compile -o libInbox.a
-osprey examples/mobile/inbox --target=android-arm64 --compile -o libInbox.a
-```
+## Language and applications
 
-The WebAssembly target supports a portable runtime subset, with file access supplied by the WASI host and a defined browser bridge. Fibers, built-in HTTP/WebSocket operations, processes, general C FFI, and resumable effects are rejected. See the [WebAssembly specification](docs/specs/0022-WebAssemblyTarget.md) and [`examples/wasm/`](examples/wasm/).
+- **Effects:** typed requests, reusable value handlers, native single-shot control operations and static interpretation. [Guide](website/src/docs/algebraic-effects.md).
+- **Types:** inference, algebraic data types, exhaustive matching and explicit `Result` failures.
+- **Two flavors:** Default braces in `.osp` and ML layout in `.ospml`, sharing a compiler and project modules.
+- **Arithmetic:** integer faults require an explicit `Arith` policy. [Contract](docs/specs/language/0037-ArithmeticEffects.md).
+- **Native concurrency and memory:** isolated fibers; default non-reclaiming allocation, tracing GC or reference counting.
 
-The [iOS](docs/specs/0038-iOSTarget.md) and [Android](docs/specs/0039-AndroidTarget.md) targets emit an archive and C header for the platform application to link. They require their matching SDK/NDK and runtime builds. The mobile example includes these build steps. Mobile C ABI builds currently support the default allocator, which retains general allocations for the process lifetime.
+[Talon Bank](examples/projects/modules/README.md) shares web and mobile application logic; [Issue Inbox](examples/mobile/README.md) shares iOS and Android state, UI descriptions and platform commands. Native hosts execute mobile SQL and HTTP commands and return completion events. [GPT-2](examples/gpt2/README.md) uses two static tensor handlers for host lists and the GPU surface.
 
-## Documentation
+Dynamic control effects require native execution. WebAssembly and mobile support value handlers and static discharge; unsupported capabilities are rejected. Full scoped effect rows and reusable continuations remain unfinished. See [feature status](website/src/status.md), [specifications](docs/specs/README.md) and [active plans](docs/plans/README.md) for the precise limits.
 
-- [Algebraic effects guide](website/src/docs/algebraic-effects.md)
-- [Language and engineering specifications](docs/specs/)
-- [Website documentation](website/src/docs/)
-- [VS Code extension](vscode-extension/README.md)
-- [Contributing guide](CONTRIBUTING.md)
-- [Release process](docs/RELEASING.md)
-
-The specifications define intended behavior. Individual chapters identify
-implementation gaps. The [feature status page](website/src/status.md) summarizes
-implementation limits.
+MIT licensed. See [LICENSE](LICENSE) and the [release process](docs/RELEASING.md).

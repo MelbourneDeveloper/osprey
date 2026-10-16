@@ -4,7 +4,7 @@
 //! record literal is still its own node. The CST→AST lowering ([`super::lower`])
 //! is the *only* place these are normalised into the canonical
 //! [`osprey_ast`] — keeping parse and lower cleanly separated
-//! ([FLAVOR-FRONTEND], docs/specs/0023-LanguageFlavors.md).
+//! ([FLAVOR-FRONTEND], docs/specs/language/0023-LanguageFlavors.md).
 //!
 //! This separation is deliberate: the parser ([`super::parser`]) decides only
 //! *what was written*; the lowerer decides *what it means*. Nothing in this

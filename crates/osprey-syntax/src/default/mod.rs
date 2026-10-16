@@ -6,7 +6,7 @@
 //!
 //! This is one of two sibling flavor folders ([`crate::ml`] is the other); both
 //! converge on the same AST, after which nothing may tell them apart
-//! ([FLAVOR-BOUNDARY], docs/specs/0023-LanguageFlavors.md). Errors are
+//! ([FLAVOR-BOUNDARY], docs/specs/language/0023-LanguageFlavors.md). Errors are
 //! collected, never fatal: the frontend never panics on bad input and always
 //! produces a best-effort tree.
 

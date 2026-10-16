@@ -1,5 +1,5 @@
 // Assertion-driven tests for the WebSocket transport
-// (docs/specs/0015-WebSockets.md). A failed assert aborts the binary.
+// (docs/specs/runtime/0015-WebSockets.md). A failed assert aborts the binary.
 //
 // This suite OWNS websocket_client_runtime.c and websocket_server_runtime.c.
 // Everything runs against a REAL loopback server in this process — a real

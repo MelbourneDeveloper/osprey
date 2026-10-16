@@ -6,7 +6,7 @@ use super::{
 
 /// The argument slot holding the kernel callback of a GPU combinator, if
 /// `name` is one. Implements [GPU-KERNEL-PURE]
-/// (docs/specs/0034-GPUComputation.md).
+/// (docs/specs/runtime/0034-GPUComputation.md).
 pub(super) fn gpu_kernel_slot(name: &str) -> Option<usize> {
     match name {
         "gpuMap" | "gpuFilter" => Some(1),

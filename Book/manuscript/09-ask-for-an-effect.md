@@ -304,6 +304,6 @@ Chapter 10 adds unreliable outside work. The next question is how an effect oper
 
 ### Authoritative sources
 
-- [Algebraic Effects](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0017-AlgebraicEffects.md): callable handlers, rest-of-block scope, operation typing, value/control modes, and static interpretation. This specification also contains planned features; use [plan 0016](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0016-algebraic-effects-and-handlers.md) for delivery limits.
+- [Algebraic Effects](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0017-AlgebraicEffects.md): callable handlers, rest-of-block scope, operation typing, value/control modes, and static interpretation. This specification also contains planned features; use [plan 0016](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0016-algebraic-effects-and-handlers.md) for delivery limits.
 - [Runnable handler examples](https://github.com/Nimblesite/osprey/tree/main/examples/handlers): current execution examples and comparisons with other languages.
 - Executable source, exact output, tests, and rejection fixtures in `examples/chapter-09/`. The compiler identity and verification are recorded in `evidence.json`; the publication release remains unpinned.

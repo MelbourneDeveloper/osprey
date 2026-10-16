@@ -61,11 +61,11 @@ pub(crate) struct Cli {
     pub(super) debug_options: crate::debug_options::DebugOptions,
     /// Profile the run [PROF-CLI-RUN]: build with line tables + frame pointers
     /// at full optimization, sample via the in-runtime profiler, then export
-    /// and report (docs/specs/0028-Profiler.md).
+    /// and report (docs/specs/tooling/0028-Profiler.md).
     pub(super) profile: bool,
     /// Explicit source flavor from `--flavor`; `None` when unset, so flavor
     /// resolution falls through to the marker/extension precedence
-    /// ([FLAVOR-SELECT], docs/specs/0023-LanguageFlavors.md).
+    /// ([FLAVOR-SELECT], docs/specs/language/0023-LanguageFlavors.md).
     pub(super) flavor: Option<Flavor>,
 }
 

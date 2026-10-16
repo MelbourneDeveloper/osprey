@@ -5,7 +5,7 @@
 //! pipe desugaring, record/block normalisation, string interpolation) is the
 //! lowerer's job ([`super::lower`]). This keeps a clean parse/lower seam: the
 //! parser decides *what was written*, the lowerer decides *what it means*
-//! ([FLAVOR-FRONTEND], docs/specs/0023-LanguageFlavors.md).
+//! ([FLAVOR-FRONTEND], docs/specs/language/0023-LanguageFlavors.md).
 //!
 //! ## Design, and the authorities it follows
 //!

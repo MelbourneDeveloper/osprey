@@ -15,6 +15,14 @@ SKIP_STATUS=skip
 # from any status the compiler or Node can return on its own.
 SKIP_CODE=200
 
+# Native suites receive the same private working directory as cross targets.
+# Keep writes out of the checkout and retain stdout/status even on failure.
+run_native() {
+  local file=$1 out=$2 err=$3 work=$4 memory=$5
+  mkdir -p "$work" || return 1
+  (cd -- "$work" && $BIN "$file" --run --quiet --memory="$memory") >"$out" 2>"$err" </dev/null
+}
+
 # Extract the compiler's explicit rejection of a program on this target, in
 # either shape it takes: an unsupported capability, or a boundary the mobile C
 # ABI cannot express. Unexpected LLVM/linker errors match NEITHER and so remain

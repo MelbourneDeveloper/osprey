@@ -4,7 +4,9 @@ Want to help build a programming language? You're in the right place. Building a
 
 Even discussions are great at this point.
 
-**CRITICIAL**: always create an issue before starting work on the compiler. Explain the issue and propose a solution for the issue. Please get approval before moving into the implementation phase. All contributions are appreciated but compiler work requires strict review and planning.
+**Compiler changes**: always create an issue before starting work on the compiler. Explain the issue and propose a solution for the issue. Please get approval before moving into the implementation phase. All contributions are appreciated but compiler work requires strict review and planning.
+
+Start with the [repository map](docs/contributing/repository-map.md) to find the component and build rules for your change.
 
 ## The Tech Stack
 
@@ -13,16 +15,6 @@ Osprey is built on battle-tested tools:
 - **[tree-sitter](https://tree-sitter.github.io/)** - Grammar parsing (`tree-sitter-osprey/`)
 - **[LLVM](https://llvm.org/)** - Code generation (textual IR handed to clang)
 - **C** - The runtime (fibers, HTTP/WebSocket, collections) in `compiler/runtime/`
-
-## AI Assisted Development
-
-You don't need a CS degree to implement language features. I've been using Claude Sonnet 4 with Cursor, and it's the first combo that actually guided me through the process of building a compiler. Other AI agents will work too, but this setup lets anyone contribute to language design.
-
-The AI can help you:
-- Extend the tree-sitter grammar and understand AST patterns
-- Implement new operators and language constructs
-- Debug LLVM IR generation
-- Write comprehensive tests
 
 ## Getting Started
 

@@ -266,9 +266,9 @@ Chapter 3 follows the types the compiler inferred through these same expressions
 
 ## Authoritative sources
 
-- Osprey [Syntax](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0003-Syntax.md) for immutable Default-flavor bindings, functions, blocks, and expressions.
-- Osprey [Type System](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0004-TypeSystem.md) for inferred primitive types and function results.
-- Osprey [String Interpolation](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0006-StringInterpolation.md) for embedded value rendering.
-- Osprey [Error Handling](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0013-ErrorHandling.md) for checked integer arithmetic and visible overflow.
-- Osprey [Arithmetic Effects](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0037-ArithmeticEffects.md) for the distinction between ordinary operators with an `Arith` policy and the explicit `checkedMul` result.
+- Osprey [Syntax](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0003-Syntax.md) for immutable Default-flavor bindings, functions, blocks, and expressions.
+- Osprey [Type System](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0004-TypeSystem.md) for inferred primitive types and function results.
+- Osprey [String Interpolation](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0006-StringInterpolation.md) for embedded value rendering.
+- Osprey [Error Handling](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0013-ErrorHandling.md) for checked integer arithmetic and visible overflow.
+- Osprey [Arithmetic Effects](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0037-ArithmeticEffects.md) for the distinction between ordinary operators with an `Arith` policy and the explicit `checkedMul` result.
 - The executable Chapter 2 Flight Log, expected output, and immutable-assignment rejection fixture in `examples/chapter-02/`.

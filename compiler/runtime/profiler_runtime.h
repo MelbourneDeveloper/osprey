@@ -1,5 +1,5 @@
 // Osprey sampling CPU profiler — shared declarations. Implements
-// [PROF-COLLECT-SAMPLER] / [PROF-COLLECT-REGISTRY] (docs/specs/0028-Profiler.md).
+// [PROF-COLLECT-SAMPLER] / [PROF-COLLECT-REGISTRY] (docs/specs/tooling/0028-Profiler.md).
 //
 // The profiler is compiled into every runtime archive and stays inert unless
 // OSPREY_PROFILE=<path> is set at process start [PROF-ACTIVATE-ENV]. Public
