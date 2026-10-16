@@ -1,132 +1,22 @@
-// TextMate grammar tests for both Osprey flavors. The grammars ship in the
-// VSIX and decide every colour a user sees, yet nothing executed them until
-// now: four rules were dead or wrong in a released extension and no check
-// could notice, because a wrong scope still renders — just in the wrong
-// colour. These tests tokenize with the SAME engine VS Code uses
-// (vscode-textmate over vscode-oniguruma) so a passing assertion is a
-// statement about the editor, not about a regex read by eye.
-//
-// Two layers, and both are load-bearing:
-//
-//   1. Named regressions — one assertion per defect found on real files, so a
-//      reintroduced bug names itself.
-//   2. A corpus invariant sweep over EVERY .osp/.ospml in the repository. Unit
-//      fixtures only cover syntax someone thought to write down; the corpus is
-//      the syntax that actually exists. It caught the missing `effect`,
-//      `handle`, `perform` and `extern` keywords that no fixture would have.
+// TextMate grammar tests for both Osprey flavors: one named regression per
+// defect found on real files, so a reintroduced bug names itself. Nothing
+// executed the grammars until these tests existed, and a wrong scope still
+// renders — just in the wrong colour — so only an assertion notices. The
+// corpus-wide invariant sweep lives in grammar-corpus.test.ts.
 
 import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
-import * as vsctm from "vscode-textmate";
-import * as oniguruma from "vscode-oniguruma";
 import { extensionRoot } from "./osprey-test-env";
-
-const repoRoot = path.resolve(extensionRoot, "..");
-const syntaxesDir = path.join(extensionRoot, "syntaxes");
-
-const GRAMMARS: Record<string, string> = {
-  "source.osprey": "osprey.tmGrammar.json",
-  "source.osprey-ml": "osprey-ml.tmLanguage.json",
-};
-
-/** One token: its text and its scopes with the grammar's root scope dropped. */
-interface Token {
-  text: string;
-  scopes: string[];
-  line: number;
-}
-
-let registry: vsctm.Registry;
-
-async function grammarFor(scope: string): Promise<vsctm.IGrammar> {
-  const grammar = await registry.loadGrammar(scope);
-  assert.ok(grammar, `grammar ${scope} loads`);
-  return grammar;
-}
-
-/** Tokenize `source`, keeping the ruleStack across lines as an editor does. */
-function tokenize(grammar: vsctm.IGrammar, source: string): Token[] {
-  const tokens: Token[] = [];
-  let stack = vsctm.INITIAL;
-  source.split("\n").forEach((line, index) => {
-    const result = grammar.tokenizeLine(line, stack);
-    stack = result.ruleStack;
-    for (const token of result.tokens) {
-      const text = line.slice(token.startIndex, token.endIndex);
-      if (text.trim()) {
-        tokens.push({ text, scopes: token.scopes.slice(1), line: index + 1 });
-      }
-    }
-  });
-  return tokens;
-}
-
-/** The scopes of the first token whose text is exactly `text`. */
-function scopesOf(tokens: Token[], text: string): string {
-  const found = tokens.find((token) => token.text.trim() === text);
-  assert.ok(found, `token ${JSON.stringify(text)} exists`);
-  return found.scopes.join("|");
-}
-
-function assertScoped(tokens: Token[], text: string, expected: string): void {
-  const scopes = scopesOf(tokens, text);
-  assert.ok(
-    scopes.includes(expected),
-    `${JSON.stringify(text)} should be ${expected}, got ${scopes || "NONE"}`,
-  );
-}
-
-/** Every Osprey source file in the repository, excluding build output. */
-function corpusFiles(): string[] {
-  const out: string[] = [];
-  const walk = (dir: string): void => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name !== "build" && entry.name !== "node_modules") {
-          walk(full);
-        }
-      } else if (/\.(osp|ospml)$/.test(entry.name)) {
-        out.push(full);
-      }
-    }
-  };
-  for (const top of ["tests", "examples"]) {
-    walk(path.join(repoRoot, top));
-  }
-  return out.sort();
-}
+import {
+  assertEveryScoped,
+  assertScoped,
+  grammarFor,
+  scopesOf,
+  tokenize,
+} from "./grammar-harness";
 
 suite("TextMate grammars", () => {
-  suiteSetup(async () => {
-    const wasmPath = path.join(
-      path.dirname(require.resolve("vscode-oniguruma")),
-      "onig.wasm",
-    );
-    const wasm = fs.readFileSync(wasmPath);
-    await oniguruma.loadWASM(
-      wasm.buffer.slice(
-        wasm.byteOffset,
-        wasm.byteOffset + wasm.byteLength,
-      ) as ArrayBuffer,
-    );
-    registry = new vsctm.Registry({
-      onigLib: Promise.resolve({
-        createOnigScanner: (sources) => new oniguruma.OnigScanner(sources),
-        createOnigString: (value) => new oniguruma.OnigString(value),
-      }),
-      loadGrammar: async (scope) => {
-        const file = GRAMMARS[scope];
-        if (!file) {
-          return null;
-        }
-        const full = path.join(syntaxesDir, file);
-        return vsctm.parseRawGrammar(fs.readFileSync(full, "utf8"), full);
-      },
-    });
-  });
-
   test("both grammars declare the scopes package.json contributes", async () => {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(extensionRoot, "package.json"), "utf8"),
@@ -339,86 +229,126 @@ suite("TextMate grammars", () => {
     }
   });
 
-  // The sweep. Every invariant here is one a reader can state without knowing
-  // the grammar: an arrow is an arrow, a boolean is a boolean, and a word that
-  // can only ever be a keyword is highlighted as one. Words that are BOTH
-  // keyword and identifier in real programs are excluded by name below,
-  // because the grammar cannot decide them from a regex and a wrong guess
-  // would mis-colour working code.
-  test("no Osprey file in the repository tokenizes with a broken operator or keyword", async () => {
-    // Contextual words: legal identifiers in the corpus today. `stage`, `out`
-    // and `extra` are record fields and GPU variables; `abort`, `alias`,
-    // `once`, `many` and `replayable` are operation names in
-    // tests/effects/multiplicity. Their keyword positions are covered by the
-    // contextual rules asserted above.
-    const CONTEXTUAL = new Set([
-      "abort",
-      "alias",
-      "extra",
-      "kernel",
-      "many",
-      "once",
-      "out",
-      "replayable",
-      "stage",
-      "static",
-    ]);
-    const ALWAYS_KEYWORD =
-      /^(fn|let|match|type|module|namespace|import|effect|handle|perform|signature|export|extern|resume|in|spawn|await|yield|send|recv|mut|handler|do|opaque|state)$/;
+  // examples/gpt2/model/backends.osp verbatim. The `type` declaration rule
+  // sat after `keywords`, whose `type` alternative matched at the same column
+  // and won, so every alias name rendered uncoloured. The rule that coloured
+  // capitalised names was never included anywhere, so `B`, `List` and
+  // `Kernel` in a signature had no scope at all; primitives read as
+  // variables; `->` split into a minus and a greater-than; and an operation
+  // name read as a variable.
+  test("Default type aliases, effect operations and their signatures are coloured", async () => {
+    const grammar = await grammarFor("source.osprey");
+    const tokens = tokenize(
+      grammar,
+      [
+        "export type Kernel = fn(int) -> float",
+        "export static effect Tensor<B> {",
+        "    build: fn(int, Kernel) -> B",
+        "    fromList: fn(List<float>) -> B",
+        "}",
+      ].join("\n"),
+    );
+    assertEveryScoped(tokens, "Kernel", "entity.name.type");
+    assertEveryScoped(tokens, "B", "entity.name.type");
+    assertEveryScoped(tokens, "List", "entity.name.type");
+    assertEveryScoped(tokens, "int", "support.type.primitive");
+    assertEveryScoped(tokens, "float", "support.type.primitive");
+    assertEveryScoped(tokens, "->", "keyword.operator.arrow");
+    assertEveryScoped(tokens, "<", "punctuation.definition.typeparameters");
+    assertScoped(tokens, "build", "entity.name.function.effect");
+    assertScoped(tokens, "fromList", "entity.name.function.effect");
+  });
 
-    const files = corpusFiles();
-    assert.ok(files.length > 100, `corpus is present (${files.length} files)`);
-    const problems: string[] = [];
-    for (const file of files) {
-      const grammar = await grammarFor(
-        file.endsWith(".ospml") ? "source.osprey-ml" : "source.osprey",
-      );
-      const relative = path.relative(repoRoot, file);
-      const lines = fs.readFileSync(file, "utf8").split("\n");
-      let stack = vsctm.INITIAL;
-      lines.forEach((line, index) => {
-        const result = grammar.tokenizeLine(line, stack);
-        stack = result.ruleStack;
-        for (const token of result.tokens) {
-          const text = line.slice(token.startIndex, token.endIndex);
-          const scopes = token.scopes.join("|");
-          if (!text.trim() || /string|comment/.test(scopes)) {
-            continue;
-          }
-          const at = `${relative}:${index + 1}`;
-          const report = (why: string): void => {
-            if (problems.length < 20) {
-              problems.push(
-                `${at} ${why}: ${JSON.stringify(text)} → ${token.scopes.slice(1).join("|") || "NONE"}`,
-              );
-            }
-          };
-          const ahead = line.slice(token.startIndex, token.startIndex + 2);
-          if (text === "=>" && !scopes.includes("arrow")) {
-            report("arrow lost its scope");
-          }
-          if ((text === "=" || text === ">") && ahead === "=>") {
-            report("arrow split in two");
-          }
-          if (text === "?" && ahead === "?:") {
-            report("`?:` split in two");
-          }
-          if (text === "?:" && !scopes.includes("operator")) {
-            report("`?:` lost its scope");
-          }
-          if (/^(true|false)$/.test(text) && !scopes.includes("boolean")) {
-            report("boolean lost its scope");
-          }
-          if (
-            ALWAYS_KEYWORD.test(text) &&
-            !CONTEXTUAL.has(text) &&
-            !/keyword|storage/.test(scopes)
-          ) {
-            report("keyword read as an identifier");
-          }
-        }
-      });
+  test("Default generic declarations, record fields and handler arms name their parts", async () => {
+    const grammar = await grammarFor("source.osprey");
+    const tokens = tokenize(
+      grammar,
+      [
+        "type Box<T> = { value: T }",
+        "type Point = {",
+        "    x: int,",
+        "    y: int",
+        "}",
+        "fn groupAt<T>(xs: List<T>, at) -> T = xs",
+        "handle static Tensor<List<float>> {",
+        "    build n f => range(0, n) |> map(f)",
+        '    device => "lists"',
+        "}",
+      ].join("\n"),
+    );
+    assertScoped(tokens, "Box", "entity.name.type");
+    assertScoped(tokens, "Point", "entity.name.type");
+    assertEveryScoped(tokens, "T", "entity.name.type");
+    assertScoped(tokens, "value", "variable.other.member");
+    assertScoped(tokens, "x", "variable.other.member");
+    assertScoped(tokens, "groupAt", "entity.name.function");
+    assertScoped(tokens, "xs", "variable.parameter");
+    assertScoped(tokens, "at", "variable.parameter");
+    assertScoped(tokens, "build", "entity.name.function.effect");
+    assertScoped(tokens, "n f", "variable.parameter");
+    assertScoped(tokens, "device", "entity.name.function.effect");
+  });
+
+  // `keywords` claimed `fn`, `namespace`, `module`, `signature` and `import`
+  // at the same column as their declaration rules, which were therefore dead:
+  // the declared name of every one rendered as a plain identifier.
+  test("Default declarations name what follows their keyword", async () => {
+    const grammar = await grammarFor("source.osprey");
+    const tokens = tokenize(
+      grammar,
+      [
+        "namespace gpt2;",
+        "import gpt2::Tokenizer",
+        "module Backends {",
+        "    fn add(a, b) = a + b",
+        "}",
+        "signature Store {",
+        "}",
+      ].join("\n"),
+    );
+    assertScoped(tokens, "gpt2", "entity.name.namespace");
+    assertScoped(tokens, "gpt2::Tokenizer", "entity.name.type.module");
+    assertScoped(tokens, "Backends", "entity.name.type.module");
+    assertScoped(tokens, "add", "entity.name.function");
+    assertScoped(tokens, "a", "variable.parameter");
+    assertScoped(tokens, "Store", "entity.name.type.interface");
+  });
+
+  // `strings` matched the same `"` as `interpolated-strings` and came first,
+  // so `${…}` never highlighted; the integer rule preceded the float rule, so
+  // `0.5` split in three; `=` preceded `==`; and `?`, `?:` and `%` had no rule.
+  test("Default operators, floats and interpolations stay whole", async () => {
+    const grammar = await grammarFor("source.osprey");
+    const tokens = tokenize(
+      grammar,
+      'let ok = a == b && n % 2 != 0 ? 0.5 : total ?: 1\nprint("sum ${count + 1}")',
+    );
+    for (const [text, scope] of [
+      ["==", "keyword.operator.comparison"],
+      ["!=", "keyword.operator.comparison"],
+      ["%", "keyword.operator.arithmetic"],
+      ["?", "keyword.operator.ternary"],
+      ["?:", "keyword.operator.error-propagation"],
+      ["0.5", "constant.numeric.float"],
+      ["count", "meta.embedded.expression"],
+    ] as const) {
+      assertScoped(tokens, text, scope);
     }
-    assert.deepStrictEqual(problems, [], `\n${problems.join("\n")}\n`);
+  });
+
+  // The ML flavor coloured primitives only inside a `type` block and had no
+  // rule for brackets or generic arguments, so a signature line rendered its
+  // types as variables and `<` as a comparison.
+  test("ML signatures colour primitives, generic arguments and brackets", async () => {
+    const grammar = await grammarFor("source.osprey-ml");
+    const tokens = tokenize(
+      grammar,
+      "oobMessage : (GpuBuffer<int>, int) -> string\nxs = [[1], []]",
+    );
+    assertEveryScoped(tokens, "int", "support.type.primitive");
+    assertScoped(tokens, "string", "support.type.primitive");
+    assertScoped(tokens, "GpuBuffer", "entity.name.type");
+    assertScoped(tokens, "<", "punctuation.definition.typeparameters");
+    assertScoped(tokens, "[", "punctuation");
   });
 });
