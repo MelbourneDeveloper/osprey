@@ -277,6 +277,7 @@ fn source_cli(path: &str, flavor: Option<Flavor>) -> io::Result<crate::Cli> {
             match flavor {
                 Flavor::Default => "default",
                 Flavor::Ml => "ml",
+                Flavor::Python => "python",
             }
             .into(),
         );

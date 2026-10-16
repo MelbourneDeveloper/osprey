@@ -266,7 +266,9 @@ fn encoded_column(
 ) -> Option<u32> {
     let column = usize::try_from(column).ok()?;
     match flavor {
-        Flavor::Default => text.get(..column).map(|prefix| measure(prefix, encoding)),
+        Flavor::Default | Flavor::Python => {
+            text.get(..column).map(|prefix| measure(prefix, encoding))
+        }
         Flavor::Ml => Some(
             text.chars()
                 .take(column)

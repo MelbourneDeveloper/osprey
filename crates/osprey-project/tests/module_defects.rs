@@ -12,11 +12,34 @@ use osprey_syntax::{parse_program_with_flavor, Flavor};
 use std::path::PathBuf;
 use support::config;
 
+#[test]
+fn imported_record_calls_use_declaration_identity_instead_of_capitalization(
+) -> Result<(), Vec<osprey_project::ProjectError>> {
+    let library = support::parsed("values.osp", Flavor::Default, "namespace ledger;\nmodule Values { export type Box<T> = { amount: T }\nexport fn Upper(work) = work() }\n");
+    let main = support::parsed("main.py", Flavor::Python, "# osprey: namespace=app\nfrom ledger import Values as V\nfrom ledger.Values import Box, Upper\ndef main():\n    one = V.Box[int](amount=41)\n    two = Box(amount=\"two\")\n    print(f\"{one.amount}:{two.amount}:{Upper(lambda: 42)}\")\n");
+    let project = assemble(&config("main.py"), &[main, library])?;
+    let errors = osprey_types::check_program(&project.program);
+    assert!(errors.is_empty(), "{errors:?}");
+    Ok(())
+}
+
+#[test]
+fn dotted_module_members_and_record_fields_share_lexical_resolution(
+) -> Result<(), Vec<osprey_project::ProjectError>> {
+    let library = support::parsed("values.osp", Flavor::Default, "namespace ledger;\nmodule Values { export type Box = { amount: int }\nexport fn make(n) = Box { amount: n }\nexport let defaults = Box { amount: 3 } }\n");
+    let main = support::parsed("main.py", Flavor::Python, "# osprey: namespace=app\nfrom ledger import Values as V\nfrom ledger.Values import defaults\nimport ledger as Ledger\ndef amount(V):\n    return V.amount\ndef main():\n    print(f\"{amount(V.make(41))}:{Ledger.Values.make(42).amount}:{defaults.amount}\")\n");
+    let project = assemble(&config("main.py"), &[main, library])?;
+    let errors = osprey_types::check_program(&project.program);
+    assert!(errors.is_empty(), "{errors:?}");
+    Ok(())
+}
+
 /// Parse and assemble one written source as a single-file project.
 fn project(flavor: Flavor, text: &str) -> Result<osprey_project::AssembledProject, Vec<String>> {
     let name = match flavor {
         Flavor::Ml => "main.ospml",
         Flavor::Default => "main.osp",
+        Flavor::Python => "main.py",
     };
     let parsed = parse_program_with_flavor(text, flavor);
     assert!(

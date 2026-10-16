@@ -17,6 +17,7 @@ pub(crate) struct LexicalScopeState {
     cell_vars: HashSet<String>,
     inlining: HashSet<String>,
     cell_slots: HashMap<String, CellSlot>,
+    handler_value_captures: HashSet<String>,
 }
 
 impl LexicalScopeState {
@@ -62,6 +63,10 @@ impl LexicalScopeState {
         std::mem::swap(&mut self.cell_vars, &mut cg.cell_vars);
         std::mem::swap(&mut self.inlining, &mut cg.inlining);
         std::mem::swap(&mut self.cell_slots, &mut cg.cell_slots);
+        std::mem::swap(
+            &mut self.handler_value_captures,
+            &mut cg.handler_value_captures,
+        );
     }
 }
 
@@ -74,6 +79,7 @@ impl Codegen {
             let _ = scope.remove(name);
         }
         let _ = self.cell_slots.remove(name);
+        let _ = self.handler_value_captures.remove(name);
         let _ = self.call_aliases.remove(name);
         let _ = self.lambdas.remove(name);
         let _ = self.lambda_envs.remove(name);
@@ -128,8 +134,10 @@ impl Codegen {
     }
 
     pub(crate) fn bind(&mut self, name: impl Into<String>, value: Value) {
+        let name = name.into();
+        let _ = self.handler_value_captures.remove(&name);
         if let Some(scope) = self.scopes.last_mut() {
-            let _ = scope.insert(name.into(), value);
+            let _ = scope.insert(name, value);
         }
     }
 

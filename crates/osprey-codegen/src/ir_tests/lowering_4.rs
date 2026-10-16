@@ -1,5 +1,96 @@
 use super::*;
 
+const GLOBAL_HANDLER_STATE: &str = r#"mut stored = ""
+effect Storage { save: fn(string) -> Unit }
+let storage = handler Storage { save value => { stored = value } }
+fn save(value) = storage(fn() => perform Storage.save(value))
+fn main() = { save("persisted") print(stored) }
+"#;
+
+const GLOBAL_HANDLER_STATE_ML: &str = r#"mut stored = ""
+effect Storage
+    save : string => Unit
+storage = handler Storage
+    save value =>
+        stored := value
+save value = storage (\() => perform Storage.save value)
+main () =
+    save "persisted"
+    print stored
+"#;
+
+#[test]
+fn value_captured_handler_state_is_quarantined_in_default() {
+    assert_handler_state_quarantine(Flavor::Default, GLOBAL_HANDLER_STATE);
+}
+
+#[test]
+fn value_captured_handler_state_is_quarantined_in_ml() {
+    assert_handler_state_quarantine(Flavor::Ml, GLOBAL_HANDLER_STATE_ML);
+}
+
+fn assert_handler_state_quarantine(flavor: Flavor, source: &str) {
+    let parsed = parse_program_with_flavor(source, flavor);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    assert_eq!(
+        compile_program(&parsed.program).map(|_| ()),
+        Err(CodegenError::Unsupported(
+            "quarantined assignment to value-captured handler state `stored`: shared cell identity is missing".into()
+        )),
+        "[EFFECTS-HANDLER-STATE] {flavor} must never silently discard a state write"
+    );
+}
+
+const SHADOWED_HANDLER_STATE: &str = r#"mut stored = "outer"
+effect Storage { saved: fn() -> string }
+fn global() = stored
+fn local(stored) = {
+    handle Storage { saved => { let before = stored
+        mut stored = before
+        stored = "inner"
+        stored } }
+    perform Storage.saved()
+}
+fn main() = print(global() + local("local"))
+"#;
+const SHADOWED_HANDLER_STATE_ML: &str = "mut stored = \"outer\"\neffect Storage\n    saved : Unit => string\nglobal () = stored\nlocal stored =\n    handle Storage\n        saved =>\n            before = stored\n            mut stored = before\n            stored := \"inner\"\n            stored\n    perform Storage.saved ()\nmain () = print (global () + local \"local\")\n";
+
+#[test]
+fn handler_capture_quarantine_preserves_shadowing_and_read_only_globals() {
+    let result_default = SHADOWED_HANDLER_STATE.replace("mut stored = before\n        stored = \"inner\"\n        stored", "mut stored = parseInt(\"1\")\n        stored = parseInt(\"2\")\n        match stored { Success { value } => before + toString(value) Error _ => before }");
+    let result_ml = SHADOWED_HANDLER_STATE_ML.replace("mut stored = before\n            stored := \"inner\"\n            stored", "mut stored = parseInt \"1\"\n            stored := parseInt \"2\"\n            match stored\n                Success value => before + toString value\n                Error _ => before");
+    for (flavor, source) in [
+        (Flavor::Default, SHADOWED_HANDLER_STATE),
+        (Flavor::Ml, SHADOWED_HANDLER_STATE_ML),
+        (Flavor::Default, result_default.as_str()),
+        (Flavor::Ml, result_ml.as_str()),
+    ] {
+        let parsed = parse_program_with_flavor(source, flavor);
+        assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+        assert!(compile_program(&parsed.program).is_ok(), "{flavor}");
+    }
+}
+
+#[test]
+fn control_handler_state_keeps_its_existing_cell_store_in_both_flavors() {
+    for (flavor, source, spelling) in [
+        (Flavor::Default, GLOBAL_HANDLER_STATE, "save:"),
+        (Flavor::Ml, GLOBAL_HANDLER_STATE_ML, "save :"),
+    ] {
+        let source = source.replacen(spelling, &format!("control {spelling}"), 1);
+        let parsed = parse_program_with_flavor(&source, flavor);
+        assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+        let ir = compile_program(&parsed.program).map_err(|error| error.to_string());
+        assert!(ir.is_ok(), "{flavor}: {ir:?}");
+        let ir = ir.into_iter().collect::<String>();
+        let arm = function_body(&ir, "define i64 @__resume_arm_Storage_save_");
+        assert!(
+            arm.contains("bitcast i8*") && arm.contains("store i8* %__arm0, i8**"),
+            "{arm}"
+        );
+    }
+}
+
 #[test]
 fn a_resumable_operation_sends_every_argument_with_its_ownership_kind() {
     // The operation mailbox is length-carrying and kind-tagged

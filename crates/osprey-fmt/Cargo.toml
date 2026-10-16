@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 osprey-ast = { workspace = true }
 osprey-syntax = { workspace = true }
+tree-sitter = { workspace = true }
 
 [lints]
 workspace = true

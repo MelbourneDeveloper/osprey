@@ -1,0 +1,43 @@
+// Python is a replaceable capability: live code and tests share the same call.
+// Implements [PYTHON-CALL]; run using `python -m osprey`, not the native target.
+extern fn osprey_python_call(module: string, name: string, args: string) -> string
+extern fn osprey_python_object(operation: string, objectId: int, name: string, args: string) -> string
+
+effect Python { call: fn(string, string, string) -> Result<string, string> }
+
+fn decodedValue(doc) = match jsonGet(doc, "ok") {
+    Success { value } => Success { value: value }
+    Error => Error { message: jsonGet(doc, "error.message") ?: "invalid Python reply" }
+}
+
+fn decode(reply) = match jsonParse(reply) {
+    Success { value } => {
+        let result = decodedValue(value)
+        let released = jsonFree(value)
+        match released {
+            Success(_value) => result
+            Error => Error { message: "could not release Python reply document" }
+        }
+    }
+    Error => Error { message: "invalid Python reply JSON" }
+}
+
+let live = handler Python { call module name args => decode(osprey_python_call(module, name, args)) }
+let fake = handler Python { call _ _ _ => Success { value: "test answer" } }
+
+fn squareRoot(value: float) = perform Python.call("math", "sqrt", "[${toString(value)}]")
+
+fn squareRootText(value) = match live(fn() => squareRoot(value)) {
+    Success { value } => value
+    Error { message } => "error: ${message}"
+}
+
+fn mockedSquareRoot() = match fake(fn() => squareRoot(81.0)) {
+    Success { value } => value
+    Error { message } => "error: ${message}"
+}
+
+// Returns a result-object handle envelope; the tensor payload stays in Python.
+fn scaleTensor(objectId) = osprey_python_object("call", objectId, "mul", "{\"args\":[{\"value\":2.0}]}")
+
+fn main() = print("live: ${squareRootText(81.0)}; mock: ${mockedSquareRoot()}")

@@ -89,7 +89,7 @@ graphics: build $(GFX_LIB) _graphics-shader
 	./$(BIN) $(GFX_DIR)/$(SCENE) --run
 endif
 
-## gpt2: Run the trained GPT-2 model under one Tensor handler (usage: make gpt2 PROMPT="..." TOKENS=20 BACKEND=gpu|lists)
+## gpt2: Run GPT-2 (usage: make gpt2 FLAVOR=default|python PROMPT="..." TOKENS=20 BACKEND=gpu|lists)
 ## BACKEND=gpu runs the model on the GPU surface: every kernel and product on GPU=auto|metal|opencl, or on the CPU with GPU=host; BACKEND=lists runs the same model over host lists.
 ## The published weights and merges download once into examples/gpt2/weights (ignored by git).
 GPT2_DIR    := examples/gpt2
@@ -98,6 +98,8 @@ PROMPT      ?= The capital of France is
 TOKENS      ?= 20
 BACKEND     ?= gpu
 GPU         ?= auto
+FLAVOR      ?= default
+GPT2_GENERATOR := $(GPT2_DIR)/$(if $(filter python,$(FLAVOR)),python/generate,generate)
 
 $(GPT2_DIR)/weights/%:
 	@$(MKDIR) $(GPT2_DIR)/weights
@@ -105,10 +107,12 @@ $(GPT2_DIR)/weights/%:
 	curl -fsSL --retry 3 -o $@ $(GPT2_SOURCE)/$*
 
 gpt2: build $(GPT2_DIR)/weights/model.safetensors $(GPT2_DIR)/weights/merges.txt
-	@printf '%s\n%s\n%s\n' "$(PROMPT)" "$(TOKENS)" "$(BACKEND)" | OSPREY_GPU=$(GPU) ./$(BIN) $(GPT2_DIR)/generate --run --memory=arc
+	@case "$(FLAVOR)" in default|python) ;; *) echo "gpt2 FLAVOR must be default or python" >&2; exit 1 ;; esac
+	@printf '%s\n%s\n%s\n' "$(PROMPT)" "$(TOKENS)" "$(BACKEND)" | OSPREY_GPU=$(GPU) ./$(BIN) $(GPT2_GENERATOR) --run --memory=arc
 
 ## gpt2-train: One training step of GPT-2 on the prompt: loss, gradients, SGD, loss again (usage: make gpt2-train PROMPT="..." BACKEND=gpu|lists)
 gpt2-train: build $(GPT2_DIR)/weights/model.safetensors $(GPT2_DIR)/weights/merges.txt
+	@test "$(FLAVOR)" = default || { echo "gpt2-train FLAVOR must be default" >&2; exit 1; }
 	@printf '%s\n%s\n' "$(PROMPT)" "$(BACKEND)" | OSPREY_GPU=$(GPU) ./$(BIN) $(GPT2_DIR)/train --run --memory=arc
 
 ## run: Compile and run an Osprey file (usage: make run FILE=<path>)

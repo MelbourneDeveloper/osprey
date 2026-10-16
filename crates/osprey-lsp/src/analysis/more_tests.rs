@@ -49,6 +49,7 @@ fn effect_requirements_follow_every_editor_view() -> Result<(), String> {
         let (uri, line, column) = match flavor {
             osprey_syntax::Flavor::Default => ("file:///requirements.osp", 2, 4),
             osprey_syntax::Flavor::Ml => ("file:///requirements.ospml", 3, 1),
+            osprey_syntax::Flavor::Python => ("file:///requirements.py", 3, 1),
         };
         let expected = "Requires on full application: `Read.get`.";
         let hover = crate::test_support::hover(source, uri, line, column, Utf16).ok_or("hover")?;

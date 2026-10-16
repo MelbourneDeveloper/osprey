@@ -21,6 +21,7 @@
 
 mod brace;
 mod layout;
+mod python;
 mod scan;
 
 pub use osprey_syntax::Flavor;
@@ -51,6 +52,7 @@ pub fn format_source(src: &str, flavor: Flavor) -> Result<String, Vec<String>> {
     let candidate = match flavor {
         Flavor::Default => brace::format(&source),
         Flavor::Ml => layout::format(&source),
+        Flavor::Python => python::format(&source),
     };
     accept(&parsed.program, candidate, flavor)
 }

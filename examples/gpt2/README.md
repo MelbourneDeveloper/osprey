@@ -59,7 +59,10 @@ loss after one step 3.8539085307403895
 | `model/model.osp` | `gpt2::Model` — the configuration, the weights, LayerNorm, attention, the blocks, the forward pass keeping every block's activations, and the KV-cached step; every tensor is `B` |
 | `generate/` | A one-file project: greedy sampling over the forward pass and the cached steps; `main` picks the handler |
 | `train/` | A one-file project: the loss, the backward pass and one SGD step over the same forward pass; `main` picks the handler |
+| [`python/`](python/README.md) | The forward model and greedy sampler in typed Python syntax, using the same tensor handlers and checkpoint |
 | `reference.py` | The independent pure-Python oracle for both programs |
+
+Run the Python syntax flavor with `make gpt2 FLAVOR=python GPU=host TOKENS=1`. Its sampler recomputes the full forward pass each token; the Default generator uses a KV cache.
 
 A standalone script cannot import across files, so each program is its own
 project naming `model/` as a second source root

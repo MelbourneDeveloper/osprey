@@ -81,6 +81,7 @@ impl Codegen {
             iter_stages: std::mem::take(&mut self.iter_stages),
             cell_vars: std::mem::take(&mut self.cell_vars),
             cell_slots: std::mem::take(&mut self.cell_slots),
+            handler_value_captures: std::mem::take(&mut self.handler_value_captures),
             resume_ctx: self.resume_ctx.take(),
             arc: std::mem::take(&mut self.arc),
             arc_slot_count: self.arc_slot_count,
@@ -125,6 +126,7 @@ impl Codegen {
         self.iter_stages = saved.iter_stages;
         self.cell_vars = saved.cell_vars;
         self.cell_slots = saved.cell_slots;
+        self.handler_value_captures = saved.handler_value_captures;
         self.resume_ctx = saved.resume_ctx;
         self.arc = saved.arc;
         self.arc_slot_count = saved.arc_slot_count;
@@ -172,6 +174,7 @@ impl Codegen {
         // this function's body before lowering it.
         self.cell_vars.clear();
         self.cell_slots.clear();
+        self.handler_value_captures.clear();
         self.resume_ctx = None;
         self.arc = crate::arc::ArcLedger::new();
         self.arc_slot_count = 0;

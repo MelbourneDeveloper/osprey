@@ -371,6 +371,8 @@ fn artifact(base: &Path, target: &str, keep_parent: bool) -> PathBuf {
         )
     };
     let extension = match target {
+        "python" if cfg!(target_os = "macos") => ".dylib",
+        "python" => ".so",
         "wasm32" => ".wasm",
         "ios" | "ios-sim" | "android-arm64" | "android-x64" => ".a",
         _ => "",

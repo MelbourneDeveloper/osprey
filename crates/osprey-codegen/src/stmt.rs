@@ -56,6 +56,13 @@ fn gen_stmt_kind(cg: &mut Codegen, stmt: &Stmt) -> Result<()> {
         } if cg.module_globals.contains_key(name) && cg.lookup(name).is_none() => {
             with_stmt_debug(cg, *position, |cg| gen_global_store(cg, name, value))
         }
+        // A handler value captured without its shared cell cannot be mutated
+        // correctly. Fail loudly instead of emitting a discarded SSA rebind.
+        Stmt::Assignment { name, .. } if cg.handler_value_captures.contains(name) => {
+            Err(CodegenError::unsupported(format!(
+                "quarantined assignment to value-captured handler state `{name}`: shared cell identity is missing"
+            )))
+        }
         // Bindings preserve their inferred representation. A Result can never
         // be silently reduced to its payload at an assignment boundary.
         Stmt::Let {

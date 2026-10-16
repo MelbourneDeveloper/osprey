@@ -217,22 +217,27 @@ pub(super) fn reload_env(cg: &mut Codegen, caps: &[ArmCap], env_ty: &str) {
 
 fn bind_capture(cg: &mut Codegen, c: &ArmCap, loaded: String) {
     match c {
-        ArmCap::Cell { name, cell } => {
-            let ptr = cg.emit_reg(format!("bitcast i8* {loaded} to {}*", cell.pointee));
-            cg.bind_cell(
-                name,
-                CellSlot {
-                    ptr,
-                    ..cell.clone()
-                },
-                false,
-            );
-        }
+        ArmCap::Cell { name, cell } => bind_cell_capture(cg, name, cell, &loaded),
         ArmCap::Val { name, val } => {
+            // Quarantine lost cell identity: an SSA rebind of this capture
+            // silently discards writes. Local shadows replace this marker.
             let mut v = val.clone();
             v.operand = loaded;
             cg.emit_debug_local(name, &v);
             cg.bind(name.clone(), v);
+            let _ = cg.handler_value_captures.insert(name.clone());
         }
     }
+}
+
+fn bind_cell_capture(cg: &mut Codegen, name: &str, cell: &CellSlot, loaded: &str) {
+    let ptr = cg.emit_reg(format!("bitcast i8* {loaded} to {}*", cell.pointee));
+    cg.bind_cell(
+        name,
+        CellSlot {
+            ptr,
+            ..cell.clone()
+        },
+        false,
+    );
 }

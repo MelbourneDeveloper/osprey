@@ -22,6 +22,9 @@ pub(crate) fn collect<T>(
     let literals = match flavor {
         Flavor::Default => crate::default::string_literals(source),
         Flavor::Ml => crate::ml::string_literals(source),
+        // Python f-string expressions already belong to the original CST;
+        // their binders/annotations were collected by the ordinary traversal.
+        Flavor::Python => return Vec::new(),
     };
     let prefix = crate::strings::fragment_binding(flavor);
     let mut result = Vec::new();

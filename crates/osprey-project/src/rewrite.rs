@@ -428,6 +428,7 @@ impl Resolver<'_> {
             | Expr::Str(_)
             | Expr::Bool(_) => {}
         }
+        self.normalize_constructor_call(expression, context);
     }
 
     fn rewrite_identifier(
@@ -453,8 +454,8 @@ impl Resolver<'_> {
         context: &Context,
         _locals: &Locals,
     ) {
-        if let Some(key) = self.resolve_path(segments, context, None) {
-            self.replace_symbol_expression(expression, &key, context);
+        if let Some(value) = self.qualified_expression(segments, context) {
+            *expression = value;
         }
     }
 }

@@ -50,6 +50,7 @@ mod linking;
 mod native;
 mod pipeline;
 mod profiling;
+mod python_target;
 use invocation::{
     parse_args, parse_flavor, parse_memory, Cli, TEST_CACHE_DIR_ENV, TEST_COVERAGE_BUILD_ENV, USAGE,
 };

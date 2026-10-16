@@ -50,7 +50,9 @@ fn integer_type(name: &str) -> bool {
 /// produced it so following the header's own instruction rebuilds that slice.
 /// [IOS-HOST-ABI] [ANDROID-HOST-ABI]
 pub(crate) fn header_for_target(abi: &HostAbi, source: &str, target: &str) -> String {
-    let group = if target.starts_with("android") {
+    let group = if target == "python" {
+        "PYTHON"
+    } else if target.starts_with("android") {
         "ANDROID"
     } else {
         "IOS"

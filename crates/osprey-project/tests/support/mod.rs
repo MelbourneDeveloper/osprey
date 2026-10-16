@@ -15,6 +15,7 @@ pub(crate) fn config(entry: &str) -> ProjectConfig {
     ProjectConfig {
         name: "app".to_string(),
         source_roots: vec![PathBuf::from("src")],
+        python_sources: Vec::new(),
         default_namespace: Some("app".to_string()),
         entry: Some(PathBuf::from(entry)),
         flavor: None,

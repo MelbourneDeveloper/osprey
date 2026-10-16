@@ -29,6 +29,7 @@ fn project(entry: &str, library: &str) -> osprey_ast::Program {
     let config = ProjectConfig {
         name: "app".into(),
         source_roots: vec![PathBuf::from("src")],
+        python_sources: Vec::new(),
         default_namespace: Some("app".into()),
         entry: Some("main.osp".into()),
         flavor: None,

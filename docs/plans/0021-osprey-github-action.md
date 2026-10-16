@@ -39,7 +39,7 @@ and are corrected here rather than left to mislead.
   from stdin, strips the newline, returns `""` on EOF — the sole input channel.
 - Native `--run` requires `clang` (`OSPREY_CC`) plus a `libfiber_runtime*.a`
   archive on the runner.
-- The Homebrew tap already ships `osprey` ([homebrew-package/osprey.rb]).
+- The Homebrew tap already ships `osprey` ([the release process](../RELEASING.md)).
 - ~~wasm excludes `input`: `WASM_RT_SRC` (`Makefile`) has no
   `random_runtime`.~~ **Corrected 2026-07-30 — this is no longer true.**
   `WASM_RT_SRC` (`Makefile`) now lists `random_runtime`, `osp_input` is defined

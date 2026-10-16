@@ -23,7 +23,7 @@ flowchart LR
     H -->|completion events| O
 ```
 
-The native shells render the screen and execute platform services. Application rules and layout live in [`inbox/src/`](inbox/src/).
+The native shells render the screen and execute platform services. Application rules and layout live in [`inbox/src/`](inbox/src).
 
 ## Effects at the host boundary
 
@@ -66,11 +66,11 @@ Build an unsigned device application with `examples/mobile/ios/run.sh --build io
 OSPREY_DEVELOPMENT_TEAM=YOUR_TEAM_ID examples/mobile/ios/run.sh ios-device
 ```
 
-Set `OSPREY_DEVICE_ID` to select a physical device, or `OSPREY_SIMULATOR_UDID` to select a simulator. `OSPREY_BIN` selects another compiler binary. The mobile launcher reuses [`../ios/`](../ios/) build/deployment scripts with the shared project, app scheme, and bundle identifier supplied through environment settings.
+Set `OSPREY_DEVICE_ID` to select a physical device, or `OSPREY_SIMULATOR_UDID` to select a simulator. `OSPREY_BIN` selects another compiler binary. The mobile launcher reuses [`../ios/`](../ios) build/deployment scripts with the shared project, app scheme, and bundle identifier supplied through environment settings.
 
 ## Android
 
-The Android application lives in [`android/`](android/), with Kotlin native rendering and a JNI adapter for the generated C interface. It requires JDK 17, Android SDK 34, an installed Android NDK, and an emulator/device running API 26 or later. Its launcher uses a local Gradle installation when available and downloads Gradle 8.7 otherwise. From the repository root:
+The Android application lives in [`android/`](android), with Kotlin native rendering and a JNI adapter for the generated C interface. It requires JDK 17, Android SDK 34, an installed Android NDK, and an emulator/device running API 26 or later. Its launcher uses a local Gradle installation when available and downloads Gradle 8.7 otherwise. From the repository root:
 
 ```sh
 make android

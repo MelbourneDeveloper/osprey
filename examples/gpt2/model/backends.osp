@@ -13,7 +13,7 @@ module Backends {
 
     /// Broken-code quarantine: a failed load or product used to become an empty
     /// tensor, and the model generated from fabricated zeros. It aborts instead.
-    fn orAbort(result) = match result {
+    export fn orAbort(result) = match result {
         Success { value } => value
         Error { message } => osprey_gpu_panic(message)
     }

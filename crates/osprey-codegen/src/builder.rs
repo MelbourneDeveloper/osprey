@@ -211,6 +211,9 @@ pub(crate) struct Codegen {
     /// reassignment stores, and an effect handler captures the cell pointer so
     /// `get`/`set` arms share one mutable location — handler-owned state.
     pub(crate) cell_slots: HashMap<String, CellSlot>,
+    /// By-value handler captures cannot be assigned without shared storage.
+    /// Lexical shadows replace this marker without changing cell promotion.
+    pub(crate) handler_value_captures: HashSet<String>,
     /// File-scope bindings that some function body reads, and the module
     /// global each one lives in. Module-wide, so it is NOT part of
     /// [`SavedFn`]: a nested handler function reads the same storage its
@@ -290,6 +293,7 @@ pub(crate) struct SavedFn {
     /// gets its own captured cells, never the suspended outer function's.
     cell_vars: HashSet<String>,
     cell_slots: HashMap<String, CellSlot>,
+    handler_value_captures: HashSet<String>,
     resume_ctx: Option<ResumeCodegenContext>,
     /// Ownership is per-function: a nested function drops its own owners at
     /// its own epilogue, never the suspended function's [GC-ARC-PERCEUS].
@@ -361,6 +365,7 @@ impl Codegen {
             call_aliases: HashMap::new(),
             cell_vars: HashSet::new(),
             cell_slots: HashMap::new(),
+            handler_value_captures: HashSet::new(),
             module_globals: BTreeMap::new(),
             resume_ctx: None,
             lowered: Lowered::default(),

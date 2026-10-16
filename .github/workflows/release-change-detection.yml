@@ -24,7 +24,7 @@ on:
   workflow_call:
     inputs:
       config_path:
-        description: "Path to the release-scope ruleset (schemas/release-scope.schema.json)."
+        description: "Path to the release-scope ruleset (.github/release-scope.json)."
         required: false
         type: string
         default: .github/release-scope.json

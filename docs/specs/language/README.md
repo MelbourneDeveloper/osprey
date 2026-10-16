@@ -26,3 +26,4 @@ Syntax, types, expressions, effects and module semantics.
 - [Staged effects — consolidated](0035-StagedEffects.md)
 - [Structured Concurrency: Cancellation and Turn Isolation](0036-StructuredConcurrency.md)
 - [Arithmetic Effects](0037-ArithmeticEffects.md)
+- [Python Flavor Syntax](0041-PythonFlavorSyntax.md)

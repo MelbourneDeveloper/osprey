@@ -43,6 +43,7 @@ pub fn binding_ranges(source: &str, flavor: Flavor) -> Vec<BindingRange> {
     let mut ranges = match flavor {
         Flavor::Default => crate::default::binding_ranges(source),
         Flavor::Ml => crate::ml::binding_ranges(source),
+        Flavor::Python => crate::python::binding_ranges(source),
     };
     ranges.extend(crate::fragment_ranges::collect(
         source,

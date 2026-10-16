@@ -15,6 +15,28 @@
 
 use osprey_syntax::{parse_program_with_flavor, Flavor};
 
+#[path = "common/effect_execution.rs"]
+mod effect_execution;
+
+#[test]
+fn python_gpt2_forward_tensors_match_the_independent_reference() -> std::io::Result<()> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let python = if cfg!(windows) { "python" } else { "python3" };
+    let output = std::process::Command::new(python)
+        .arg(root.join("scripts/check-python-gpt2.py"))
+        .args(["--compiler", env!("CARGO_BIN_EXE_osprey")])
+        .current_dir(root)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("matched 24 complete tensors"));
+    Ok(())
+}
+
 /// The canonical AST as a debug string with every source `Position { … }`
 /// payload scrubbed, so structural equality ignores spans.
 fn canonical(src: &str, flavor: Flavor) -> String {
@@ -115,4 +137,32 @@ fn record_heads_lower_identically_across_flavors() {
         assert!(default.contains(variant), "{head}: {default}");
         assert_eq!(default, ml, "record head {head}");
     }
+}
+
+/// [FLAVOR-PYTHON-TYPING] Inferred Python-flavor values use the same native ABI.
+#[test]
+fn python_hm_inference_executes_polymorphism_and_constrained_closures() {
+    let source = r#"from typing import Callable
+def identity(x):
+    return x
+def constly(value):
+    return lambda ignored: value
+held: Callable[[str], int] = constly(9)
+alias = identity
+def parsed(text):
+    match parseInt(text):
+        case Success(value=value):
+            return value
+        case Error(message=message):
+            return 0
+numbers = [alias(7), held("ignored")]
+words = {"answer": alias("seven")}
+print(f"{numbers[0]}:{numbers[1]}:{words["answer"]}:{identity(True)}:{parsed("42")}:{parsed("bad")}")
+"#;
+    effect_execution::assert_flavored_output(
+        "python_hm",
+        "py",
+        source,
+        "Success(7):Success(9):Success(seven):true:42:0\n",
+    );
 }
