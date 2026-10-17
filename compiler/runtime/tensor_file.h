@@ -27,7 +27,7 @@ typedef void (*OspTensorSink)(void *ctx, const double *values, size_t n);
 // reason recorded on the io_error channel under `op`.
 int osp_tensor_locate(const char *op, const char *path, const char *name, OspTensorSpan *span);
 
-// Widen every element of `span` exactly to a double and hand them to `sink`:
+// Widen every element of `span` (count never negative) exactly to a double and hand them to `sink`:
 // 1, or 0 with the reason recorded. A short read is an error, never a shorter
 // tensor: a truncated weight file must not load as a smaller model.
 int osp_tensor_read(const char *op, const char *path, const OspTensorSpan *span, OspTensorSink sink,

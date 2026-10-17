@@ -90,7 +90,7 @@ Run these from the repository root. The compiler is written to `target/release/o
 
 - **Effects:** typed requests, reusable value handlers, native single-shot control operations and static interpretation. [Guide](website/src/docs/algebraic-effects.md).
 - **Types:** inference, algebraic data types, exhaustive matching and explicit `Result` failures.
-- **Any syntax, one language:** every flavor's concrete syntax tree lowers into one canonical AST, so types, effects and project modules are shared. Default braces (`.osp`), ML layout (`.ospml`) and typed Python (`.py`) ship today and mix in one project.
+- **Any syntax, one language:** every flavor's concrete syntax tree lowers into one canonical AST, so types, effects and project modules are shared. Default braces (`.osp`), ML layout (`.ospml`) and [typed Python](https://www.ospreylang.dev/docs/python-flavor/) (`.py`) ship today and mix in one project.
 - **Arithmetic:** integer faults require an explicit `Arith` policy. [Contract](docs/specs/language/0037-ArithmeticEffects.md).
 - **Native concurrency and memory:** isolated fibers; default non-reclaiming allocation, tracing GC or reference counting.
 

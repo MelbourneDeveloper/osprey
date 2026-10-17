@@ -1,6 +1,6 @@
 # GPT-2 in Python syntax
 
-The whole program is Python-flavor source: no `.osp` module is imported and the project's one source root holds none. [backends.py](backends.py) declares the `Tensor` static effect and spells the arithmetic policy with a `Fault` effect, two handler classes and `with`. [cpu.py](cpu.py) answers `Tensor` over host lists and [gpu.py](gpu.py) over GPU buffers. [tokenizer.py](tokenizer.py) is the byte-level BPE tokenizer. [model.py](model.py) holds the constants, the records, the checkpoint loader, the forward pass and the KV-cached step. [generate.py](generate/generate.py) is the Default sampler in Python syntax.
+The whole program is Python-flavor source: no `.osp` module is imported and the project's one source root holds none. [backends.py](backends.py) declares the `Tensor` static effect and spells the arithmetic policy with a `Fault` effect, two handler classes and `with`. [cpu.py](cpu.py) answers `Tensor` over host lists and [gpu.py](gpu.py) over GPU buffers. [tokenizer.py](tokenizer.py) is the byte-level BPE tokenizer. [model.py](model.py) holds the constants, the records, the checkpoint loader, the forward pass and the KV-cached step. [generate.py](generate/generate.py) is the Default sampler in Python syntax. The [Python flavor guide](https://www.ospreylang.dev/docs/python-flavor/) explains the syntax and what it does not support.
 
 ```python
 # backends.py

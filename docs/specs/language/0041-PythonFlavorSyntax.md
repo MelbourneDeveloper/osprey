@@ -32,11 +32,11 @@ Indentation opens suites; tabs in indentation and inconsistent dedents are error
 def scale(value, factor):
     return value * factor
 
-answer = scale(6, factor=7)
+answer = scale(value=6, factor=7)
 twice = lambda value: scale(value, 2)
 ```
 
-`def` becomes a flat `Stmt::Function`; `lambda` becomes `Expr::Lambda`. Parameters/results are inferred unless a written constraint is necessary. Keyword arguments retain names and lower to canonical named arguments. There is no implicit receiver, currying, default argument, variadic argument, argument unpacking, or decorator execution. Explicit type application uses `f[int](value)` and lowers to the existing type-application node.
+`def` becomes a flat `Stmt::Function`; `lambda` becomes `Expr::Lambda`. Parameters/results are inferred unless a written constraint is necessary. Keyword arguments retain names and lower to canonical named arguments; as in every flavor, one argument list is fully positional or fully named ([function calls](0005-FunctionCalls.md)). There is no implicit receiver, currying, default argument, variadic argument, argument unpacking, or decorator execution. Explicit type application uses `f[int](value)` and lowers to the existing type-application node.
 
 `@extern` marks a signature-only `def` with an exact `...` body and complete parameter/result types. It lowers to the existing `Stmt::Extern`, with the same C ABI and safety boundary; it does not import a Python extension module. Legal combinations such as `@export` with one declaration-kind decorator are order-independent metadata. Duplicate or conflicting declaration-kind decorators are errors.
 

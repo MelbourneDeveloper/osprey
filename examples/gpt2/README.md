@@ -5,7 +5,7 @@ This is GPT-2: OpenAI's 124M-parameter language model, running the trained weigh
 The model is written in both the Default flavor and the Python flavor:
 
 - **Default flavor**: [`model/`](model) and [`generate/`](generate), plus a [training step](train).
-- **Python flavor**: [`python/`](python/README.md), typed Python syntax with no `.osp` file anywhere in the project.
+- **Python flavor**: [`python/`](python/README.md), typed Python syntax with no `.osp` file anywhere in the project. The [Python flavor guide](https://www.ospreylang.dev/docs/python-flavor/) explains the syntax.
 
 Given the same prompt, the Default and Python versions print exactly the same bytes on the CPU, on Metal and on OpenCL. The test `python_gpt2_generator_output_is_byte_identical_to_the_default_generator` compares them on each of those devices.
 

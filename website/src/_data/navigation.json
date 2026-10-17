@@ -16,6 +16,7 @@
         { "text": "Documentation home", "url": "/docs/" },
         { "text": "Algebraic effects", "url": "/docs/effects/" },
         { "text": "One model, two backends", "url": "/docs/one-model-two-backends/" },
+        { "text": "Python flavor", "url": "/docs/python-flavor/" },
         { "text": "Installation", "url": "/docs/installation/" },
         { "text": "My First App", "url": "/docs/my-first-app/" }
       ]
@@ -60,6 +61,7 @@
       "items": [
         { "text": "Documentation", "url": "/docs/" },
         { "text": "Algebraic Effects", "url": "/docs/effects/" },
+        { "text": "Python Flavor", "url": "/docs/python-flavor/" },
         { "text": "Web Apps Guide", "url": "/docs/web-apps/" },
         { "text": "Mobile Apps Guide", "url": "/docs/mobile-apps/" },
         { "text": "Feature Status", "url": "/status/" },

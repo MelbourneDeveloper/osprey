@@ -134,10 +134,6 @@ static int read_span(FILE *f, const char *op, const char *path, const OspTensorS
 
 int osp_tensor_read(const char *op, const char *path, const OspTensorSpan *span, OspTensorSink sink,
                     void *ctx) {
-  if (span->count < 0) {
-    osp_io_error_text(op, path, "a negative element count");
-    return 0;
-  }
   FILE *f = open_at(op, path, span->offset);
   if (!f) {
     return 0;
