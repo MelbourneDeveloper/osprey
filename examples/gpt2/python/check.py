@@ -54,5 +54,4 @@ def main():
         case Success(value=value):
             return value
         case Error(message=message):
-            _ = Backends.or_abort(Error(message=message))
-            return None
+            return print(f"check stopped: {message}")

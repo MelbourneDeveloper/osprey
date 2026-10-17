@@ -3,12 +3,28 @@
 # osprey: module=Cpu
 """The CPU interpretation of `gpt2.Backends.Tensor`: every operation answered with
 host list code, accumulating in the same k order from 0.0 as
-examples/gpt2/reference.py.
-Implements [STAGE-BACKEND], [FLAVOR-PYTHON-GPU].
+examples/gpt2/reference.py. Nothing here names the GPU surface: weights load
+through the host `loadTensor` and a failed load aborts through the host runtime.
+Implements [STAGE-BACKEND], [FLAVOR-PYTHON-GPU], [BUILTIN-FILE-TENSOR].
 """
-from gpt2.Backends import Tensor, or_abort, hit, min_i
+from gpt2.Backends import Tensor, hit, min_i
 
 __all__ = ["on_lists"]
+
+
+@extern
+def osprey_tensor_panic(message: str) -> list[float]: ...
+
+
+def or_abort(result):
+    """Broken-code quarantine: a failed load or product used to become an empty
+    tensor, and the model generated from fabricated zeros. It aborts instead,
+    through this handler's own runtime."""
+    match result:
+        case Success(value=value):
+            return value
+        case Error(message=message):
+            return osprey_tensor_panic(message)
 
 
 def element(b, i):
@@ -21,7 +37,7 @@ def dot(a, b, i, inner, cols):
 
 @static_handler(Tensor[list[float]])
 class on_lists:
-    """Host lists, loaded through the GPU surface's safetensors reader."""
+    """Host lists, loaded straight into lists from the safetensors file."""
     def build(n, f):
         return toList(map(range(n), f))
 
@@ -47,7 +63,7 @@ class on_lists:
         return xs
 
     def load(path, name):
-        return fromGpu(or_abort(gpuLoadTensor(path, name)))
+        return or_abort(loadTensor(path, name))
 
     def device():
         return "lists"

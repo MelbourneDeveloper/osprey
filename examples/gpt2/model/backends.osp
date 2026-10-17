@@ -9,15 +9,6 @@
 namespace gpt2;
 
 module Backends {
-    extern fn osprey_gpu_panic(message: string) -> GpuBuffer<float>
-
-    /// Broken-code quarantine: a failed load or product used to become an empty
-    /// tensor, and the model generated from fabricated zeros. It aborts instead.
-    export fn orAbort(result) = match result {
-        Success { value } => value
-        Error { message } => osprey_gpu_panic(message)
-    }
-
     /// The kernels a model hands its handler: an index to its element, and two
     /// elements to one.
     export type Kernel = fn(int) -> float

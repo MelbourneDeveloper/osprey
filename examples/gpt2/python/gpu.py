@@ -5,9 +5,24 @@
 product or a loader of the GPU surface.
 Implements [STAGE-BACKEND], [GPU-DEVICE], [FLAVOR-PYTHON-GPU].
 """
-from gpt2.Backends import Tensor, or_abort, hit, min_i
+from gpt2.Backends import Tensor, hit, min_i
 
 __all__ = ["on_gpu"]
+
+
+@extern
+def osprey_gpu_panic(message: str) -> GpuBuffer[float]: ...
+
+
+def or_abort(result):
+    """Broken-code quarantine: a failed load or product used to become an empty
+    tensor, and the model generated from fabricated zeros. It aborts instead,
+    through this handler's own runtime."""
+    match result:
+        case Success(value=value):
+            return value
+        case Error(message=message):
+            return osprey_gpu_panic(message)
 
 
 def fetched(b, i):

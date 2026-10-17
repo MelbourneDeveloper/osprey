@@ -74,6 +74,8 @@ def parsed(text):
             continue
         if line.startswith("@device:"):
             continue
+        if line.startswith("check stopped:"):
+            raise AssertionError(line)
         name, numbers = line.split(":", 1)
         if name in result:
             raise AssertionError(f"duplicate tensor {name}")

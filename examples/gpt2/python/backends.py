@@ -14,21 +14,7 @@ from typing import Callable
 
 from gpt2 import Cpu, Gpu
 
-__all__ = ["Kernel", "Combine", "Tensor", "or_abort", "hit", "min_i", "strictly", "under"]
-
-
-@extern
-def osprey_gpu_panic(message: str) -> GpuBuffer[float]: ...
-
-
-def or_abort(result):
-    """Broken-code quarantine: a failed load or product used to become an empty
-    tensor, and the model generated from fabricated zeros. It aborts instead."""
-    match result:
-        case Success(value=value):
-            return value
-        case Error(message=message):
-            return osprey_gpu_panic(message)
+__all__ = ["Kernel", "Combine", "Tensor", "hit", "min_i", "strictly", "under"]
 
 
 # The kernels a model hands its handler: an index to its element, and two

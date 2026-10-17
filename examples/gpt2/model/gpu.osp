@@ -4,9 +4,18 @@
 
 namespace gpt2;
 
-import gpt2::Backends::{Tensor, orAbort, hit, minI}
+import gpt2::Backends::{Tensor, hit, minI}
 
 module Gpu {
+    extern fn osprey_gpu_panic(message: string) -> GpuBuffer<float>
+    /// Broken-code quarantine: a failed load or product used to become an
+    /// empty tensor, and the model generated from fabricated zeros. It aborts
+    /// instead, through this handler's own runtime.
+    fn orAbort(result) = match result {
+        Success { value } => value
+        Error { message } => osprey_gpu_panic(message)
+    }
+
     /// GPU buffers, and `device` reports which backend executes them. Kernels
     /// and products run on Metal or OpenCL when `OSPREY_GPU` selects a device.
     export fn onGpu(work) = {
