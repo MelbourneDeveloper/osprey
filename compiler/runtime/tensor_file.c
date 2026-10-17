@@ -42,6 +42,13 @@ static int osp_fseek(FILE *f, int64_t offset, int whence) {
 // Elements per fread while widening a tensor.
 #define LOAD_CHUNK 4096
 
+// One read's stored bytes and widened values. It lives on the heap: on the
+// stack it alone fills wasm32's default 64 KiB, and the frame traps.
+typedef struct {
+  unsigned char bytes[LOAD_CHUNK * 8];
+  double values[LOAD_CHUNK];
+} ReadBuffers;
+
 // --- stored float formats ------------------------------------------------------
 
 // Byte width of one stored element.
@@ -108,20 +115,18 @@ static FILE *open_at(const char *op, const char *path, int64_t offset) {
 }
 
 static int read_span(FILE *f, const char *op, const char *path, const OspTensorSpan *span,
-                     OspTensorSink sink, void *ctx) {
-  unsigned char chunk[LOAD_CHUNK * 8];
-  double values[LOAD_CHUNK];
+                     OspTensorSink sink, void *ctx, ReadBuffers *buffers) {
   size_t width = dtype_width(span->dtype);
   for (int64_t done = 0; done < span->count;) {
     size_t want = (size_t)(span->count - done < LOAD_CHUNK ? span->count - done : LOAD_CHUNK);
-    if (fread(chunk, width, want, f) != want) {
+    if (fread(buffers->bytes, width, want, f) != want) {
       osp_io_error_text(op, path, ferror(f) ? "read failed" : "file ends before the tensor does");
       return 0;
     }
     for (size_t i = 0; i < want; i++) {
-      values[i] = widen(span->dtype, chunk + i * width);
+      buffers->values[i] = widen(span->dtype, buffers->bytes + i * width);
     }
-    sink(ctx, values, want);
+    sink(ctx, buffers->values, want);
     done += (int64_t)want;
   }
   return 1;
@@ -129,12 +134,17 @@ static int read_span(FILE *f, const char *op, const char *path, const OspTensorS
 
 int osp_tensor_read(const char *op, const char *path, const OspTensorSpan *span, OspTensorSink sink,
                     void *ctx) {
-  FILE *f = open_at(op, path, span->offset);
-  if (!f) {
+  ReadBuffers *buffers = malloc(sizeof *buffers);
+  if (!buffers) {
+    osp_io_error_set(op, path, ENOMEM);
     return 0;
   }
-  int read = read_span(f, op, path, span, sink, ctx);
-  fclose(f);
+  FILE *f = open_at(op, path, span->offset);
+  int read = f && read_span(f, op, path, span, sink, ctx, buffers);
+  if (f) {
+    fclose(f);
+  }
+  free(buffers);
   return read;
 }
 

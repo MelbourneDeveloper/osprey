@@ -10,7 +10,7 @@
 //! stays unknown.
 
 use super::{function_bodies, invokes_parameter};
-use crate::{walk_program, AstNode, AstVisitor, Expr, NamedArgument, Program, Stmt};
+use crate::{walk_program, AstNode, AstVisitor, Expr, NamedArgument, Parameter, Program, Stmt};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The requirement of a callable whose effects no call site settles.
@@ -134,18 +134,12 @@ impl AstVisitor for Scope {
             } => {
                 let count = self.declared.entry(name.clone()).or_default();
                 *count = count.saturating_add(1);
-                self.declare(
-                    name,
-                    parameters.iter().map(|parameter| parameter.name.clone()),
-                );
+                self.declare(name, parameters);
             }
             Stmt::Let { name, value, .. } => {
                 let _ = self.binders.insert(name.clone());
                 if let Expr::Lambda { parameters, .. } = value {
-                    self.declare(
-                        name,
-                        parameters.iter().map(|parameter| parameter.name.clone()),
-                    );
+                    self.declare(name, parameters);
                 }
             }
             _ => {}
@@ -174,8 +168,11 @@ impl AstVisitor for Scope {
 }
 
 impl Scope {
-    fn declare(&mut self, name: &str, parameters: impl Iterator<Item = String>) {
-        let parameters: Vec<String> = parameters.collect();
+    fn declare(&mut self, name: &str, parameters: &[Parameter]) {
+        let parameters: Vec<String> = parameters
+            .iter()
+            .map(|parameter| parameter.name.clone())
+            .collect();
         self.binders.extend(parameters.iter().cloned());
         let _ = self.parameters.insert(name.to_owned(), parameters);
     }
@@ -190,24 +187,29 @@ impl Scope {
     fn classify(&self, bodies: &BTreeMap<String, Expr>) -> Callables {
         let mut callables = Callables::default();
         for (name, parameters) in &self.parameters {
-            let Some(body) = bodies.get(name) else {
-                continue;
-            };
-            let unique = self.unique(name);
-            if unique && self.closed(body, parameters) {
-                let _ = callables.known.insert(name.clone());
-            }
-            let invoked = invoked_indices(body, parameters);
-            if invoked.is_empty() {
-                continue;
-            }
-            if unique {
-                let _ = callables.parametric.insert(name.clone(), invoked);
-            } else {
-                let _ = callables.opaque.insert(name.clone());
+            if let Some(body) = bodies.get(name) {
+                self.admit(&mut callables, name, body, parameters);
             }
         }
         callables
+    }
+
+    /// Record `name` as known when a reference to it names exactly `body`,
+    /// and as parametric or opaque when `body` calls a parameter.
+    fn admit(&self, callables: &mut Callables, name: &str, body: &Expr, parameters: &[String]) {
+        let unique = self.unique(name);
+        if unique && self.closed(body, parameters) {
+            let _ = callables.known.insert(name.to_owned());
+        }
+        let invoked = invoked_indices(body, parameters);
+        if invoked.is_empty() {
+            return;
+        }
+        if unique {
+            let _ = callables.parametric.insert(name.to_owned(), invoked);
+        } else {
+            let _ = callables.opaque.insert(name.to_owned());
+        }
     }
 
     /// Whether `body` reads nothing a binder elsewhere could supply.
