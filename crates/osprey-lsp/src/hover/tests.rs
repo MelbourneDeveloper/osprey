@@ -362,6 +362,16 @@ fn hover_on_a_parameter_shows_its_type_inside_its_own_body() {
     // answer from `twice` while the cursor is in a later declaration.
     let two = "fn twice(n) = n * 2\nfn other() = 1\n";
     assert!(hover(two, "file:///a.osp", 1, 13, U16).is_none());
+
+    // [LSP-HOVER-PARAM-DOCS] A parameter is documented in its function's
+    // `# Parameters` section, but hovering `work` showed only its type.
+    for (uri, src, call) in [
+        ("file:///a.osp", "/// Runs work.\n///\n/// # Parameters\n/// - work: what runs under the handler.\nfn under(work) = work()\n", "work()"),
+        ("file:///a.ospml", "(** Runs work.\n\n    # Parameters\n    - work: what runs under the handler. *)\nunder work = work ()\n", "work ()"),
+    ] {
+        let md = hover(src, uri, 4, col_of(src, 4, call), U16).expect("hover over `work`");
+        assert!(md.contains("what runs under the handler."), "{uri}: {md}");
+    }
 }
 
 #[test]

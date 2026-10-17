@@ -19,6 +19,10 @@ module Cpu {
     }
 
     /// Host lists, loaded straight into lists from the safetensors file.
+    ///
+    /// # Parameters
+    /// - work: the computation to run, whose every `Tensor` operation this
+    ///   handler answers on host lists without touching the GPU.
     export fn onLists(work) = {
         handle static Tensor<List<float>> {
             build n f => range(0, n) |> map(f) |> toList()

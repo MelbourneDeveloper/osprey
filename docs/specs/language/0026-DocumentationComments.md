@@ -129,7 +129,9 @@ An inner comment attaches instead to the scope containing it — the file, a
 namespace, or a module ([DOC-SIGIL-INNER]) — and is recorded separately from
 that scope's outer comment.
 
-Docs do not attach separately to variants, fields, or parameters.
+Docs do not attach separately to variants, fields, or parameters. A parameter
+is documented in its function's `# Parameters` section, and hovering the
+parameter shows that entry ([LSP-HOVER-PARAM-DOCS](../tooling/0020-LanguageServerAndEditors.md)).
 
 ### Effect operations `[DOC-EFFECT-OP]`
 

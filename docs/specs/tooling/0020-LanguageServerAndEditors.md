@@ -254,7 +254,9 @@ declarations:
   position (`ProgramTypes::param_types`), so `fn twice(n) = n * 2` hovers `n`
   as `n: int`. Scope is the enclosing declaration: the nearest function
   declared at or above the cursor. A parameter must not answer for a name in a
-  *later* declaration.
+  *later* declaration. `[LSP-HOVER-PARAM-DOCS]` The parameter's entry in its
+  function's `# Parameters` section ([DOC-SECTIONS](../language/0026-DocumentationComments.md#recognized-sections-doc-sections))
+  follows the type, so a documented `work` hovers with its description.
 - **A built-in type name in an annotation** (`int`, `string`, `Result`, …). No
   source file declares these, so there is nothing to navigate to; hover carries
   a one-line summary instead. A **declared** type resolves to its declaration

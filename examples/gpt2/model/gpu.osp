@@ -18,6 +18,10 @@ module Gpu {
 
     /// GPU buffers, and `device` reports which backend executes them. Kernels
     /// and products run on Metal or OpenCL when `OSPREY_GPU` selects a device.
+    ///
+    /// # Parameters
+    /// - work: the computation to run, whose every `Tensor` operation this
+    ///   handler answers on the GPU.
     export fn onGpu(work) = {
         handle static Tensor<GpuBuffer<float>> {
             build n f => gpuIota(n) |> gpuMap(f)

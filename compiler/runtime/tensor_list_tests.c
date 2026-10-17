@@ -5,10 +5,13 @@
 // list_runtime.c, file_runtime.c (the io_error channel) and memory_runtime.c,
 // and nothing named gpu_*.
 #include <assert.h>
+#include <signal.h>
 
 #include "collection_runtime.h"
+#include "test_death.h"
 
 OspreyList *osprey_load_tensor(const char *path, const char *name);
+void *osprey_tensor_panic(const char *message);
 const char *osp_io_error(void);
 void osp_io_error_clear(void);
 
@@ -38,8 +41,24 @@ static double at(void *list, int64_t i) {
   return d;
 }
 
+static void panic_named(void) {
+  (void)osprey_tensor_panic("loadTensor: w: no tensor of that name in the header");
+}
+
+static void panic_unnamed(void) {
+  (void)osprey_tensor_panic(NULL);
+}
+
+// Broken-code quarantine: the CPU handler's failed load aborts rather than
+// hand the model a fabricated tensor, with or without a recorded reason.
+static void t_panic_aborts(void) {
+  CHECK(osp_death_signal(panic_named) == SIGABRT);
+  CHECK(osp_death_signal(panic_unnamed) == SIGABRT);
+}
+
 int main(void) {
   t_tensor_loader(&(TensorLoader){"loadTensor", load, length, at});
+  t_panic_aborts();
   printf("[ok] tensor_list: %ld assertions\n", g_checks);
   return 0;
 }

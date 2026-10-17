@@ -3,7 +3,7 @@
 //! inference), then synthesize `main` from either a user `main` or the trailing
 //! top-level statements.
 
-use crate::builder::{Codegen, CodegenOptions, ParamSig};
+use crate::builder::{Codegen, CodegenOptions, Linkage, ParamSig};
 use crate::error::Result;
 use crate::llty::{LType, Value};
 use osprey_ast::{Expr, Parameter, Position, Program, Stmt};
@@ -73,7 +73,12 @@ fn with_kernel_mode(options: CodegenOptions) -> Result<CodegenOptions> {
     })
 }
 
+/// An executable exports only its entry point [CODEGEN-LINKAGE].
 fn compile_program_with_options(program: &Program, options: CodegenOptions) -> Result<String> {
+    let options = CodegenOptions {
+        linkage: Linkage::Executable,
+        ..options
+    };
     compile_module(program, options, false)
 }
 
