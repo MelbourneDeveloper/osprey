@@ -96,8 +96,14 @@ impl Lowerer<'_> {
             .into_iter()
             .map(|arm| self.handler_arm(arm))
             .collect::<Result<_>>()?;
-        let value = osprey_ast::handler_value(stage, effect, arms, None, Some(position(node)));
-        self.documented(node, self.let_statement(name, value, false, None))
+        let function = osprey_ast::handler_function(
+            self.text(name).into(),
+            stage,
+            effect,
+            arms,
+            Some(position(node)),
+        );
+        self.documented(node, function)
     }
 
     fn handler_head(&self, node: Node<'_>) -> Result<(Stage, String)> {

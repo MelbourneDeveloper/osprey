@@ -14,6 +14,8 @@ fn assert_flavors(name: &str, default: &str, ml: &str, python: &str, expected: &
 
 #[test]
 fn declared_modes_distinguish_value_return_control_return_and_resumption() {
+    // A Python handler class is a named function, so, like a Default `fn`, it
+    // cannot take a builtin's name such as `replace`.
     assert_flavors(
         "declared_modes",
         r#"
@@ -21,13 +23,13 @@ effect ValueAsk { value: fn() -> int }
 effect ControlAsk { control value: fn() -> int }
 fn valueWork() = satAdd(perform ValueAsk.value(), 1)
 fn controlWork() = satAdd(perform ControlAsk.value(), 1)
-let replace = handler ValueAsk { value => 41 }
+let fixed = handler ValueAsk { value => 41 }
 let around = handler ControlAsk { value => satAdd(resume(41), 100) }
 let noResume = handler ControlAsk { value => 0 }
 let deadResume = handler ControlAsk {
     value => match false { true => resume(0) false => 0 }
 }
-let replacement = replace(valueWork)
+let replacement = fixed(valueWork)
 let resumed = around(controlWork)
 let returned = noResume(controlWork)
 let deadBranch = deadResume(controlWork)
@@ -40,7 +42,7 @@ effect ControlAsk
     control value : Unit => int
 valueWork () = satAdd (perform ValueAsk.value ()) 1
 controlWork () = satAdd (perform ControlAsk.value ()) 1
-replace = handler ValueAsk
+fixed = handler ValueAsk
     value => 41
 around = handler ControlAsk
     value => satAdd (resume 41) 100
@@ -50,7 +52,7 @@ deadResume = handler ControlAsk
     value => match false
         true => resume 0
         false => 0
-replacement = replace valueWork
+replacement = fixed valueWork
 resumed = around controlWork
 returned = noResume controlWork
 deadBranch = deadResume controlWork
@@ -68,7 +70,7 @@ def valueWork():
 def controlWork():
     return satAdd(perform(ControlAsk.value()), 1)
 @handler(ValueAsk)
-class replace:
+class fixed:
     def value():
         return 41
 @handler(ControlAsk)
@@ -83,7 +85,7 @@ class noResume:
 class deadResume:
     def value():
         return resume(0) if False else 0
-replacement = replace(valueWork)
+replacement = fixed(valueWork)
 resumed = around(controlWork)
 returned = noResume(controlWork)
 deadBranch = deadResume(controlWork)

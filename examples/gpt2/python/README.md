@@ -1,29 +1,44 @@
 # GPT-2 in Python syntax
 
-The [model](model.py) performs the existing `Tensor` effect. The handler selects host lists or the GPU surface; the forward mathematics stays in Python-flavor source.
+The whole program is Python-flavor source: no `.osp` module is imported and the project's one source root holds none. [backends.py](backends.py) declares the `Tensor` static effect and answers it twice, over host lists and over GPU buffers, and spells the arithmetic policy with a `Fault` effect, two handler classes and `with`. [tokenizer.py](tokenizer.py) is the byte-level BPE tokenizer. [model.py](model.py) holds the constants, the records, the checkpoint loader, the forward pass and the KV-cached step. [generate.py](generate/generate.py) is the Default sampler in Python syntax.
 
 ```python
-def matmul(x, w, rows, inner, cols):
-    return perform(Tensor.matMul(x, w, rows, inner, cols))
+@static_effect
+class Tensor[B]:
+    def build(size: int, kernel: Kernel) -> B: ...
+    def mat_mul(a: B, b: B, rows: int, inner: int, cols: int) -> B: ...
+
+
+@static_handler(Tensor[GpuBuffer[float]])
+class on_gpu:
+    def build(n, f):
+        return gpuMap(gpuIota(n), f)
+
+    def mat_mul(a, b, rows, inner, cols):
+        return or_abort(gpuMatMul(a, b, rows, inner, cols))
+
+
+def product(a, b, rows, inner, cols):
+    return perform(Tensor.mat_mul(a, b, rows, inner, cols))
 ```
 
 From the repository root:
 
 ```sh
-make gpt2 FLAVOR=python GPU=host PROMPT="The capital of France is" TOKENS=1
+make gpt2 FLAVOR=python GPU=metal PROMPT="The capital of France is" TOKENS=20
 make gpt2 FLAVOR=python BACKEND=lists PROMPT="The capital of France is" TOKENS=1
 ```
 
-The GPU-surface host run produces `The capital of France is the`, matching the independent reference. `GPU=auto`, `GPU=metal` and `GPU=opencl` select the existing device adapters; on Metal and OpenCL the same source generates the Default example's 20-token continuations of `The capital of France is` and `Melbourne is the capital of` byte for byte, naming the device in its banner. A missing adapter stops execution with an error.
+The output is byte for byte the Default example's output for the same stdin: the banner naming the device, the prompt and token lines, the generated count, the decoded text, and the `generation stopped:` and unknown-backend messages. `GPU=auto`, `GPU=metal` and `GPU=opencl` select the existing device adapters; a missing adapter stops execution with an error. The prompt takes one full forward pass and every later token one `forward_step` over the blocks' cached qkv rows, as in the Default sampler.
 
-The [sampler](generate/generate.py) recomputes the forward pass for each token. The existing Default example uses a KV cache, so its timings measure different work. Tokenization and weight loading reuse the existing Osprey modules; the independent [Python reference](../reference.py) stays separate.
-
-The ordinary compiler test compares every element of 24 deterministic tensors against that reference, at the real embedding width and sequence lengths 1/2/3, under both handlers and default/GC/ARC memory. This includes all intermediate values from a transformer block. Run it directly with an existing compiler:
+The ordinary compiler test compares every element of 24 deterministic tensors against the independent [Python reference](../reference.py), at the real embedding width and sequence lengths 1/2/3, under both handlers and default/GC/ARC memory, including all intermediate values from a transformer block. Run it directly with an existing compiler:
 
 ```sh
 python3 scripts/check-python-gpt2.py --compiler target/debug/osprey
 ```
 
 Pass `--device metal`, `--device opencl` or `--device auto` for a strict hardware comparison. That mode requires an adapter identity and completed device dispatches. Host arithmetic compares exactly; only values downstream of `exp`/`tanh` use the existing GPU precision bound.
+
+The generator comparison itself is `python_gpt2_generator_output_is_byte_identical_to_the_default_generator` in `crates/osprey-cli/tests/cross_flavor_equiv.rs`. It needs the downloaded checkpoint, so it runs with `cargo test -p osprey-cli --test cross_flavor_equiv -- --ignored`; the checkpoint-free message comparison and the no-`.osp` check run in every suite.
 
 The [port notes](../../../docs/plans/python-flavor-port/README.md) show the concrete changes from reference Python.

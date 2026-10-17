@@ -1,4 +1,5 @@
-//! Fiber and immutable-update spelling preserves the shared runtime contract.
+//! Fiber, immutable-update and Result-default spelling preserves the shared
+//! runtime contract.
 //! Implements [FLAVOR-PYTHON-INTEROP], [FLAVOR-PYTHON-EXPRESSIONS].
 use super::context::{apply, Lowerer, Result};
 use osprey_ast::Expr;
@@ -8,6 +9,9 @@ impl Lowerer<'_> {
     pub(super) fn fiber_intrinsic(&mut self, node: Node<'_>, name: &str) -> Result<Option<Expr>> {
         if name == "update" {
             return self.update(node).map(Some);
+        }
+        if name == "unwrap_or" {
+            return self.unwrap_or(node).map(Some);
         }
         if !matches!(
             name,
@@ -33,6 +37,19 @@ impl Lowerer<'_> {
                 channel: Box::new(channel.clone()),
                 value: Box::new(value.clone()),
             }),
+            _ => self.unsupported(node),
+        }
+    }
+
+    /// `unwrap_or(result, fallback)` is Default `result ?: fallback`: the
+    /// fallback is the Error arm, evaluated only when there is no value.
+    fn unwrap_or(&mut self, node: Node<'_>) -> Result<Expr> {
+        let (args, named) = self.arguments(Self::field(node, "arguments")?)?;
+        match (args.as_slice(), named.is_empty()) {
+            ([result, fallback], true) => Ok(crate::desugar::result_default(
+                result.clone(),
+                fallback.clone(),
+            )),
             _ => self.unsupported(node),
         }
     }

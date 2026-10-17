@@ -53,9 +53,23 @@ fn specialized_lambda_type(cg: &Codegen, position: Option<Position>) -> Result<o
         .filter(|(sites, ty)| position.is_some_and(|position| sites.contains(&position))
             && crate::types::fn_value_concrete(ty))
         .map(|(_, ty)| ty.clone())
-        .ok_or_else(|| CodegenError::unsupported(
-            "a closure value with a still-generic type (wrap it in a function with concrete parameter/return types)",
-        ))
+        .ok_or_else(|| CodegenError::unsupported(format!(
+            "a closure value with a still-generic type (wrap it in a function with concrete parameter/return types){}",
+            lambda_site(cg, position),
+        )))
+}
+
+/// Which lambda a message is about: its enclosing function and source line.
+fn lambda_site(cg: &Codegen, position: Option<Position>) -> String {
+    let function = cg
+        .source_function
+        .as_deref()
+        .map(|name| format!(" in `{name}`"))
+        .unwrap_or_default();
+    let site = position
+        .map(|at| format!(" at {}:{}", at.line, at.column))
+        .unwrap_or_default();
+    format!("{function}{site}")
 }
 
 /// Emit a lambda as a closure value with the given signature (the consuming

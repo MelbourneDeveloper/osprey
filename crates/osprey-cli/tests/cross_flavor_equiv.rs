@@ -74,6 +74,135 @@ fn python_gpt2_device_runs_never_pass_on_host_fallback() -> std::io::Result<()> 
         .try_for_each(|device| assert_python_gpt2_matches(device))
 }
 
+const DEFAULT_GENERATOR: &str = "examples/gpt2/generate";
+const PYTHON_GENERATOR: &str = "examples/gpt2/python/generate";
+
+/// `osprey <project> --run --memory=arc` from the repository root, as `make
+/// gpt2` runs it, with `stdin` and `OSPREY_GPU=device`.
+fn generated(project: &str, stdin: &str, device: &str) -> std::io::Result<std::process::Output> {
+    use std::io::Write;
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_osprey"))
+        .arg(root.join(project))
+        .args(["--run", "--memory=arc"])
+        .env("OSPREY_GPU", device)
+        .current_dir(&root)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+    child
+        .stdin
+        .take()
+        .map_or(Ok(()), |mut pipe| pipe.write_all(stdin.as_bytes()))?;
+    child.wait_with_output()
+}
+
+/// Both generators exit cleanly on `stdin` and print the same bytes.
+fn assert_generators_agree(stdin: &str, device: &str) -> std::io::Result<String> {
+    let default = generated(DEFAULT_GENERATOR, stdin, device)?;
+    let python = generated(PYTHON_GENERATOR, stdin, device)?;
+    for (flavor, output) in [("default", &default), ("python", &python)] {
+        assert!(
+            output.status.success(),
+            "{flavor} generator failed on {device}:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    assert_eq!(
+        String::from_utf8_lossy(&python.stdout),
+        String::from_utf8_lossy(&default.stdout),
+        "python generator stdout differs from the default generator on {device}"
+    );
+    assert_eq!(
+        python.stdout, default.stdout,
+        "stdout bytes differ on {device}"
+    );
+    Ok(String::from_utf8_lossy(&python.stdout).into_owned())
+}
+
+/// [FLAVOR-PYTHON-GPU]: the Python-flavor generator is a self-contained port
+/// of the Default generator, so its project holds no `.osp` source and reaches
+/// none through a source root.
+#[test]
+fn python_gpt2_project_contains_no_osprey_flavor_source() -> std::io::Result<()> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let python = root.join("examples/gpt2/python").canonicalize()?;
+    let project = python.join("generate");
+    let manifest = std::fs::read_to_string(project.join("osprey.toml"))?;
+    let roots = manifest
+        .lines()
+        .find_map(|line| line.strip_prefix("source_roots = ["))
+        .and_then(|rest| rest.strip_suffix(']'))
+        .expect("the generator manifest declares its source roots");
+    for source_root in roots.split(',').map(|path| path.trim().trim_matches('"')) {
+        let resolved = project.join(source_root).canonicalize()?;
+        assert!(
+            resolved.starts_with(&python),
+            "source root `{source_root}` reaches outside the Python port: {}",
+            resolved.display()
+        );
+    }
+    let mut pending = vec![python.clone()];
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(directory)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else {
+                assert!(
+                    path.extension().is_none_or(|extension| extension != "osp"),
+                    "{} is an Osprey-flavor source inside the Python port",
+                    path.display()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The Python generator keeps the Default generator's stdin contract and
+/// messages byte for byte. An unknown backend runs no model, so this path
+/// needs no checkpoint and runs everywhere.
+#[test]
+fn python_gpt2_generator_prints_the_default_generator_messages() -> std::io::Result<()> {
+    let stdout =
+        assert_generators_agree("The capital of France is\nnot a count\nnowhere\n", "host")?;
+    assert_eq!(stdout, "unknown backend `nowhere`: choose gpu or lists\n");
+    Ok(())
+}
+
+/// The whole model in Python flavor: tokenizer, checkpoint loader, forward
+/// pass, KV-cached steps and greedy sampling print the Default example's
+/// output byte for byte on the host surface, over host lists and on the GPU
+/// hardware this host has ([GPU-DEVICE], [FLAVOR-PYTHON-GPU]). It needs the
+/// published checkpoint in examples/gpt2/weights, which `make gpt2` downloads.
+#[test]
+#[ignore = "needs the GPT-2 checkpoint (`make gpt2` downloads it): run with --ignored"]
+fn python_gpt2_generator_output_is_byte_identical_to_the_default_generator() -> std::io::Result<()>
+{
+    let devices: &[&str] = if cfg!(target_os = "macos") {
+        &["host", "metal", "opencl"]
+    } else {
+        &["host", "auto"]
+    };
+    for device in devices {
+        let stdout = assert_generators_agree("The capital of France is\n20\ngpu\n", device)?;
+        assert!(
+            stdout.starts_with(&format!("gpt2 (124M) on {device}")),
+            "{device}: {stdout}"
+        );
+        assert!(
+            stdout.contains("\ngenerated 20 tokens\n"),
+            "{device}: {stdout}"
+        );
+    }
+    let lists = assert_generators_agree("Melbourne is the capital of\n1\nlists\n", "host")?;
+    assert!(lists.starts_with("gpt2 (124M) on lists"), "{lists}");
+    Ok(())
+}
+
 /// The canonical AST as a debug string with every source `Position { … }`
 /// payload scrubbed, so structural equality ignores spans.
 fn canonical(src: &str, flavor: Flavor) -> String {

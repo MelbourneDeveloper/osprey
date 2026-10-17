@@ -98,11 +98,106 @@ fn python_requires_preserves_closed_and_open_effect_rows() {
 }
 
 #[test]
-fn python_perform_resume_and_handler_values_equal_default_ast() {
-    equal(
+fn python_perform_resume_and_handler_classes_equal_default_ast() {
+    // [FLAVOR-PYTHON-HANDLER]: a handler class is a named handler function,
+    // the module idiom `fn h(work) = { handle E { … }\n work() }`, so a module
+    // may export it where a module `let` must be a compile-time constant. Its
+    // generated parameter is unspellable, so the twin is the Default handler
+    // value's closure declared as that function rather than bound by `let`.
+    equal_with_handler_functions(
         "effect Ask { control ask: fn() -> int }\nlet Answer = handler Ask { ask => resume(7) }\nfn work() = perform Ask.ask()\nlet result = Answer(work)\n",
         "@effect\nclass Ask:\n    @control\n    def ask() -> int: ...\n@handler(Ask)\nclass Answer:\n    def ask():\n        return resume(7)\ndef work():\n    return perform(Ask.ask())\nresult = Answer(work)\n",
     );
+}
+
+/// [`equal`], with every Default `let h = handler E { … }` read as the
+/// handler function a Python handler class declares.
+fn equal_with_handler_functions(default: &str, source: &str) {
+    let expected = parse_program_with_flavor(default, Flavor::Default);
+    let actual = parse(source);
+    assert!(expected.errors.is_empty(), "{:?}", expected.errors);
+    assert!(actual.errors.is_empty(), "{:?}", actual.errors);
+    let expected = osprey_ast::Program {
+        statements: expected
+            .program
+            .statements
+            .into_iter()
+            .map(handler_lets_as_functions)
+            .collect(),
+        doc: None,
+    };
+    assert_eq!(
+        osprey_ast::canonical::without_positions(&actual.program),
+        osprey_ast::canonical::without_positions(&expected)
+    );
+}
+
+fn handler_lets_as_functions(statement: osprey_ast::Stmt) -> osprey_ast::Stmt {
+    use osprey_ast::{Expr, Stmt};
+    match statement {
+        Stmt::Namespace {
+            name,
+            body,
+            file_scoped,
+            doc,
+            inner_doc,
+            position,
+        } => Stmt::Namespace {
+            name,
+            body: body.into_iter().map(handler_lets_as_functions).collect(),
+            file_scoped,
+            doc,
+            inner_doc,
+            position,
+        },
+        Stmt::Module {
+            path,
+            kind,
+            signature,
+            body,
+            doc,
+            inner_doc,
+            position,
+        } => Stmt::Module {
+            path,
+            kind,
+            signature,
+            body: body
+                .into_iter()
+                .map(|item| osprey_ast::ModuleItem {
+                    declaration: Box::new(handler_lets_as_functions(*item.declaration)),
+                    ..item
+                })
+                .collect(),
+            doc,
+            inner_doc,
+            position,
+        },
+        Stmt::Let {
+            name,
+            value:
+                Expr::Lambda {
+                    parameters,
+                    body,
+                    position,
+                    ..
+                },
+            doc,
+            ..
+        } => Stmt::Function {
+            name,
+            type_params: Vec::new(),
+            parameters,
+            return_type: None,
+            effects: Vec::new(),
+            effect_tail: None,
+            effect_row_present: false,
+            body: *body,
+            doc,
+            position,
+        },
+        other => other,
+    }
 }
 
 #[test]
@@ -156,6 +251,17 @@ fn python_fiber_intrinsics_and_updates_equal_default_ast() {
 }
 
 #[test]
+fn python_unwrap_or_equals_the_default_result_default_operator() {
+    // [FLAVOR-PYTHON-EXPRESSIONS]: `unwrap_or(result, fallback)` is Default
+    // `result ?: fallback`, so the fallback stays an arm evaluated only on
+    // Error and a `gpuGet` read keeps its device gather form.
+    equal(
+        "fn at(b, i) = gpuGet(b, i) ?: 0.0\nfn rank(ranks, key) = mapGet(ranks, key) ?: expensive()\n",
+        "def at(b, i):\n    return unwrap_or(gpuGet(b, i), 0.0)\ndef rank(ranks, key):\n    return unwrap_or(mapGet(ranks, key), expensive())\n",
+    );
+}
+
+#[test]
 fn python_partial_tail_returns_are_rejected_even_for_unit() {
     for source in [
         "def f(x):\n    if x:\n        return None\n",
@@ -177,6 +283,9 @@ fn python_intrinsics_reject_invalid_arity_and_context_managers() {
         "send(1)\n",
         "recv()\n",
         "update(1, x=2)\n",
+        "unwrap_or(result)\n",
+        "unwrap_or(result, 0, 1)\n",
+        "unwrap_or(result, fallback=0)\n",
         "with handler as value:\n    pass\n",
         "with first, second:\n    pass\n",
     ] {
@@ -221,7 +330,7 @@ fn python_docstrings_lower_to_the_shared_documentation_model() {
 
 #[test]
 fn python_effect_handler_and_foreign_signature_docs_preserve_export_metadata() {
-    equal(
+    equal_with_handler_functions(
         "namespace app;\nmodule Api {\n/// A capability.\nexport effect Log {\n/// Writes a message.\nwrite: fn(string) -> Unit }\n/// A console.\nlet Console = handler Log { write message => print(message) }\n/// A foreign call.\nexport extern fn foreign(value: int) -> int\n}\n",
         "# osprey: namespace=app\n# osprey: module=Api\n@export\n@effect\nclass Log:\n    \"\"\"A capability.\"\"\"\n    def write(message: str) -> None:\n        \"\"\"Writes a message.\"\"\"\n        ...\n@handler(Log)\nclass Console:\n    \"\"\"A console.\"\"\"\n    def write(message):\n        return print(message)\n@extern\n@export\ndef foreign(value: int) -> int:\n    \"\"\"A foreign call.\"\"\"\n    ...\n",
     );

@@ -49,14 +49,13 @@ def expected(module):
 
 
 def project(directory):
-    model = (ROOT / "examples/gpt2/model/model.osp").read_text()
-    (directory / "model.osp").write_text(model)
-    (directory / "backends.osp").write_text((ROOT / "examples/gpt2/model/backends.osp").read_text())
+    """The check program over the self-contained Python-flavor modules: no `.osp` source."""
     (directory / "check.py").write_text((PORT / "check.py").read_text())
+    modules = ", ".join(f'"{Path(os.path.relpath(PORT / name, directory)).as_posix()}"' for name in ("backends.py", "model.py"))
     (directory / "osprey.toml").write_text(f'''[project]
 name = "python-gpt2-check"
 source_roots = [".", "{PORT.as_posix()}"]
-python_sources = ["{Path(os.path.relpath(PORT / 'model.py', directory)).as_posix()}"]
+python_sources = [{modules}]
 entry = "check.py"
 ''')
 

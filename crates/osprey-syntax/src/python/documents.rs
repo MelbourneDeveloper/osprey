@@ -8,7 +8,10 @@ impl Lowerer<'_> {
     pub(super) fn documented(&mut self, node: Node<'_>, mut statement: Stmt) -> Result<Stmt> {
         let documentation = self.declaration_doc(node)?;
         match &mut statement {
-            Stmt::Let { doc, .. } | Stmt::Effect { doc, .. } | Stmt::Extern { doc, .. } => {
+            Stmt::Let { doc, .. }
+            | Stmt::Function { doc, .. }
+            | Stmt::Effect { doc, .. }
+            | Stmt::Extern { doc, .. } => {
                 *doc = documentation;
             }
             _ => return self.unsupported(node),

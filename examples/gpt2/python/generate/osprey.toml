@@ -1,6 +1,6 @@
 [project]
 name = "python-generate"
-source_roots = ["..", "../../model"]
-python_sources = ["../model.py"]
+source_roots = [".."]
+python_sources = ["../backends.py", "../tokenizer.py", "../model.py"]
 default_namespace = "generate"
 entry = "generate.py"
