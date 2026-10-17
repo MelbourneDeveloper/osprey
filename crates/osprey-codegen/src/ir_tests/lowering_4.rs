@@ -83,7 +83,7 @@ fn control_handler_state_keeps_its_existing_cell_store_in_both_flavors() {
         let ir = compile_program(&parsed.program).map_err(|error| error.to_string());
         assert!(ir.is_ok(), "{flavor}: {ir:?}");
         let ir = ir.into_iter().collect::<String>();
-        let arm = function_body(&ir, "define i64 @__resume_arm_Storage_save_");
+        let arm = function_body(&ir, "define internal i64 @__resume_arm_Storage_save_");
         assert!(
             arm.contains("bitcast i8*") && arm.contains("store i8* %__arm0, i8**"),
             "{arm}"

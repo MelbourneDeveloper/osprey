@@ -52,14 +52,15 @@ WASM_STACK_BYTES=4194304
 # Language order is the report's column order. "Speed of light" baselines (C,
 # Rust) first after Osprey so the gap to Osprey reads left-to-right. `osprey-gc`
 # and `osprey-arc` are the SAME .osp compiled with the tracing-GC (--memory=gc)
-# and Perceus ARC (--memory=arc) backends, so the allocation cases
-# (binarytrees) show both reclamation strategies next to the default backend.
+# and Perceus ARC (--memory=arc) backends. ARC leads because it reclaims memory
+# at Rust's footprint; the default backend never frees, so the allocation cases
+# (binarytrees) show its peak memory next to both reclamation strategies.
 # `rust-checked` is the SAME .rs built with `-C overflow-checks=on`: Osprey
 # checks every integer operation (spec 0037), so this is the like-for-like
 # baseline; plain `rust` and `c` run unchecked arithmetic.
-LANGS=(osprey osprey-arc osprey-gc rust rust-checked c csharp dart ocaml haskell osprey-wasm rust-wasm c-wasm)
+LANGS=(osprey-arc osprey-gc osprey rust rust-checked c csharp dart ocaml haskell osprey-wasm rust-wasm c-wasm)
 if [[ "$PARTIAL" == 1 ]]; then
-  LANGS=(osprey osprey-arc osprey-gc osprey-wasm)
+  LANGS=(osprey-arc osprey-gc osprey osprey-wasm)
 fi
 typeset -A EXT
 EXT=(osprey osp  osprey-arc osp  osprey-gc osp  rust rs  rust-checked rs  c c  csharp cs  dart dart

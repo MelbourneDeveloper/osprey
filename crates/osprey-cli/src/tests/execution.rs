@@ -273,9 +273,9 @@ fn a_small_helper_is_inlined_into_its_caller() {
     assert!(!body.contains("@add("), "add was not inlined:\n{body}");
 }
 
-// RED until plan 0033 phase 3. An executable exports nothing but `main`, yet
-// every function is emitted with external linkage, so LLVM must keep `@add`'s
-// definition after inlining it everywhere and can specialise none of them.
+// [CODEGEN-LINKAGE] An executable exports nothing but `main`, so every other
+// function is internal and LLVM drops `@add`'s definition once it is inlined
+// everywhere.
 #[test]
 fn an_executable_drops_a_helper_once_it_is_inlined() {
     let module = optimised_ir(HELPER_PROGRAM);

@@ -22,6 +22,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// whole-program facts, so they are built once and read by every region.
 struct Facts {
     effects: BTreeMap<String, EffectDecl>,
+    callables: crate::stage_rows::Callables,
     runtime: BTreeMap<String, Vec<String>>,
 }
 
@@ -34,6 +35,7 @@ pub(crate) fn legality(program: &Program) -> Vec<StageError> {
     }
     let facts = Facts {
         effects: effect_declarations(program),
+        callables: crate::stage_rows::Callables::of(program),
         runtime: runtime_requirements(program),
     };
     regions
@@ -44,8 +46,13 @@ pub(crate) fn legality(program: &Program) -> Vec<StageError> {
 
 /// The rejection for one region, or `None` when its body is stage-legal.
 fn verdict(facts: &Facts, region: &Region) -> Option<StageError> {
-    let mut required =
-        body_requirements(&facts.effects, &region.body, Stage::Dynamic, &facts.runtime);
+    let mut required = body_requirements(
+        &facts.effects,
+        &facts.callables,
+        &region.body,
+        Stage::Dynamic,
+        &facts.runtime,
+    );
     if crate::stage_rows::invokes_parameter(&region.body, &region.unresolved) {
         required.push("<unknown>".to_owned());
     }

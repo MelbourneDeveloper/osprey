@@ -1,8 +1,8 @@
 {
   "languages": [
-    "osprey",
     "osprey-arc",
     "osprey-gc",
+    "osprey",
     "rust",
     "c",
     "csharp",

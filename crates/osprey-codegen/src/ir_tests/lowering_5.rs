@@ -38,13 +38,13 @@ fn higher_order_calls_through_computed_and_field_callees() {
         ("fallbackWitness", 31),
     ] {
         assert!(
-            function_body(&ir, &format!("define i64 @{name}()"))
+            function_body(&ir, &format!("define internal i64 @{name}()"))
                 .contains(&format!("ret i64 {value}")),
             "{name} must return its selected generic function's value:\n{ir}"
         );
     }
     assert!(
-        function_body(&ir, "define i8* @fieldWitness()").contains("call i8* %"),
+        function_body(&ir, "define internal i8* @fieldWitness()").contains("call i8* %"),
         "the callable record field must retain its string-returning ABI:\n{ir}"
     );
 }
@@ -97,7 +97,7 @@ fn field_callbacks_return_callables_and_keep_named_slots() {
              print(\"${pureWitness()} ${namedPureWitness()} ${handledWitness()} ${namedHandledWitness()} ${genericSlotWitness()} ${declaredSlotWitness()} ${directLambdaWitness()} ${genericLambdaWitness()}\")\n",
         );
     for witness in ["pureWitness", "namedPureWitness"] {
-        let body = function_body(&returned, &format!("define i64 @{witness}()"));
+        let body = function_body(&returned, &format!("define internal i64 @{witness}()"));
         assert!(
             body.contains("call i8* %") && body.contains("call i64 %"),
             "{witness} must call the factory and then its returned int callback:\n{returned}"
@@ -113,14 +113,15 @@ fn field_callbacks_return_callables_and_keep_named_slots() {
         ("declaredSlotWitness", "i64 11, i64 22"),
     ] {
         assert!(
-            function_body(&returned, &format!("define i64 @{witness}()"))
+            function_body(&returned, &format!("define internal i64 @{witness}()"))
                 .contains(&format!("@firstSlot({arguments})")),
             "{witness} must preserve its source call site's argument slots:\n{returned}"
         );
     }
     for witness in ["directLambdaWitness", "genericLambdaWitness"] {
         assert!(
-            function_body(&returned, &format!("define i64 @{witness}()")).contains("ret i64 22"),
+            function_body(&returned, &format!("define internal i64 @{witness}()"))
+                .contains("ret i64 22"),
             "{witness} must bind named values in written slots:\n{returned}"
         );
     }
@@ -187,8 +188,8 @@ fn one_generic_function_at_one_abi_is_emitted_exactly_once() {
     // int and string are two ABIs ⇒ exactly two specialised bodies, not the
     // four the three int uses plus one string use would otherwise emit.
     assert_eq!(
-        ir.matches("define i64 @__closure_fn_").count()
-            + ir.matches("define i8* @__closure_fn_").count(),
+        ir.matches("define internal i64 @__closure_fn_").count()
+            + ir.matches("define internal i8* @__closure_fn_").count(),
         2,
         "one body per (function, ABI) pair:\n{ir}"
     );
@@ -372,7 +373,7 @@ fn a_mixed_handler_dispatcher_continues_by_guaranteed_tail_call() {
     );
     let body = function_body(
         &ir,
-        "define i64 @__resume_drive_Log_0(i8* %__env, i8* %__coro)",
+        "define internal i64 @__resume_drive_Log_0(i8* %__env, i8* %__coro)",
     );
     let reentries: Vec<&str> = body
         .lines()

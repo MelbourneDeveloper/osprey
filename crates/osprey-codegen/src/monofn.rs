@@ -340,7 +340,9 @@ print("${listening}${alsoListening}")
         // has no Osprey call site, so codegen emitted the reference and never
         // the body while still returning `Ok`.
         assert_eq!(
-            module.matches("define i8* @handler$mono0(").count(),
+            module
+                .matches("define internal i8* @handler$mono0(")
+                .count(),
             1,
             "exactly one definition of the instantiation:\n{module}"
         );
@@ -369,7 +371,9 @@ print("${listening}${alsoListening}")
         // one response pointer out — because that is the one signature the C
         // runtime will ever call it with.
         assert!(
-            module.contains("define i8* @handler$mono0(i8* %$p0, i8* %$p1, i8* %$p2, i8* %$p3)"),
+            module.contains(
+                "define internal i8* @handler$mono0(i8* %$p0, i8* %$p1, i8* %$p2, i8* %$p3)"
+            ),
             "the instantiation is emitted at the declared callback ABI:\n{module}"
         );
         // Once per registration, at that same type. `contains` would pass with

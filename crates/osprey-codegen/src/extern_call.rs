@@ -317,7 +317,7 @@ mod tests {
         );
         let ir = crate::compile_program(&parsed.program).expect("terminal codegen");
         for (function, callee) in [("configure", "term_raw_mode"), ("nap", "fiber_sleep")] {
-            let marker = format!("define i64 @{function}(");
+            let marker = format!("define internal i64 @{function}(");
             let start = ir
                 .find(&marker)
                 .unwrap_or_else(|| panic!("missing {function}"));

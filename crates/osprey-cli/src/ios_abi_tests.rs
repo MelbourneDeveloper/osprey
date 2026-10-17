@@ -23,7 +23,7 @@ fn checked(source: &str) -> (Program, ProgramTypes, String) {
     let errors = osprey_types::check_program(&program);
     assert!(errors.is_empty(), "fixture types: {errors:?}");
     let types = osprey_types::infer_program(&program);
-    let ir = osprey_codegen::compile_program(&program).expect("fixture lowers");
+    let ir = osprey_codegen::compile_library(&program).expect("fixture lowers");
     (program, types, ir)
 }
 
@@ -126,7 +126,7 @@ fn project_symbols_export_under_their_qualified_c_name() {
     .expect("assemble")
     .program;
     let types = osprey_types::infer_program(&program);
-    let ir = osprey_codegen::compile_program(&program).expect("lowers");
+    let ir = osprey_codegen::compile_library(&program).expect("lowers");
     let abi = host_abi(&program, &types, &ir).expect("abi");
     let greet = abi
         .exports

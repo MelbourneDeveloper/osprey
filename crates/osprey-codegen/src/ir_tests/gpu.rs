@@ -17,11 +17,15 @@ fn a_lambda_kernel_is_lifted_to_one_function_the_loop_calls() {
              print(f())\n",
     );
     assert!(
-        ir.contains("define double @__gpu_kernel_0(double %$p0)"),
+        ir.contains("define internal double @__gpu_kernel_0(double %$p0)"),
         "{ir}"
     );
-    assert_eq!(ir.matches("define double @__gpu_kernel_0(").count(), 1);
-    let host = function_body(&ir, "define i64 @f()");
+    assert_eq!(
+        ir.matches("define internal double @__gpu_kernel_0(")
+            .count(),
+        1
+    );
+    let host = function_body(&ir, "define internal i64 @f()");
     assert!(
         host.contains("call double @__gpu_kernel_0(double "),
         "{host}"
@@ -46,8 +50,8 @@ fn each_distinct_kernel_gets_its_own_symbol() {
     shows(
         &ir,
         &[
-            "define double @__gpu_kernel_0(double %$p0)",
-            "define double @__gpu_kernel_1(double %$p0)",
+            "define internal double @__gpu_kernel_0(double %$p0)",
+            "define internal double @__gpu_kernel_1(double %$p0)",
         ],
     );
 }
@@ -66,12 +70,12 @@ fn captures_become_leading_parameters_sorted_by_name() {
              }\n\
              print(f())\n",
     );
-    let header = "define double @__gpu_kernel_0(double %$p0, double %$p1, double %$p2)";
+    let header = "define internal double @__gpu_kernel_0(double %$p0, double %$p1, double %$p2)";
     assert!(ir.contains(header), "{ir}");
     let kernel = function_body(&ir, header);
     shows(&kernel, &["fmul double %$p1, %$p2", "fadd double"]);
     assert!(!kernel.contains("__env"), "{kernel}");
-    let host = function_body(&ir, "define i64 @f()");
+    let host = function_body(&ir, "define internal i64 @f()");
     assert!(
         host.contains("@__gpu_kernel_0(double 2.0, double 5.0, double "),
         "{host}"
@@ -89,7 +93,7 @@ fn a_captured_buffer_handle_travels_as_a_uniform() {
              print(f())\n",
     );
     assert!(
-        ir.contains("define double @__gpu_kernel_0(i8* %$p0, i64 %$p1)"),
+        ir.contains("define internal double @__gpu_kernel_0(i8* %$p0, i64 %$p1)"),
         "{ir}"
     );
 }
@@ -103,7 +107,7 @@ fn a_fold_kernel_takes_uniforms_then_accumulator_then_element() {
              }\n\
              print(\"${f()}\")\n",
     );
-    let header = "define double @__gpu_kernel_0(double %$p0, double %$p1, double %$p2)";
+    let header = "define internal double @__gpu_kernel_0(double %$p0, double %$p1, double %$p2)";
     assert!(ir.contains(header), "{ir}");
     let kernel = function_body(&ir, header);
     shows(&kernel, &["fmul double %$p0, %$p2", "fadd double %$p1,"]);
@@ -126,23 +130,23 @@ fn a_named_kernel_reuses_its_own_definition() {
              print(f())\n",
     );
     assert!(!ir.contains(KERNEL_PREFIX), "{ir}");
-    assert_eq!(ir.matches("define double @twice(").count(), 1);
-    assert!(function_body(&ir, "define i64 @f()").contains("call double @twice(double "));
+    assert_eq!(ir.matches("define internal double @twice(").count(), 1);
+    assert!(function_body(&ir, "define internal i64 @f()").contains("call double @twice(double "));
 }
 
 #[test]
 fn a_known_let_bound_kernel_is_extracted() {
     let ir = module("fn f() = { let k = fn(v) => v * 2.0\n let out = toGpu([1.0, 2.0]) |> gpuMap(k)\n gpuLength(out) }\nprint(f())\n");
     assert_eq!(
-        ir.matches("define double @__gpu_kernel_").count(),
+        ir.matches("define internal double @__gpu_kernel_").count(),
         1,
         "{ir}"
     );
     assert!(
-        ir.contains("define double @__gpu_kernel_0(double %$p0)"),
+        ir.contains("define internal double @__gpu_kernel_0(double %$p0)"),
         "{ir}"
     );
-    let host = function_body(&ir, "define i64 @f()");
+    let host = function_body(&ir, "define internal i64 @f()");
     assert!(
         host.contains("call double @__gpu_kernel_0(double "),
         "{host}"
@@ -205,7 +209,7 @@ fn twin_flavors_number_their_kernels_identically() {
              print (f ())\n",
     );
     assert_eq!(default_ir, ml_ir);
-    assert!(default_ir.contains("define double @__gpu_kernel_0(double %$p0, double %$p1)"));
+    assert!(default_ir.contains("define internal double @__gpu_kernel_0(double %$p0, double %$p1)"));
 }
 
 // ---- host operations [GPU-MATMUL] [GPU-BUFFER-LOAD] [GPU-BUFFER-TENSOR] ----
@@ -214,7 +218,7 @@ fn twin_flavors_number_their_kernels_identically() {
 /// channel cleared immediately before and read immediately after, so the
 /// `Error` message is the reason THIS call recorded [BUILTIN-FILE-ERRMSG].
 fn assert_one_bracketed_call(ir: &str, symbol: &str) {
-    let host = function_body(ir, "define i64 @f()");
+    let host = function_body(ir, "define internal i64 @f()");
     let call = format!("call i8* @{symbol}(");
     assert_eq!(host.matches(&call).count(), 1, "{host}");
     let at = host.find(&call).unwrap_or(host.len());
@@ -301,7 +305,7 @@ fn a_float_function_by_name_is_an_extracted_kernel_in_both_flavors() {
              print (f ())\n",
     );
     assert_eq!(default_ir, ml_ir);
-    let header = "define double @__gpu_kernel_0(double %$p0)";
+    let header = "define internal double @__gpu_kernel_0(double %$p0)";
     assert!(default_ir.contains(header), "{default_ir}");
     let kernel = function_body(&default_ir, header);
     assert!(

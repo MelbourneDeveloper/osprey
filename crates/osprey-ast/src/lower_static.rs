@@ -43,6 +43,8 @@ struct Lowering {
     /// Each function's requirements, independent of its selected interpretation.
     requirements: BTreeMap<String, Vec<String>>,
     dispatches: BTreeMap<String, Vec<String>>,
+    /// What each call site settles about the helper it calls.
+    callables: crate::stage_rows::Callables,
     /// Region-specialized definitions appended to the program.
     produced: Vec<Stmt>,
     /// Specialization cache, keyed by function name and the operations each
@@ -72,6 +74,7 @@ pub(crate) fn run(program: &Program) -> Result<Program, Vec<StageError>> {
         effects: effect_declarations(&program),
         requirements: all_requirements(&program),
         dispatches: crate::stage_rows::dispatch_requirements(&program),
+        callables: crate::stage_rows::Callables::of(&program),
         produced: Vec::new(),
         emitted: BTreeMap::new(),
         consumed: BTreeSet::new(),
@@ -188,14 +191,7 @@ impl Lowering {
             // Validate unused arms too, and resolve their requests in the
             // enclosing scope rather than recursively selecting themselves.
             self.rewrite(&mut arm.body, regions);
-            let mut required = self.remaining_requirements(&arm.body);
-            required.extend(crate::stage_rows::body_dispatches(
-                &self.effects,
-                &arm.body,
-                &self.dispatches,
-            ));
-            required.sort();
-            required.dedup();
+            let required = self.arm_requirements(&arm.body);
             if !required.is_empty() {
                 self.errors.push(StageError::new(
                     format!("static handler arm `{effect}.{}` requires runtime effects: {}; arm operations must be statically discharged", arm.operation, required.join(", ")),
@@ -381,8 +377,7 @@ impl Lowering {
         self.rewrite(&mut specialized_body, &mut owned);
         let effects = self.residual_declarations(effects, regions);
         let required = self.remaining_requirements(&specialized_body);
-        let dispatches =
-            crate::stage_rows::body_dispatches(&self.effects, &specialized_body, &self.dispatches);
+        let dispatches = self.dispatches_of(&specialized_body);
         let _ = self.dispatches.insert(specialized.to_owned(), dispatches);
         let _ = self.requirements.insert(specialized.to_owned(), required);
         let _ = self.consumed.insert(original.to_owned());

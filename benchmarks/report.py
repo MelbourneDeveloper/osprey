@@ -26,7 +26,7 @@ from typing import Callable, Optional
 
 from merge_results import TIMING, atomic_write, valid_timing
 
-ORDER: list[str] = ["osprey", "osprey-arc", "osprey-gc", "rust", "rust-checked", "c", "csharp",
+ORDER: list[str] = ["osprey-arc", "osprey-gc", "osprey", "rust", "rust-checked", "c", "csharp",
                     "dart", "ocaml", "haskell", "osprey-wasm", "rust-wasm", "c-wasm"]
 LABEL: dict[str, str] = {"osprey": "Osprey", "osprey-arc": "Osprey (ARC)",
                          "osprey-gc": "Osprey (GC)",
