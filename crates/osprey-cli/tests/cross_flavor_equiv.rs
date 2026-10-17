@@ -18,23 +18,60 @@ use osprey_syntax::{parse_program_with_flavor, Flavor};
 #[path = "common/effect_execution.rs"]
 mod effect_execution;
 
-#[test]
-fn python_gpt2_forward_tensors_match_the_independent_reference() -> std::io::Result<()> {
+/// `scripts/check-python-gpt2.py` against the compiler under test with
+/// `OSPREY_GPU=device`: every element of 24 tensors under both Tensor handlers
+/// and all three memory modes must match the independent reference.
+fn assert_python_gpt2_matches(device: &str) -> std::io::Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let python = if cfg!(windows) { "python" } else { "python3" };
     let output = std::process::Command::new(python)
         .arg(root.join("scripts/check-python-gpt2.py"))
-        .args(["--compiler", env!("CARGO_BIN_EXE_osprey")])
+        .args([
+            "--compiler",
+            env!("CARGO_BIN_EXE_osprey"),
+            "--device",
+            device,
+        ])
         .current_dir(root)
         .output()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         output.status.success(),
-        "{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
+        "{device}: {stdout}\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(String::from_utf8_lossy(&output.stdout).contains("matched 24 complete tensors"));
+    assert!(
+        stdout.contains("matched 24 complete tensors"),
+        "{device}: {stdout}"
+    );
     Ok(())
+}
+
+#[test]
+fn python_gpt2_forward_tensors_match_the_independent_reference() -> std::io::Result<()> {
+    assert_python_gpt2_matches("host")
+}
+
+/// [GPU-DEVICE], [GPU-BACKEND-DEVICE]: the same Python model body runs on the
+/// GPU hardware this host has — Metal and `OpenCL` on macOS, the `OpenCL`
+/// device `auto` resolves elsewhere. The check script demands a `metal:`/`opencl:`
+/// identity that is not `unavailable` and completed dispatches in the trace, so
+/// a run that fell back to the host can never pass. Without GPU hardware the
+/// test is ignored: unverified delivery, never a green acceleration test.
+#[test]
+#[cfg_attr(
+    not(target_os = "macos"),
+    ignore = "needs GPU hardware: run with --ignored on a host that has a device"
+)]
+fn python_gpt2_device_runs_never_pass_on_host_fallback() -> std::io::Result<()> {
+    let devices: &[&str] = if cfg!(target_os = "macos") {
+        &["metal", "opencl"]
+    } else {
+        &["auto"]
+    };
+    devices
+        .iter()
+        .try_for_each(|device| assert_python_gpt2_matches(device))
 }
 
 /// The canonical AST as a debug string with every source `Position { … }`

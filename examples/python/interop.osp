@@ -1,6 +1,6 @@
 // Python is a replaceable capability: live code and tests share the same call.
 // Implements [PYTHON-CALL]; run using `python -m osprey`, not the native target.
-extern fn osprey_python_call(module: string, name: string, args: string) -> string
+extern fn osprey_python_call(moduleName: string, name: string, args: string) -> string
 extern fn osprey_python_object(operation: string, objectId: int, name: string, args: string) -> string
 
 effect Python { call: fn(string, string, string) -> Result<string, string> }
@@ -22,7 +22,7 @@ fn decode(reply) = match jsonParse(reply) {
     Error => Error { message: "invalid Python reply JSON" }
 }
 
-let live = handler Python { call module name args => decode(osprey_python_call(module, name, args)) }
+let live = handler Python { call moduleName name args => decode(osprey_python_call(moduleName, name, args)) }
 let fake = handler Python { call _ _ _ => Success { value: "test answer" } }
 
 fn squareRoot(value: float) = perform Python.call("math", "sqrt", "[${toString(value)}]")

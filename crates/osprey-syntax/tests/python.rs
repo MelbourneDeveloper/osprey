@@ -119,9 +119,12 @@ fn python_typing_aliases_remain_lexically_scoped() {
         "fn inner() = {}\nfn outer(value: Items<int>) = value\n",
         "def inner():\n    from typing import List as Items\n    pass\ndef outer(value: Items[int]):\n    return value\n",
     );
-    assert!(!parse("from collections.abc import Final\n")
-        .errors
-        .is_empty());
+    assert!(
+        !parse("from collections.abc import Final\n")
+            .errors
+            .is_empty(),
+        "accepted a typing alias imported from outside `typing`"
+    );
 }
 
 #[test]
@@ -130,7 +133,10 @@ fn python_multiline_string_tabs_are_content() {
         "let text = \"line\\n\\tcontent\\n\"\n",
         "text = \"\"\"line\n\tcontent\n\"\"\"\n",
     );
-    assert!(!parse("def f():\n\treturn 1\n").errors.is_empty());
+    assert!(
+        !parse("def f():\n\treturn 1\n").errors.is_empty(),
+        "accepted a tab-indented body"
+    );
 }
 
 #[test]

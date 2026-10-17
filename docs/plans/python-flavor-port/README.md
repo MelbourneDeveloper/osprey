@@ -1,6 +1,6 @@
 # Python-flavor GPT-2 port notes
 
-The authored sources now live in [`examples/gpt2/python`](../../../examples/gpt2/python/README.md). The model and sampler compile through the Python frontend and execute the real 124M checkpoint on the host. [Plan 0031](../0031-python-flavor.md) tracks the complete flavor, device and training acceptance.
+The authored sources now live in [`examples/gpt2/python`](../../../examples/gpt2/python/README.md). The model and sampler compile through the Python frontend and execute the real 124M checkpoint on the host and on Metal and OpenCL hardware. [Plan 0031](../0031-python-flavor.md) tracks the complete flavor and training acceptance.
 
 | Reference Python | Osprey Python flavor |
 | --- | --- |

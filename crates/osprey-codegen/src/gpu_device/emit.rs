@@ -16,15 +16,25 @@ use super::{DeviceBody, Ty, Uniform};
 use crate::builder::Codegen;
 use osprey_ast::{Expr, MatchArm, NamedArgument, Parameter, Stmt};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 pub(super) type Emitted = Result<(Ty, String), String>;
 
-/// A name in scope: a scalar held in a C variable, or a buffer uniform with
-/// its pointer and length variables.
+/// A name in scope: a scalar held in a C variable, a buffer uniform with its
+/// pointer and length variables, or a function passed rather than called.
 #[derive(Clone)]
 pub(super) enum Local {
     Scalar(Ty, String),
     Buffer(String, String),
+    Function(Rc<Closure>),
+}
+
+/// A lambda or helper handed to a function: inlined wherever it is called, in
+/// the scopes it closed over, so a helper's parameters never shadow its names.
+pub(super) struct Closure {
+    pub(super) parameters: Vec<Parameter>,
+    pub(super) body: Expr,
+    scopes: Vec<HashMap<String, Local>>,
 }
 
 pub(super) struct Emitter<'a> {
@@ -165,6 +175,7 @@ impl Emitter<'_> {
         match self.lookup(name) {
             Some(Local::Scalar(ty, value)) => Ok((ty, value)),
             Some(Local::Buffer(..)) => Err(format!("`{name}` is a buffer, not a kernel value")),
+            Some(Local::Function(_)) => Err(format!("`{name}` is a function, not a kernel value")),
             None => match self.cg.device.constants.get(name).cloned() {
                 Some(literal) => self.expression(&literal),
                 None => Err(format!("`{name}` is not a value a device kernel can reach")),
@@ -219,16 +230,15 @@ impl Emitter<'_> {
         let Expr::Identifier(name) = function else {
             return Err("a computed callee has no device form".into());
         };
-        if self.lookup(name).is_some() {
-            return Err(format!(
+        match (self.lookup(name), name.as_str()) {
+            (Some(Local::Function(closure)), _) => self.invoke(name, &closure, arguments),
+            (Some(_), _) => Err(format!(
                 "`{name}` is a kernel value, not a function the device can call"
-            ));
-        }
-        match name.as_str() {
-            "fold" => self.fold(arguments),
-            "gpuLength" => self.length(arguments),
-            _ if self.cg.device.defs.contains_key(name) => self.inline(name, arguments),
-            _ => self.builtin(name, arguments),
+            )),
+            (None, "fold") => self.fold(arguments),
+            (None, "gpuLength") => self.length(arguments),
+            (None, _) if self.cg.device.defs.contains_key(name) => self.inline(name, arguments),
+            (None, _) => self.builtin(name, arguments),
         }
     }
 
@@ -267,6 +277,32 @@ impl Emitter<'_> {
         let Some((parameters, body)) = self.cg.device.defs.get(name).cloned() else {
             return Err(format!("`{name}` is not a function the device can inline"));
         };
+        let bindings = self.bindings(name, &parameters, arguments)?;
+        self.apply(&body, bindings)
+    }
+
+    /// Inline a function argument the way a helper is inlined, in its own
+    /// scopes.
+    fn invoke(&mut self, name: &str, closure: &Closure, arguments: &[Expr]) -> Emitted {
+        let bindings = self.bindings(name, &closure.parameters, arguments)?;
+        self.closed(closure, bindings)
+    }
+
+    /// Emit `closure`'s body under `bindings` in the scopes it closed over.
+    pub(super) fn closed(&mut self, closure: &Closure, bindings: Vec<(String, Local)>) -> Emitted {
+        let outer = std::mem::replace(&mut self.scopes, closure.scopes.clone());
+        let result = self.apply(&closure.body, bindings);
+        self.scopes = outer;
+        result
+    }
+
+    /// Each argument bound once, in order, to its parameter.
+    fn bindings(
+        &mut self,
+        name: &str,
+        parameters: &[Parameter],
+        arguments: &[Expr],
+    ) -> Result<Vec<(String, Local)>, String> {
         if parameters.len() != arguments.len() {
             return Err(format!(
                 "`{name}` is called with {} of {} arguments",
@@ -277,11 +313,11 @@ impl Emitter<'_> {
         if self.depth >= MAX_INLINE_DEPTH {
             return Err(format!("`{name}` recurses, which a device kernel cannot"));
         }
-        let mut bindings = Vec::with_capacity(parameters.len());
-        for (parameter, argument) in parameters.iter().zip(arguments) {
-            bindings.push((parameter.name.clone(), self.argument(argument)?));
-        }
-        self.apply(&body, bindings)
+        parameters
+            .iter()
+            .zip(arguments)
+            .map(|(parameter, argument)| Ok((parameter.name.clone(), self.argument(argument)?)))
+            .collect()
     }
 
     /// Emit `body` under `bindings` one inlining level deeper.
@@ -294,16 +330,38 @@ impl Emitter<'_> {
         result
     }
 
-    /// A call argument as a local: a buffer passes by alias, a scalar is
-    /// evaluated once into a temporary.
+    /// A call argument as a local: a buffer or function passes unevaluated,
+    /// a scalar is evaluated once into a temporary.
     pub(super) fn argument(&mut self, argument: &Expr) -> Result<Local, String> {
-        if let Expr::Identifier(name) = argument {
-            if let Some(buffer @ Local::Buffer(..)) = self.lookup(name) {
-                return Ok(buffer);
-            }
+        if let Some(local) = self.passed(argument) {
+            return Ok(local);
         }
         let (ty, value) = self.expression(argument)?;
         Ok(Local::Scalar(ty, self.declare(ty, &value)))
+    }
+
+    /// An argument that passes unevaluated: a buffer by alias, a lambda or
+    /// helper as a closure over the current scopes.
+    pub(super) fn passed(&self, argument: &Expr) -> Option<Local> {
+        let closure = |parameters: &[Parameter], body: &Expr| {
+            Local::Function(Rc::new(Closure {
+                parameters: parameters.to_vec(),
+                body: body.clone(),
+                scopes: self.scopes.clone(),
+            }))
+        };
+        match callee(argument) {
+            Expr::Lambda {
+                parameters, body, ..
+            } => Some(closure(parameters, body)),
+            Expr::Identifier(name) => match self.lookup(name) {
+                Some(Local::Scalar(..)) => None,
+                Some(local) => Some(local),
+                None => (self.cg.device.defs.get(name))
+                    .map(|(parameters, body)| closure(parameters, body)),
+            },
+            _ => None,
+        }
     }
 
     fn length(&mut self, arguments: &[Expr]) -> Emitted {

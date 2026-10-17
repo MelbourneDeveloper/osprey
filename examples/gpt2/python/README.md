@@ -14,7 +14,7 @@ make gpt2 FLAVOR=python GPU=host PROMPT="The capital of France is" TOKENS=1
 make gpt2 FLAVOR=python BACKEND=lists PROMPT="The capital of France is" TOKENS=1
 ```
 
-The GPU-surface host run produces `The capital of France is the`, matching the independent reference. `GPU=auto`, `GPU=metal` and `GPU=opencl` select the existing device adapters. A missing adapter stops execution with an error.
+The GPU-surface host run produces `The capital of France is the`, matching the independent reference. `GPU=auto`, `GPU=metal` and `GPU=opencl` select the existing device adapters; on Metal and OpenCL the same source generates the Default example's 20-token continuations of `The capital of France is` and `Melbourne is the capital of` byte for byte, naming the device in its banner. A missing adapter stops execution with an error.
 
 The [sampler](generate/generate.py) recomputes the forward pass for each token. The existing Default example uses a KV cache, so its timings measure different work. Tokenization and weight loading reuse the existing Osprey modules; the independent [Python reference](../reference.py) stays separate.
 
