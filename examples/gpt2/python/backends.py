@@ -1,18 +1,20 @@
 # osprey: flavor=python
 # osprey: namespace=gpt2
 # osprey: module=Backends
-"""The tensor dialect GPT-2 is written in, and the two interpretations that run it.
+"""The tensor dialect GPT-2 is written in.
 
-`gpt2.Model` performs `Tensor` operations and never names a buffer type; `on_lists`
-answers every operation with host list code and `on_gpu` with the GPU surface. The
-handler a program installs decides where the arithmetic runs, and both must agree
-with examples/gpt2/reference.py bit for bit, because every arm accumulates in the
-same k order from 0.0.
+`gpt2.Model` performs `Tensor` operations and never names a buffer type;
+`Cpu.on_lists` (cpu.py) answers every operation with host list code and
+`Gpu.on_gpu` (gpu.py) with the GPU surface. The handler a program installs decides
+where the arithmetic runs, and both must agree with examples/gpt2/reference.py bit
+for bit, because every arm accumulates in the same k order from 0.0.
 Implements [STAGE-BACKEND], [GPU-DEVICE], [FLAVOR-PYTHON-GPU].
 """
 from typing import Callable
 
-__all__ = ["Kernel", "Combine", "Tensor", "or_abort", "on_lists", "on_gpu", "strictly", "under"]
+from gpt2 import Cpu, Gpu
+
+__all__ = ["Kernel", "Combine", "Tensor", "or_abort", "hit", "min_i", "strictly", "under"]
 
 
 @extern
@@ -66,88 +68,6 @@ def min_i(a, i):
     return i if i < a else a
 
 
-def element(b, i):
-    return unwrap_or(listGet(b, i), 0.0)
-
-
-def dot(a, b, i, inner, cols):
-    return fold(range(inner), 0.0, lambda acc, k: acc + element(a, i // cols * inner + k) * element(b, k * cols + i % cols))
-
-
-@static_handler(Tensor[list[float]])
-class on_lists:
-    """Host lists, loaded through the GPU surface's safetensors reader."""
-    def build(n, f):
-        return toList(map(range(n), f))
-
-    def get(b, i):
-        return element(b, i)
-
-    def length(b):
-        return len(b)
-
-    def zip_with(a, b, f):
-        return toList(map(range(len(a)), lambda i: f(element(a, i), element(b, i))))
-
-    def reduce(b, seed, f):
-        return fold(range(len(b)), seed, lambda a, i: f(a, element(b, i)))
-
-    def index_of(b, x):
-        return fold(map(range(len(b)), lambda i: hit(element(b, i), x, i, len(b))), len(b), min_i)
-
-    def mat_mul(a, b, rows, inner, cols):
-        return toList(map(range(rows * cols), lambda i: dot(a, b, i, inner, cols)))
-
-    def from_list(xs):
-        return xs
-
-    def load(path, name):
-        return fromGpu(or_abort(gpuLoadTensor(path, name)))
-
-    def device():
-        return "lists"
-
-
-def fetched(b, i):
-    return unwrap_or(gpuGet(b, i), 0.0)
-
-
-@static_handler(Tensor[GpuBuffer[float]])
-class on_gpu:
-    """GPU buffers: each operation is a kernel, a product or a loader of the GPU
-    surface, and `device` reports which backend executes them. Kernels and
-    products run on Metal or OpenCL when `OSPREY_GPU` selects a device."""
-    def build(n, f):
-        return gpuMap(gpuIota(n), f)
-
-    def get(b, i):
-        return fetched(b, i)
-
-    def length(b):
-        return gpuLength(b)
-
-    def zip_with(a, b, f):
-        return gpuZipWith(a, b, f)
-
-    def reduce(b, seed, f):
-        return gpuFold(b, seed, f)
-
-    def index_of(b, x):
-        return gpuFold(gpuMap(gpuIota(gpuLength(b)), lambda i: hit(fetched(b, i), x, i, gpuLength(b))), gpuLength(b), min_i)
-
-    def mat_mul(a, b, rows, inner, cols):
-        return or_abort(gpuMatMul(a, b, rows, inner, cols))
-
-    def from_list(xs):
-        return toGpu(xs)
-
-    def load(path, name):
-        return or_abort(gpuLoadTensor(path, name))
-
-    def device():
-        return gpuDevice()
-
-
 @effect
 class Fault:
     """An arithmetic fault ends the run: its arm answers the whole region."""
@@ -190,8 +110,8 @@ def under(name, work):
     so a mistyped backend never silently lands on the GPU surface."""
     match name:
         case "gpu":
-            return on_gpu(work)
+            return Gpu.on_gpu(work)
         case "lists":
-            return on_lists(work)
+            return Cpu.on_lists(work)
         case _:
             return print(f"unknown backend `{name}`: choose gpu or lists")

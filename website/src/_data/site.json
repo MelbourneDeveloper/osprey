@@ -6,7 +6,7 @@
   "author": "Christian Findlay",
   "stylesheet": "/assets/css/styles.css",
   "themeColor": "#0c1325",
-  "keywords": "osprey, functional programming, algebraic effects, handlers, language flavors, ML syntax, curry by default, fibers, LLVM, type inference, pattern matching, WebAssembly, iOS, Android, C ABI, reactive applications",
+  "keywords": "osprey, functional programming, algebraic effects, handlers, language flavors, ML syntax, Python syntax, curry by default, fibers, LLVM, type inference, pattern matching, WebAssembly, iOS, Android, C ABI, reactive applications",
   "ogImage": "/assets/images/og-image.png",
   "ogImageWidth": "1200",
   "ogImageHeight": "630",

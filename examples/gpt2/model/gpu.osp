@@ -1,0 +1,27 @@
+// The GPU interpretation of `gpt2::Backends::Tensor`: every operation is a
+// kernel, a product or a loader of the GPU surface. Implements [STAGE-BACKEND],
+// [GPU-DEVICE].
+
+namespace gpt2;
+
+import gpt2::Backends::{Tensor, orAbort, hit, minI}
+
+module Gpu {
+    /// GPU buffers, and `device` reports which backend executes them. Kernels
+    /// and products run on Metal or OpenCL when `OSPREY_GPU` selects a device.
+    export fn onGpu(work) = {
+        handle static Tensor<GpuBuffer<float>> {
+            build n f => gpuIota(n) |> gpuMap(f)
+            get b i => gpuGet(b, i) ?: 0.0
+            length b => gpuLength(b)
+            zipWith a b f => gpuZipWith(a, b, f)
+            reduce b seed f => b |> gpuFold(seed, f)
+            indexOf b x => gpuIota(gpuLength(b)) |> gpuMap(fn(i) => hit(gpuGet(b, i) ?: 0.0, x, i, gpuLength(b))) |> gpuFold(gpuLength(b), minI)
+            matMul a b rows inner cols => orAbort(gpuMatMul(a, b, rows, inner, cols))
+            fromList xs => toGpu(xs)
+            load path name => orAbort(gpuLoadTensor(path, name))
+            device => gpuDevice()
+        }
+        work()
+    }
+}

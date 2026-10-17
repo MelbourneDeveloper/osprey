@@ -1,10 +1,11 @@
 # Language Flavors
 
-Osprey has two source syntaxes over one canonical AST. A flavor owns parsing
-and lowering; type checking, effect checking, project assembly, and code
-generation are shared.
+Every Osprey flavor is a concrete syntax tree lowered into one canonical AST. A
+flavor owns parsing and lowering; type checking, effect checking, project
+assembly, and code generation are shared, so the set of flavors is open.
 
-The ML surface is specified in [ML Flavor Syntax](0024-MLFlavorSyntax.md).
+The ML surface is specified in [ML Flavor Syntax](0024-MLFlavorSyntax.md) and the
+Python surface in [Python Flavor Syntax](0041-PythonFlavorSyntax.md).
 
 <a id="the-one-law"></a>
 
@@ -29,13 +30,14 @@ the same call semantics and ABI; no backend branch inspects the source flavor.
 | --- | --- | --- | --- | --- |
 | Default | braces | `f(x: a, y: b)` | flat multi-parameter | `.osp` |
 | ML | offside layout | `f a b` | curried | `.ospml` |
+| Python | indentation | `f(a, b)` | flat multi-parameter | `.py` with `# osprey: flavor=python` |
 
 Default remains the default API and source flavor. One file uses one flavor;
-projects may contain both extensions.
+a project may mix flavors.
 
 ## Lowering Pipeline
 
-Both frontends preserve declarations, handler arms and operations in the canonical AST. Module assembly, source validation, static discharge and residual validation follow [STAGE-LOWER-ORDER-PHASE](0017-AlgebraicEffects.md). A flavor lowerer must not erase an effect contract before shared validation.
+Every frontend preserves declarations, handler arms and operations in the canonical AST. Module assembly, source validation, static discharge and residual validation follow [STAGE-LOWER-ORDER-PHASE](0017-AlgebraicEffects.md). A flavor lowerer must not erase an effect contract before shared validation.
 
 ## Flavor Frontend
 
@@ -43,7 +45,7 @@ Both frontends preserve declarations, handler arms and operations in the canonic
 points:
 
 ```rust
-pub enum Flavor { Default, Ml }
+pub enum Flavor { Default, Ml, Python }
 
 pub struct Parsed {
     pub program: Program,
@@ -56,7 +58,7 @@ pub fn parse_program_with_flavor(source: &str, flavor: Flavor) -> Parsed;
 ```
 
 `parse_program` selects Default. `parse_program_with_flavor` dispatches to
-`default::parse` or `ml::parse_ml`.
+`default::parse`, `ml::parse_ml` or `python::parse`.
 
 The physical split is:
 

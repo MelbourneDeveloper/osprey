@@ -29,6 +29,8 @@ interface Case {
 }
 
 const BACKENDS = "gpt2/model/backends.osp";
+const CPU = "gpt2/model/cpu.osp";
+const GPU = "gpt2/model/gpu.osp";
 const MODEL = "gpt2/model/model.osp";
 const GENERATE = "gpt2/generate/generate.osp";
 const TRAIN = "gpt2/train/train.osp";
@@ -73,13 +75,13 @@ const TENSOR_PERFORMS: Record<string, string[]> = {
 };
 
 const TENSOR_HEADS = [
-  site(BACKENDS, "handle static Tensor<List<float>>", "Tensor"),
-  site(BACKENDS, "handle static Tensor<GpuBuffer<float>>", "Tensor"),
+  site(CPU, "handle static Tensor<List<float>>", "Tensor"),
+  site(GPU, "handle static Tensor<GpuBuffer<float>>", "Tensor"),
 ];
 
-/** The arm answering `op` in each handler: onLists first, then onGpu. */
+/** The arm answering `op` in each handler: onLists in cpu.osp, then onGpu in gpu.osp. */
 const tensorArms = (op: string): Site[] =>
-  occurrences(2).map((at) => site(BACKENDS, `\n            ${op} `, op, at));
+  [CPU, GPU].map((file) => site(file, `\n            ${op} `, op));
 
 const tensorOperationCases = (): Case[] =>
   Object.entries(TENSOR_PERFORMS).flatMap(([op, files]) => [
@@ -206,7 +208,7 @@ const metricsCases = (): Case[] => [
 const NOTHING: Site[] = [
   site(BACKENDS, "fn orAbort(result)", "orAbort"),
   site(BACKENDS, "export type Kernel", "Kernel"),
-  site(BACKENDS, "handle static Tensor<List<float>>", "List"),
+  site(CPU, "handle static Tensor<List<float>>", "List"),
   site(MODEL, "perform Backends::Tensor.get", "Backends"),
   site(ROUTES, "perform Ledger::Store.owner", "Ledger"),
   site(LEDGER, "export sqlite db", "sqlite"),

@@ -55,4 +55,4 @@ Create an ML twin of one pure module, run both checks, and compare stdout or tes
 
 ## Edition note
 
-Never say Osprey is permanently limited to two flavors. Name Default and ML as the currently available surfaces and keep future additions structurally possible.
+Never describe Osprey as a fixed number of flavors. Every flavor lowers its concrete syntax tree into one canonical AST; name Default, ML and Python as the surfaces that ship today and keep future additions structurally possible.

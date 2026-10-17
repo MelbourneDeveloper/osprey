@@ -29,7 +29,7 @@ Osprey uses typed algebraic effects to separate application requests from their 
 - **[Check feature status](/status/)** — see what is stable, partial, experimental, or planned.
 - **[Browse keywords](/docs/keywords/)** — declarations, bindings, matching, imports, and literals.
 
-Osprey currently has two source flavors. Default files use `.osp`, braces, `fn`, and parenthesized calls. ML files use `.ospml`, indentation, currying by default, and whitespace application. Both lower to the same checked program representation.
+A flavor is a surface syntax: its concrete syntax tree lowers into one canonical AST, and everything after that is shared. Default files use `.osp`, braces, `fn`, and parenthesized calls. ML files use `.ospml`, indentation, currying by default, and whitespace application. Python files use `.py` with the `# osprey: flavor=python` marker, typed Python syntax, and decorators for effects.
 
 ## Reference
 

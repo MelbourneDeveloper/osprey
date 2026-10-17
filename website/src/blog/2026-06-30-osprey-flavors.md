@@ -1,23 +1,26 @@
 ---
 layout: page.njk
-title: "Osprey Flavors: Two Syntaxes, One Language"
-excerpt: "Default and ML syntax lower to the same Osprey program representation."
-description: "How Osprey's Default and ML source flavors share one compiler pipeline."
-modified: 2026-07-25
-tags: ["blog", "language-design", "flavors", "functional-programming", "ml-syntax"]
+title: "Osprey Flavors: Any Syntax, One Language"
+excerpt: "Every Osprey flavor lowers its concrete syntax tree into one canonical AST."
+description: "How every Osprey source flavor shares one AST and one compiler pipeline."
+modified: 2026-10-17
+tags: ["blog", "language-design", "flavors", "functional-programming", "ml-syntax", "python-syntax"]
 author: "Christian Findlay"
 readingTime: 3
 image: /assets/images/blog/osprey-flavors.png
 ---
 
-Osprey has two source flavors:
+A flavor is a surface syntax, not a separate language. Each flavor parses its
+own concrete syntax tree and lowers it into the canonical `osprey_ast::Program`;
+type checking, effect checking and code generation only ever see that AST. A new
+syntax is a new frontend, and every flavor gets the whole language. Osprey ships
+these today:
 
 - **Default (`.osp`)** uses braces, `fn`, named arguments and familiar calls.
 - **ML (`.ospml`)** uses layout, curry-by-default functions and whitespace
   application.
-
-Each flavor has its own parser and lowerer. Both produce
-`osprey_ast::Program` before type checking, effect checking and code generation.
+- **Python (`.py`)** uses typed Python syntax, with decorators and `with` for
+  effects.
 
 ```osprey
 fn add(x) = fn(y) => x + y
@@ -41,9 +44,9 @@ classify n =
         _ => "many"
 ```
 
-Flavor selection works per file through `.osp` or `.ospml`, a leading source marker, or `--flavor` for a single-file build. A project can mix both flavors and import across them.
+Flavor selection works per file through `.osp` or `.ospml`, a leading source marker such as `# osprey: flavor=python`, or `--flavor` for a single-file build. A project can mix flavors and import across them.
 
-Both flavors support `effect`, `perform`, `handle` and `handler`; see [Effect Handlers You Can Call](/blog/2026-10-05-effect-handlers-you-can-call/).
+Default and ML support `effect`, `perform`, `handle` and `handler`, and Python spells the same effects with `@effect` classes, `perform(...)`, handler classes and `with`; see [Effect Handlers You Can Call](/blog/2026-10-05-effect-handlers-you-can-call/).
 
 See the [tested examples](https://github.com/Nimblesite/osprey/tree/main/tests/regressions)
 and [language-flavor specification](/spec/0023-languageflavors/).

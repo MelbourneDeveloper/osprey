@@ -92,7 +92,7 @@ fn gpt2_project(name: &str, source: &str) -> Option<PathBuf> {
 
 #[test]
 fn gpt2_rejects_a_failed_gpu_dispatch_instead_of_generating_with_empty_matrices() {
-    let source = "import gpt2::Model\nimport gpt2::Backends\nfn main() = Backends::onGpu(fn() => print(gpuLength(Model::product(toGpu([1.0]), toGpu([1.0]), 1, 1, 1))))\n";
+    let source = "import gpt2::Model\nimport gpt2::Gpu\nfn main() = Gpu::onGpu(fn() => print(gpuLength(Model::product(toGpu([1.0]), toGpu([1.0]), 1, 1, 1))))\n";
     let path = gpt2_project("failure", source);
     assert!(path.is_some(), "GPU failure project could not be written");
     let (code, stdout, stderr) = path

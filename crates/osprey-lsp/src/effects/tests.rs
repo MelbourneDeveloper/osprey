@@ -7,10 +7,13 @@ mod unix {
     /// line makes an unrelated comment fail these tests.
     const CREDIT_PERFORM: &str = "credit id cents note";
     const CREDIT_OPERATION: &str = "credit";
-    /// examples/gpt2/model/backends.osp declares `Tensor` and discharges it
-    /// twice; model.osp performs it and reaches backends.osp as a sibling
-    /// through the generate and train manifests' `../model` source root.
+    /// examples/gpt2/model/backends.osp declares `Tensor`; cpu.osp and gpu.osp
+    /// discharge it once each, and model.osp performs it. All four are
+    /// siblings through the generate and train manifests' `../model` source
+    /// root.
     const BACKENDS: &str = "gpt2/model/backends.osp";
+    const CPU: &str = "gpt2/model/cpu.osp";
+    const GPU: &str = "gpt2/model/gpu.osp";
     const MODEL: &str = "gpt2/model/model.osp";
     const TENSOR: &str = "Tensor";
     const TENSOR_HANDLES: [&str; 2] = [
@@ -124,11 +127,11 @@ mod unix {
     // manifests share the `../model` source root.
     #[test]
     fn implementations_on_an_operation_list_each_handler_arm_once() {
-        let expected = spans_in(
-            BACKENDS,
-            &["get b i => listGet", "get b i => gpuGet"],
-            "get",
-        );
+        let expected = [
+            spans_in(CPU, &["get b i => listGet"], "get"),
+            spans_in(GPU, &["get b i => gpuGet"], "get"),
+        ]
+        .concat();
         for (relative, context) in [
             (BACKENDS, "get: fn(B, int) -> float"),
             (MODEL, "perform Backends::Tensor.get"),
@@ -144,11 +147,14 @@ mod unix {
     // It returned nothing: only operation names were ever resolved.
     #[test]
     fn implementations_on_an_effect_name_list_every_handler_that_discharges_it() {
-        let expected = spans_in(BACKENDS, &TENSOR_HANDLES, TENSOR);
-        for (relative, context) in [
-            (BACKENDS, "effect Tensor<B>"),
-            (BACKENDS, TENSOR_HANDLES[1]),
-            (MODEL, "perform Backends::Tensor.get"),
+        let cpu = spans_in(CPU, &TENSOR_HANDLES[..1], TENSOR);
+        let gpu = spans_in(GPU, &TENSOR_HANDLES[1..], TENSOR);
+        let siblings = [cpu.clone(), gpu.clone()].concat();
+        // The open buffer is searched first, so gpu.osp lists its own handler first.
+        for (relative, context, expected) in [
+            (BACKENDS, "effect Tensor<B>", siblings.clone()),
+            (GPU, TENSOR_HANDLES[1], [gpu, cpu].concat()),
+            (MODEL, "perform Backends::Tensor.get", siblings),
         ] {
             let found = implementations_at(relative, context, TENSOR);
             assert_eq!(found, expected, "from `{context}` in {relative}");
