@@ -1,6 +1,6 @@
 //! Perceus dup/drop insertion — the ownership ledger threaded through the
 //! AST walk. Implements [MEM-OWNERSHIP] and [GC-ARC-PERCEUS]
-//! (docs/specs/0018-MemoryManagement.md):
+//! (docs/specs/compiler/0018-MemoryManagement.md):
 //! every producer owns (+1), stores dup, owners drop at region end, returns
 //! transfer (+1). The reference algorithm is Reinking, Xie, de Moura & Leijen,
 //! *Perceus: Garbage Free Reference Counting with Reuse*, MSR-TR-2020-42.

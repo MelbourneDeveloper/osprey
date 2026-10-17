@@ -2,7 +2,7 @@
 
 Control operations declare how often their continuation may be resumed: `control abort`, `control once` (the default for `control`), or `control many`. `replayable` is a separate promise about repeating an operation. Retrying a payment request inside an arm is different from resuming twice and repeating the email in the remaining computation.
 
-The [effects specification](../../../docs/specs/0017-AlgebraicEffects.md) defines multiplicity and replay. [Plan 0016](../../../docs/plans/0016-algebraic-effects-and-handlers.md) tracks delivery; reusable `many` continuations remain unsupported. This directory holds accepted cases; rejection fixtures live in [`examples/failscompilation`](../../../examples/failscompilation).
+The [effects specification](../../../docs/specs/language/0017-AlgebraicEffects.md) defines multiplicity and replay. [Plan 0016](../../../docs/plans/0016-algebraic-effects-and-handlers.md) tracks delivery; reusable `many` continuations remain unsupported. This directory holds accepted cases; rejection fixtures live in [`examples/failscompilation`](../../../examples/failscompilation).
 
 ## What the paired suite pins
 

@@ -711,7 +711,7 @@ test("mega showcase preserves effect, fiber, and tier state", fn() => {
      (** … *)  documentation comment  (odoc double-star — spec 0026)
      //  …     line comment
    The (** *) docs below show the ML documentation idiom; each attaches to the
-   declaration that follows it. See docs/specs/0026-DocumentationComments.md.
+   declaration that follows it. See docs/specs/language/0026-DocumentationComments.md.
    ═══════════════════════════════════════════════════════════════════════ *)
 
 (** An effect that emits a line of human-readable output.

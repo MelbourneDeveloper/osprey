@@ -4,79 +4,79 @@
     {
       "id": "spec-introduction",
       "kind": "repository-specification",
-      "path": "../docs/specs/0001-Introduction.md",
+      "path": "../docs/specs/language/0001-Introduction.md",
       "use": "language shape, explicit failure, runtime and platform qualifications"
     },
     {
       "id": "spec-syntax",
       "kind": "repository-specification",
-      "path": "../docs/specs/0003-Syntax.md",
+      "path": "../docs/specs/language/0003-Syntax.md",
       "use": "Default bindings, functions, records, unions, and expression syntax"
     },
     {
       "id": "spec-types",
       "kind": "repository-specification",
-      "path": "../docs/specs/0004-TypeSystem.md",
+      "path": "../docs/specs/language/0004-TypeSystem.md",
       "use": "inference, records, unions, collections, and Result preservation"
     },
     {
       "id": "spec-functions",
       "kind": "repository-specification",
-      "path": "../docs/specs/0005-FunctionCalls.md",
+      "path": "../docs/specs/language/0005-FunctionCalls.md",
       "use": "Default call syntax and argument behavior"
     },
     {
       "id": "spec-patterns",
       "kind": "repository-specification",
-      "path": "../docs/specs/0007-PatternMatching.md",
+      "path": "../docs/specs/language/0007-PatternMatching.md",
       "use": "matching, destructuring, exhaustiveness, and fallback policy"
     },
     {
       "id": "spec-iterators",
       "kind": "repository-specification",
-      "path": "../docs/specs/0010-LoopConstructsAndFunctionalIterators.md",
+      "path": "../docs/specs/language/0010-LoopConstructsAndFunctionalIterators.md",
       "use": "range pipelines, map, filter, fold, forEach, and stream fusion"
     },
     {
       "id": "spec-errors",
       "kind": "repository-specification",
-      "path": "../docs/specs/0013-ErrorHandling.md",
+      "path": "../docs/specs/language/0013-ErrorHandling.md",
       "use": "Result handling, checked arithmetic, propagation, and explicit fallback"
     },
     {
       "id": "spec-effects",
       "kind": "repository-specification",
-      "path": "../docs/specs/0017-AlgebraicEffects.md",
+      "path": "../docs/specs/language/0017-AlgebraicEffects.md",
       "use": "effect declarations, operations, handlers, and availability limits"
     },
     {
       "id": "spec-fibers",
       "kind": "repository-specification",
-      "path": "../docs/specs/0011-LightweightFibersAndConcurrency.md",
+      "path": "../docs/specs/language/0011-LightweightFibersAndConcurrency.md",
       "use": "fiber isolation, channels, scheduling, and native availability"
     },
     {
       "id": "spec-wasm",
       "kind": "repository-specification",
-      "path": "../docs/specs/0022-WebAssemblyTarget.md",
+      "path": "../docs/specs/compiler/0022-WebAssemblyTarget.md",
       "use": "WebAssembly build behavior and portable runtime subset"
     },
     {
       "id": "spec-flavors",
       "kind": "repository-specification",
-      "path": "../docs/specs/0023-LanguageFlavors.md",
+      "path": "../docs/specs/language/0023-LanguageFlavors.md",
       "use": "current Default and ML surfaces, selection, lowering boundary, and interop"
     },
     {
       "id": "spec-ml",
       "kind": "repository-specification",
-      "path": "../docs/specs/0024-MLFlavorSyntax.md",
+      "path": "../docs/specs/language/0024-MLFlavorSyntax.md",
       "use": "optional ML layout, currying, and source syntax"
     },
     {
       "id": "spec-testing",
       "kind": "repository-specification",
-      "path": "../docs/specs/0027-TestingFramework.md",
+      "path": "../docs/specs/language/0027-TestingFramework.md",
       "use": "Osprey test declarations, assertions, and test execution"
     },
     {
@@ -118,7 +118,7 @@
     {
       "id": "spec-interpolation",
       "kind": "repository-specification",
-      "path": "../docs/specs/0006-StringInterpolation.md",
+      "path": "../docs/specs/language/0006-StringInterpolation.md",
       "use": "Distinguish formatting values in interpolation from string concatenation requirements"
     },
     {
@@ -148,13 +148,13 @@
     {
       "id": "spec-file-builtins",
       "kind": "repository-specification",
-      "path": "../docs/specs/0012-Built-InFunctions.md",
+      "path": "../docs/specs/runtime/0012-Built-InFunctions.md",
       "use": "File read/write Result contracts and string decoding operations"
     },
     {
       "id": "spec-http",
       "kind": "repository-specification",
-      "path": "../docs/specs/0014-HTTP.md",
+      "path": "../docs/specs/runtime/0014-HTTP.md",
       "use": "Native response handles, status/body access, resource cleanup, and platform limits"
     },
     {
@@ -166,25 +166,25 @@
     {
       "id": "spec-memory",
       "kind": "repository-authority",
-      "path": "../docs/specs/0018-MemoryManagement.md",
+      "path": "../docs/specs/compiler/0018-MemoryManagement.md",
       "use": "Default allocator, native GC/ARC, fiber ownership, and runtime qualifications"
     },
     {
       "id": "spec-modules",
       "kind": "repository-authority",
-      "path": "../docs/specs/0025-ModulesAndNamespaces.md",
+      "path": "../docs/specs/language/0025-ModulesAndNamespaces.md",
       "use": "Implemented projects, namespaces, imports, and project flavor selection"
     },
     {
       "id": "spec-ios",
       "kind": "repository-authority",
-      "path": "../docs/specs/0038-iOSTarget.md",
+      "path": "../docs/specs/platforms/0038-iOSTarget.md",
       "use": "Apple archive/header targets and native host requirements"
     },
     {
       "id": "spec-android",
       "kind": "repository-authority",
-      "path": "../docs/specs/0039-AndroidTarget.md",
+      "path": "../docs/specs/platforms/0039-AndroidTarget.md",
       "use": "Android ABI targets and native host requirements"
     },
     {

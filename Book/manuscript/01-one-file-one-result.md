@@ -337,11 +337,11 @@ Chapter 2 keeps the program small and asks a deeper question: what makes a name 
 
 ## Authoritative sources
 
-- Osprey [Introduction](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0001-Introduction.md) for the language shape and explicit-failure contract.
-- Osprey [Syntax](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0003-Syntax.md) for Default bindings, functions, and expressions.
-- Osprey [Type System](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0004-TypeSystem.md) for Hindley–Milner inference.
-- Osprey [Function Calls](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0005-FunctionCalls.md) for Default call behavior.
-- Osprey [Iterators and Iteration](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0010-LoopConstructsAndFunctionalIterators.md) for the pipe operator.
-- Osprey [Language Flavors](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0023-LanguageFlavors.md) and [ML Flavor Syntax](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0024-MLFlavorSyntax.md) for the optional comparison.
+- Osprey [Introduction](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0001-Introduction.md) for the language shape and explicit-failure contract.
+- Osprey [Syntax](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0003-Syntax.md) for Default bindings, functions, and expressions.
+- Osprey [Type System](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0004-TypeSystem.md) for Hindley–Milner inference.
+- Osprey [Function Calls](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0005-FunctionCalls.md) for Default call behavior.
+- Osprey [Iterators and Iteration](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0010-LoopConstructsAndFunctionalIterators.md) for the pipe operator.
+- Osprey [Language Flavors](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0023-LanguageFlavors.md) and [ML Flavor Syntax](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0024-MLFlavorSyntax.md) for the optional comparison.
 - The maintained [installation guide](https://www.ospreylang.dev/docs/installation/) for local and no-install paths.
 - Executable examples, exact output, and the unknown-name rejection fixture in `examples/chapter-01/`, verified with the compiler recorded in `evidence.json`.

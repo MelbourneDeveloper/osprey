@@ -59,8 +59,8 @@ Produce a native artifact, record its command and environment, then build only t
 
 ## Source map
 
-- Memory and foreign resources: `docs/specs/0018-MemoryManagement.md` and `docs/specs/0019-ForeignFunctionInterface.md`.
-- Targets: `docs/specs/0022-WebAssemblyTarget.md`, `docs/specs/0038-iOSTarget.md`, and `docs/specs/0039-AndroidTarget.md`.
-- Debug/profiling distinction: `docs/specs/0028-Profiler.md`, `[PROF-BUILD-MODE]`; executable checks in `scripts/test_profiler.sh`.
-- Project support: `docs/specs/0025-ModulesAndNamespaces.md`, `examples/projects/modules/`, and `crates/osprey-cli/tests/cross_flavor_ir_equiv.rs`.
-- Package status: `docs/specs/0029-PackageManagement.md` and `docs/plans/0020-package-manager.md`.
+- Memory and foreign resources: `docs/specs/compiler/0018-MemoryManagement.md` and `docs/specs/compiler/0019-ForeignFunctionInterface.md`.
+- Targets: `docs/specs/compiler/0022-WebAssemblyTarget.md`, `docs/specs/platforms/0038-iOSTarget.md`, and `docs/specs/platforms/0039-AndroidTarget.md`.
+- Debug/profiling distinction: `docs/specs/tooling/0028-Profiler.md`, `[PROF-BUILD-MODE]`; executable checks in `scripts/test_profiler.sh`.
+- Project support: `docs/specs/language/0025-ModulesAndNamespaces.md`, `examples/projects/modules/`, and `crates/osprey-cli/tests/cross_flavor_ir_equiv.rs`.
+- Package status: `docs/specs/ecosystem/0029-PackageManagement.md` and `docs/plans/0020-package-manager.md`.

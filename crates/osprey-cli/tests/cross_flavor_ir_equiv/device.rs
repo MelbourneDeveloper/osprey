@@ -166,6 +166,42 @@ fn kernels_without_a_device_form_decline_by_name_in_both_flavors() -> Result<(),
     Ok(())
 }
 
+/// [GPU-KERNEL-EXTRACT] A kernel that reduces through a higher-order helper,
+/// handing it a lambda over the kernel's own index, keeps its device form in
+/// every flavor. The Python GPT-2 port spells every row reduction this way
+/// (`add_all(WIDTH, lambda c: ...)`), and on Metal/OpenCL each such kernel
+/// declined with "a function value has no device form".
+#[test]
+fn kernels_reducing_through_higher_order_helpers_keep_their_device_form() -> Result<(), String> {
+    let mut sources = Vec::new();
+    for (source, flavor) in [
+        (
+            "fn addAll(size, valueAt) = range(0, size) |> fold(0.0, fn(acc, i) => acc + valueAt(i))\nfn main() = {\n    let sums = gpuIota(4) |> gpuMap(fn(r) => addAll(3, fn(c) => toFloat(c) * toFloat(r)))\n    print(\"${gpuLength(sums)}\")\n}\n",
+            Flavor::Default,
+        ),
+        (
+            "addAll (size, valueAt) = range (0, size) |> fold (0.0, \\(acc, i) => acc + valueAt i)\nmain () =\n    sums = gpuIota 4 |> gpuMap (\\r => addAll (3, \\c => toFloat c * toFloat r))\n    print \"${gpuLength sums}\"\n",
+            Flavor::Ml,
+        ),
+        (
+            "def add_all(size, value_at):\n    return fold(range(size), 0.0, lambda acc, i: acc + value_at(i))\n\n\ndef main():\n    sums = gpuMap(gpuIota(4), lambda r: add_all(3, lambda c: toFloat(c) * toFloat(r)))\n    print(f\"{gpuLength(sums)}\")\n",
+            Flavor::Python,
+        ),
+    ] {
+        let ir = lambda_debug_ir(source, flavor)?;
+        assert_eq!(count(&ir, "call i32 @osprey_gpu_declined("), 0, "{flavor:?}: {:?}", declined_reasons(&ir));
+        assert_eq!(count(&ir, "call i32 @osprey_gpu_launch("), 1, "{flavor:?}");
+        let kernels = kernel_source(&ir);
+        assert!(kernels.contains("for (long "), "{flavor:?}: the helper's fold loop\n{kernels}");
+        sources.push(kernels);
+    }
+    assert!(
+        sources.windows(2).all(|pair| pair.first() == pair.last()),
+        "every flavor must emit the same device source"
+    );
+    Ok(())
+}
+
 /// [GPU-KERNEL-EXTRACT] A kernel passed through a static handler arm's
 /// binding (`let f = addF`, or a let-bound lambda) keeps its device form.
 #[test]

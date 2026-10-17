@@ -3,7 +3,7 @@ use crate::testutil::{accepts, rejects_with};
 use osprey_syntax::Flavor;
 
 // ---------- GPU kernel purity [GPU-KERNEL-PURE], [STAGE-GPU-LEGAL] ----------
-// (docs/specs/0034-GPUComputation.md, docs/specs/0035-StagedEffects.md)
+// (docs/specs/runtime/0034-GPUComputation.md, docs/specs/language/0035-StagedEffects.md)
 //
 // Staging generalised the rule from "empty row" to "empty DYNAMIC row", so the
 // rejection names what is left to answer at the boundary rather than calling
@@ -87,9 +87,13 @@ const DYNAMIC_KERNEL_ERROR: &str =
 
 /// [STAGE-GPU-LEGAL] Host discharge cannot legalize a dynamic kernel read.
 #[test]
-fn every_gpu_combinator_checks_transitive_effects_in_both_flavors() {
-    for (default, ml) in COMBINATORS {
-        for (expression, flavor) in [(default, Flavor::Default), (ml, Flavor::Ml)] {
+fn every_gpu_combinator_checks_transitive_effects_in_all_flavors() {
+    for (default, ml, python) in COMBINATORS {
+        for (expression, flavor) in [
+            (default, Flavor::Default),
+            (ml, Flavor::Ml),
+            (python, Flavor::Python),
+        ] {
             rejects_with(
                 flavor,
                 transitive_kernel(flavor, expression, true),
@@ -109,37 +113,45 @@ fn transitive_kernel(flavor: Flavor, expression: &str, dynamic: bool) -> String 
         Flavor::Ml => {
             format!("effect Log\n    write : string => Unit\nthird x = {body}\nsecond x = third x\nfirst x = second x\nmain () =\n    handle Log\n        write m => print m\n    result = {expression}\n    perform Log.write \"host\"\n")
         }
+        Flavor::Python => format!("@effect\nclass Log:\n    def write(message: str) -> None: ...\n@handler(Log)\nclass Logging:\n    def write(message):\n        print(message)\ndef third(x):\n    {body}\ndef second(x):\n    return third(x)\ndef first(x):\n    return second(x)\ndef main():\n    with Logging:\n        result = {expression}\n        perform(Log.write(\"host\"))\n"),
     }
 }
 
 fn kernel_leaf(flavor: Flavor, dynamic: bool) -> &'static str {
     match (flavor, dynamic) {
-        (_, false) => "x",
+        (Flavor::Default | Flavor::Ml, false) => "x",
+        (Flavor::Python, false) => "return x",
         (Flavor::Default, true) => "{ perform Log.write(\"saw\")\n x }",
         (Flavor::Ml, true) => "\n    perform Log.write \"saw\"\n    x",
+        (Flavor::Python, true) => "perform(Log.write(\"saw\"))\n    return x",
     }
 }
 
-const COMBINATORS: [(&str, &str); 5] = [
+const COMBINATORS: [(&str, &str, &str); 5] = [
     (
         "gpuMap(toGpu([1]), fn(x) => first(x))",
         "gpuMap (toGpu [1]) (\\x => first x)",
+        "gpuMap(toGpu([1]), lambda x: first(x))",
     ),
     (
         "gpuFilter(toGpu([1]), fn(x) => first(x) > 0)",
         "gpuFilter (toGpu [1]) (\\x => first x > 0)",
+        "gpuFilter(toGpu([1]), lambda x: first(x) > 0)",
     ),
     (
         "gpuZipWith(toGpu([1]), toGpu([2]), fn(x, y) => wrapAdd(first(x), y))",
         "gpuZipWith (toGpu [1], toGpu [2], \\(x, y) => wrapAdd (first x) y)",
+        "gpuZipWith(toGpu([1]), toGpu([2]), lambda x, y: wrapAdd(first(x), y))",
     ),
     (
         "gpuFold(toGpu([1]), 0, fn(x, y) => wrapAdd(first(x), y))",
         "gpuFold (toGpu [1], 0, \\(x, y) => wrapAdd (first x) y)",
+        "gpuFold(toGpu([1]), 0, lambda x, y: wrapAdd(first(x), y))",
     ),
     (
         "gpuScan(toGpu([1]), 0, fn(x, y) => wrapAdd(first(x), y))",
         "gpuScan (toGpu [1], 0, \\(x, y) => wrapAdd (first x) y)",
+        "gpuScan(toGpu([1]), 0, lambda x, y: wrapAdd(first(x), y))",
     ),
 ];
 
@@ -155,6 +167,11 @@ fn every_gpu_combinator_rejects_unprovable_callbacks_in_both_flavors() {
         rejects_with(
             Flavor::Ml,
             format!("run f =\n    result = {ml}\n    0"),
+            "cannot prove GPU kernel pure",
+        );
+        rejects_with(
+            Flavor::Python,
+            format!("def run(f):\n    result = {default}\n    return 0\n"),
             "cannot prove GPU kernel pure",
         );
     }
@@ -203,8 +220,12 @@ fn scalar_builtin_kernels_cannot_invent_an_arithmetic_policy() {
 /// [ARITH-EFFECT-DISCHARGE] Every host GPU callback contributes to its caller's row.
 #[test]
 fn every_gpu_combinator_propagates_arithmetic_and_outer_recovery_requirements() {
-    for (default, ml) in ARITHMETIC_KERNELS {
-        for (body, flavor) in [(default, Flavor::Default), (ml, Flavor::Ml)] {
+    for (default, ml, python) in ARITHMETIC_KERNELS {
+        for (body, flavor) in [
+            (default, Flavor::Default),
+            (ml, Flavor::Ml),
+            (python, Flavor::Python),
+        ] {
             let unhandled = arithmetic_program(flavor, body, "");
             rejects_with(
                 flavor,
@@ -230,32 +251,44 @@ fn arithmetic_program(flavor: Flavor, body: &str, recovery: &str) -> String {
         (Flavor::Ml, false) => {
             format!("    handle Arith\n        overflow _ _ _ wrapped => {recovery}\n")
         }
+        (Flavor::Python, false) => format!("@handler(Arith)\nclass Policy:\n    def overflow(_op, _left, _right, wrapped):\n        return {recovery}\n"),
     };
     match flavor {
         Flavor::Default => format!("fn main() = {{ {handler} let result = {body}\n print(0) }}"),
         Flavor::Ml => format!("main () =\n{handler}    result = {body}\n    print 0"),
+        Flavor::Python if recovery.is_empty() => {
+            format!("def main():\n    result = {body}\n    print(0)\n")
+        }
+        Flavor::Python => format!(
+            "{handler}def main():\n    with Policy:\n        result = {body}\n        print(0)\n"
+        ),
     }
 }
 
-const ARITHMETIC_KERNELS: [(&str, &str); 5] = [
+const ARITHMETIC_KERNELS: [(&str, &str, &str); 5] = [
     (
         "gpuMap(toGpu([1]), fn(x) => x + 1)",
         "gpuMap (toGpu [1]) (\\x => x + 1)",
+        "gpuMap(toGpu([1]), lambda x: x + 1)",
     ),
     (
         "gpuFilter(toGpu([1]), fn(x) => x + 1 > 0)",
         "gpuFilter (toGpu [1]) (\\x => x + 1 > 0)",
+        "gpuFilter(toGpu([1]), lambda x: x + 1 > 0)",
     ),
     (
         "gpuFold(toGpu([1]), 0, fn(x, y) => x + y)",
         "gpuFold (toGpu [1], 0, \\(x, y) => x + y)",
+        "gpuFold(toGpu([1]), 0, lambda x, y: x + y)",
     ),
     (
         "gpuScan(toGpu([1]), 0, fn(x, y) => x + y)",
         "gpuScan (toGpu [1], 0, \\(x, y) => x + y)",
+        "gpuScan(toGpu([1]), 0, lambda x, y: x + y)",
     ),
     (
         "gpuZipWith(toGpu([1]), toGpu([2]), fn(x, y) => x + y)",
         "gpuZipWith (toGpu [1], toGpu [2], \\(x, y) => x + y)",
+        "gpuZipWith(toGpu([1]), toGpu([2]), lambda x, y: x + y)",
     ),
 ];

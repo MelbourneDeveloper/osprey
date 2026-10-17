@@ -63,7 +63,7 @@ impl CType {
         }
     }
 
-    fn osprey(self) -> &'static str {
+    pub(crate) fn osprey(self) -> &'static str {
         match self {
             Self::Int => names::INT,
             Self::Float => names::FLOAT,
@@ -137,7 +137,7 @@ mod selection;
 use selection::host_abi;
 use selection::host_abi_selected;
 
-fn defines(ir: &str, symbol: &str) -> bool {
+pub(crate) fn defines(ir: &str, symbol: &str) -> bool {
     let needle = format!(" @{symbol}(");
     ir.lines()
         .any(|line| line.starts_with("define ") && line.contains(&needle))
@@ -419,22 +419,44 @@ pub(crate) fn source(
     extend_bool: bool,
     entry_only: bool,
 ) -> Result<(String, String), String> {
+    let (ir, abi) = source_with_abi(program, path, target, extend_bool, entry_only)?;
+    Ok((ir, header_for_target(&abi, path, target)))
+}
+
+/// Compile and adapt the common scalar host boundary. [PYTHON-HOST-ABI]
+pub(crate) fn source_with_abi(
+    program: &Program,
+    path: &str,
+    target: &str,
+    extend_bool: bool,
+    entry_only: bool,
+) -> Result<(String, HostAbi), String> {
     crate::target_capabilities::validate(program, target)?;
     let ir = osprey_codegen::compile_library(program).map_err(|e| format!("{path}: {e}"))?;
-    let abi = host_abi_selected(
-        program,
-        &osprey_types::infer_program(program),
-        &ir,
-        !entry_only,
-    )
-    .map_err(|error| format!("{path}: target `{target}` C ABI: {error}"))?;
+    let abi = checked_abi(program, path, target, &ir, entry_only)?;
     let adapted = if extend_bool {
         with_host_abi(&ir, &abi)?
     } else {
         with_host_abi_for_target(&ir, &abi, false)?
     };
-    let header = header_for_target(&abi, path, target);
-    Ok((adapted, header))
+    Ok((adapted, abi))
+}
+
+fn checked_abi(
+    program: &Program,
+    path: &str,
+    target: &str,
+    ir: &str,
+    entry_only: bool,
+) -> Result<HostAbi, String> {
+    let abi = host_abi_selected(
+        program,
+        &osprey_types::infer_program(program),
+        ir,
+        !entry_only,
+    )
+    .map_err(|error| format!("{path}: target `{target}` C ABI: {error}"))?;
+    Ok(abi)
 }
 
 #[cfg(test)]

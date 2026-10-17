@@ -23,7 +23,7 @@ flowchart LR
     H -->|completion events| O
 ```
 
-The native shells render the screen and execute platform services. Application rules and layout live in [`inbox/src/`](inbox/src/).
+The native shells render the screen and execute platform services. Application rules and layout live in [`inbox/src/`](inbox/src).
 
 ## Effects at the host boundary
 
@@ -66,11 +66,11 @@ Build an unsigned device application with `examples/mobile/ios/run.sh --build io
 OSPREY_DEVELOPMENT_TEAM=YOUR_TEAM_ID examples/mobile/ios/run.sh ios-device
 ```
 
-Set `OSPREY_DEVICE_ID` to select a physical device, or `OSPREY_SIMULATOR_UDID` to select a simulator. `OSPREY_BIN` selects another compiler binary. The mobile launcher reuses [`../ios/`](../ios/) build/deployment scripts with the shared project, app scheme, and bundle identifier supplied through environment settings.
+Set `OSPREY_DEVICE_ID` to select a physical device, or `OSPREY_SIMULATOR_UDID` to select a simulator. `OSPREY_BIN` selects another compiler binary. The mobile launcher reuses [`../ios/`](../ios) build/deployment scripts with the shared project, app scheme, and bundle identifier supplied through environment settings.
 
 ## Android
 
-The Android application lives in [`android/`](android/), with Kotlin native rendering and a JNI adapter for the generated C interface. It requires JDK 17, Android SDK 34, an installed Android NDK, and an emulator/device running API 26 or later. Its launcher uses a local Gradle installation when available and downloads Gradle 8.7 otherwise. From the repository root:
+The Android application lives in [`android/`](android), with Kotlin native rendering and a JNI adapter for the generated C interface. It requires JDK 17, Android SDK 34, an installed Android NDK, and an emulator/device running API 26 or later. Its launcher uses a local Gradle installation when available and downloads Gradle 8.7 otherwise. From the repository root:
 
 ```sh
 make android
@@ -124,7 +124,7 @@ xcrun simctl get_app_container booted org.ospreylang.IssueInbox data
 
 Use the returned container path to read `Documents/inbox-state.json`. With multiple booted simulators, replace `booted` with the chosen UDID. Adding `--inbox-open-first` opens the first loaded issue automatically, which is how the Markdown detail screenshot is captured with `xcrun simctl io booted screenshot`. Diagnostic output is disabled in ordinary launches.
 
-The native C boundary currently uses the default memory runtime and retains general allocations for the process lifetime. Hosts copy strings but cannot release Osprey allocations through a stable public API yet. Mobile targets reject unsupported features such as resumable effects and built-in native HTTP; platform networking runs through the host command boundary. See the [iOS target](../../docs/specs/0038-iOSTarget.md), [Android target](../../docs/specs/0039-AndroidTarget.md), and [application specification](../../docs/specs/0040-ReactiveMobileApplications.md).
+The native C boundary currently uses the default memory runtime and retains general allocations for the process lifetime. Hosts copy strings but cannot release Osprey allocations through a stable public API yet. Mobile targets reject unsupported features such as resumable effects and built-in native HTTP; platform networking runs through the host command boundary. See the [iOS target](../../docs/specs/platforms/0038-iOSTarget.md), [Android target](../../docs/specs/platforms/0039-AndroidTarget.md), and [application specification](../../docs/specs/applications/0040-ReactiveMobileApplications.md).
 
 ## Validation
 

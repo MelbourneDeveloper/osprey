@@ -63,7 +63,7 @@ pub(super) fn effect_row(entry: &DocEntry, flavor: Flavor) -> String {
         (_, []) => " ![]".to_owned(),
         (Flavor::Ml, [only]) => format!(" ! {only}"),
         (Flavor::Ml, many) => format!(" ! [{}]", many.join(", ")),
-        (Flavor::Default, many) => format!(" ![{}]", many.join(", ")),
+        (Flavor::Default | Flavor::Python, many) => format!(" ![{}]", many.join(", ")),
     }
 }
 

@@ -1,5 +1,5 @@
 //! Kernel extraction for the GPU combinators — implements [GPU-KERNEL-EXTRACT]
-//! (docs/specs/0034-GPUComputation.md).
+//! (docs/specs/runtime/0034-GPUComputation.md).
 //!
 //! A combinator's kernel is compiled ONCE, as a module-scope function with a
 //! flat scalar signature, and the host loop calls that symbol per element. A
@@ -125,7 +125,7 @@ pub(crate) fn kernel_elem(
 /// `arg_i`-th argument as a callback, plus the element `LType` recovered from
 /// the buffer's owner tag or the kernel's parameter at `slot`.
 ///
-/// Admits every kernel form [GPU-KERNEL-FORM] (docs/specs/0034-GPUComputation.md):
+/// Admits every kernel form [GPU-KERNEL-FORM] (docs/specs/runtime/0034-GPUComputation.md):
 /// [`callback_of`] resolves a named top-level function, an inline lambda, a
 /// block-bodied lambda, a let-bound lambda, a capturing closure local and a
 /// computed function value alike, and each spelling has a lowering in

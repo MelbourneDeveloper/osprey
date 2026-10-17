@@ -62,34 +62,25 @@ impl Emitter<'_> {
         Ok((self.declare(Ty::Int, &start), self.declare(Ty::Int, &end)))
     }
 
-    /// Apply a callback — a lambda or a named helper — to already-bound locals.
+    /// Apply a callback — a lambda, a named helper or a function argument —
+    /// to already-bound locals.
     fn callback(&mut self, callback: &Expr, values: &[Local]) -> Emitted {
-        let (parameters, body) =
-            match callee(callback) {
-                Expr::Lambda {
-                    parameters, body, ..
-                } => (parameters.clone(), body.as_ref().clone()),
-                Expr::Identifier(name) => {
-                    self.cg.device.defs.get(name).cloned().ok_or_else(|| {
-                        format!("`{name}` is not a function the device can inline")
-                    })?
-                }
-                other => {
-                    return Err(format!(
-                        "{} as a callback has no device form",
-                        describe(other)
-                    ))
-                }
-            };
-        if parameters.len() != values.len() {
+        let Some(Local::Function(closure)) = self.passed(callback) else {
+            return Err(format!(
+                "{} as a callback has no device form",
+                describe(callee(callback))
+            ));
+        };
+        if closure.parameters.len() != values.len() {
             return Err("a callback whose arity disagrees with its combinator".into());
         }
-        let bindings = parameters
+        let bindings = closure
+            .parameters
             .iter()
             .zip(values)
             .map(|(parameter, local)| (parameter.name.clone(), local.clone()))
             .collect();
-        self.apply(&body, bindings)
+        self.closed(&closure, bindings)
     }
 
     /// `gpuGet(buffer, index) ?: fallback` over a captured buffer: the word at

@@ -434,9 +434,9 @@ as scheduling/runtime primitives rather than as the semantics of effects.
 Local Osprey context:
 
 - [README.md](../../README.md)
-- [Algebraic Effects spec](../specs/0017-AlgebraicEffects.md)
-- [Fibers and Concurrency spec](../specs/0011-LightweightFibersAndConcurrency.md)
-- [WebAssembly target spec](../specs/0022-WebAssemblyTarget.md)
+- [Algebraic Effects spec](specs/language/0017-AlgebraicEffects.md)
+- [Fibers and Concurrency spec](specs/language/0011-LightweightFibersAndConcurrency.md)
+- [WebAssembly target spec](specs/compiler/0022-WebAssemblyTarget.md)
 - [Algebraic effects roadmap](../plans/0016-algebraic-effects-and-handlers.md)
 - [`crates/osprey-codegen/src/effects.rs`](../../crates/osprey-codegen/src/effects.rs)
 - [`crates/osprey-codegen/src/fiber.rs`](../../crates/osprey-codegen/src/fiber.rs)

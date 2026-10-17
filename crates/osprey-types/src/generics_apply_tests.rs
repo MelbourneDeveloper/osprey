@@ -1,6 +1,6 @@
 //! Spec-driven assertions for **call-site type application**
-//! ([TYPE-GENERICS-APPLY], docs/specs/0004-TypeSystem.md; the ML spelling is
-//! [FLAVOR-ML-GENERICS], docs/specs/0024-MLFlavorSyntax.md).
+//! ([TYPE-GENERICS-APPLY], docs/specs/language/0004-TypeSystem.md; the ML spelling is
+//! [FLAVOR-ML-GENERICS], docs/specs/language/0024-MLFlavorSyntax.md).
 //!
 //! Type arguments have three positions in the language: the declaration binder
 //! (`fn pick<T, U>`), the construction site (`Box<int> { … }`) and the call

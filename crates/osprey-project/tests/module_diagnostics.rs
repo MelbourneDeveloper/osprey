@@ -26,6 +26,7 @@ fn diagnose(flavor: Flavor, text: &str) -> Vec<String> {
     let name = match flavor {
         Flavor::Ml => "main.ospml",
         Flavor::Default => "main.osp",
+        Flavor::Python => "main.py",
     };
     let parsed = parse_program_with_flavor(text, flavor);
     if !parsed.errors.is_empty() {

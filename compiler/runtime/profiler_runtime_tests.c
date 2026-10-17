@@ -1,5 +1,5 @@
 // Assertion-driven tests for the sampling CPU profiler [PROF-TEST]
-// (docs/specs/0028-Profiler.md). A failed assert aborts the binary.
+// (docs/specs/tooling/0028-Profiler.md). A failed assert aborts the binary.
 //
 // SPEC ID CROSS-REFERENCE — every clause of 0028-Profiler.md and what enforces
 // it. [PROF-TEST] splits the work: "The C runtime suite verifies thread
@@ -307,7 +307,7 @@ static void test_churn_under_max_rate_sampling(void) {
 }
 
 
-// ---- SPEC-DERIVED CONFORMANCE: docs/specs/0028-Profiler.md ------------------
+// ---- SPEC-DERIVED CONFORMANCE: docs/specs/tooling/0028-Profiler.md ------------------
 // Every assertion below quotes the clause it enforces and names its spec ID.
 // Nothing here asserts behaviour the spec does not state.
 

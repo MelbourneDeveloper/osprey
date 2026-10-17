@@ -1,6 +1,6 @@
 #!/bin/bash
 # [PROF-TEST] [PROF-ACTIVATE-ENV] [PROF-CLI-RUN] [PROF-CLI-REPORT]
-# End-to-end profiler check (docs/specs/0028-Profiler.md):
+# End-to-end profiler check (docs/specs/tooling/0028-Profiler.md):
 # `osprey <file> --profile` must run the program, write all four exports, and
 # print a terminal report attributing samples to the hot Osprey function.
 set -euo pipefail
@@ -87,7 +87,7 @@ assert fib["totalPct"] > 50.0, (
 EOF
 
 # ---- SPEC-DERIVED CLI CONFORMANCE ------------------------------------------
-# Each assertion names the clause of docs/specs/0028-Profiler.md it enforces.
+# Each assertion names the clause of docs/specs/tooling/0028-Profiler.md it enforces.
 
 # [PROF-CLI-RUN] "`osprey <file> --run --profile` (`--profile` implies `--run`
 # when no other mode is given)" and its five numbered post-processing steps.

@@ -5,7 +5,7 @@
 // every accumulation that can overflow asserts both sides of its boundary —
 // the last value that fits and the first that does not ([GPU-BACKEND-HOST],
 // [GPU-FOLD], [GPU-SCAN], [GPU-FILTER], [GPU-ZIPWITH], [GPU-GET],
-// [GPU-CONVERT] — docs/specs/0034-GPUComputation.md).
+// [GPU-CONVERT] — docs/specs/runtime/0034-GPUComputation.md).
 
 /// overflowMark is the sentinel a checked-arithmetic fallback publishes: no
 /// kernel below produces it any other way, so reading it back proves the

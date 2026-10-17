@@ -132,6 +132,7 @@ fn kernel_debug_ir(source: &str, flavor: Flavor) -> Result<String, String> {
     let wrapped = match flavor {
         Flavor::Default => format!("fn main() = {{\n let result = {source}\n print(0)\n}}"),
         Flavor::Ml => format!("main () =\n    result = {source}\n    print 0"),
+        Flavor::Python => format!("def main():\n    result = {source}\n    print(0)\n"),
     };
     lambda_debug_ir(&wrapped, flavor)
 }
@@ -172,6 +173,7 @@ fn zip_scan_and_filter_have_exact_scalar_abis() -> Result<(), String> {
             let source = match flavor {
                 Flavor::Default => format!("fn main() = {{\n let zebra = 1.5\n let alpha = 2\n let result = {expression}\n print(0)\n}}"),
                 Flavor::Ml => format!("main () =\n    zebra = 1.5\n    alpha = 2\n    result = {expression}\n    print 0"),
+                Flavor::Python => format!("def main():\n    zebra = 1.5\n    alpha = 2\n    result = {expression}\n    print(0)\n"),
             };
             let ir = lambda_debug_ir(&source, flavor)?;
             assert!(ir.contains(signature), "{flavor}: missing ABI {signature}");
@@ -210,6 +212,7 @@ fn buffer_ir(default: &str, ml: &str) -> Result<Vec<String>, String> {
             let source = match flavor {
                 Flavor::Default => format!("fn main() = gpuLength({expression})"),
                 Flavor::Ml => format!("main () = gpuLength ({expression})"),
+                Flavor::Python => format!("def main():\n    return gpuLength({expression})\n"),
             };
             super::ir_for(&source, flavor, "buffer.osp")
         })

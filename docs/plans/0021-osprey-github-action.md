@@ -9,15 +9,15 @@ only `action.yml` in the tree is the internal
 `.github/actions/setup-osprey-compiler/action.yml`, which builds the compiler
 for CI and is not the marketplace action. Zero code or test references any
 `[GHA-*]` spec id.
-**Spec:** [0033 - Osprey GitHub Action](../specs/0033-OspreyGitHubAction.md)
+**Spec:** [0033 - Osprey GitHub Action](../specs/ecosystem/0033-OspreyGitHubAction.md)
 (`[GHA-*]`)
 
 > Renumbered from `0015` on 2026-07-30: that number was already
-> plan 0015 — Generics and Variance (now retired; [shipped contract](../specs/0004-TypeSystem.md#generics-and-variance)).
+> plan 0015 — Generics and Variance (now retired; [shipped contract](../specs/language/0004-TypeSystem.md#generics-and-variance)).
 
 ## Summary
 
-Implement [spec 0033 - Osprey GitHub Action](../specs/0033-OspreyGitHubAction.md):
+Implement [spec 0033 - Osprey GitHub Action](../specs/ecosystem/0033-OspreyGitHubAction.md):
 a marketplace action that is a thin wrapper over a co-located `.osp` program.
 The wrapper serializes a job's inputs into one JSON line, feeds it to the native
 Osprey program on stdin, and routes the program's `key=value` stdout to
@@ -39,7 +39,7 @@ and are corrected here rather than left to mislead.
   from stdin, strips the newline, returns `""` on EOF — the sole input channel.
 - Native `--run` requires `clang` (`OSPREY_CC`) plus a `libfiber_runtime*.a`
   archive on the runner.
-- The Homebrew tap already ships `osprey` ([homebrew-package/osprey.rb]).
+- The Homebrew tap already ships `osprey` ([the release process](../RELEASING.md)).
 - ~~wasm excludes `input`: `WASM_RT_SRC` (`Makefile`) has no
   `random_runtime`.~~ **Corrected 2026-07-30 — this is no longer true.**
   `WASM_RT_SRC` (`Makefile`) now lists `random_runtime`, `osp_input` is defined

@@ -1,5 +1,5 @@
 //! Line-coverage instrumentation. Implements [TESTING-COVERAGE-CODEGEN]
-//! (docs/specs/0027-TestingFramework.md).
+//! (docs/specs/language/0027-TestingFramework.md).
 //!
 //! When [`crate::builder::CodegenOptions::coverage`] is set, lowering marks
 //! each coverable source line — a function definition or a statement with a

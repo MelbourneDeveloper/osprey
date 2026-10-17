@@ -9,7 +9,7 @@
 // tracing GC, arena, pool) replaces this object by linking its own
 // implementations of the same symbols.
 //
-// The full backend ABI (docs/specs/0018-MemoryManagement.md [MEM-BACKENDS]):
+// The full backend ABI (docs/specs/compiler/0018-MemoryManagement.md [MEM-BACKENDS]):
 // `osp_alloc_tagged` carries a layout word (kind + pointer mask) that only the
 // ARC backend reads; `osp_retain`/`osp_release` are dup/drop hooks that only
 // the ARC backend acts on; `osp_collect` is a full-collection hook that only

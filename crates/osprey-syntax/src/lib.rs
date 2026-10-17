@@ -1,12 +1,13 @@
 //! Flavor-agnostic frontend entry: source text in, canonical [`Program`] out.
 //!
-//! This crate hosts two **flavor** folders that each parse a source surface and
+//! This crate hosts **flavor** folders that each parse a source surface and
 //! lower it to the one shared [`osprey_ast::Program`]: [`default`] (C-style
-//! braces, tree-sitter) and [`ml`] (layout, curry-by-default, hand-written).
+//! braces, tree-sitter), [`ml`] (layout, curry-by-default, hand-written), and
+//! [`python`] (a typed Python syntax subset, tree-sitter).
 //! Everything in this module is flavor-neutral — the [`Flavor`] selector, the
 //! [`Parsed`] result, and the dispatch that routes source to a flavor's
 //! frontend. Past lowering, nothing may tell the flavors apart
-//! ([FLAVOR-BOUNDARY], docs/specs/0023-LanguageFlavors.md). `parse_program` is
+//! ([FLAVOR-BOUNDARY], docs/specs/language/0023-LanguageFlavors.md). `parse_program` is
 //! the public entry; errors are collected, never fatal, so the frontend never
 //! panics on bad input and always produces a best-effort AST.
 
@@ -38,6 +39,7 @@ mod fragment_ranges;
 mod kernel;
 mod ml;
 mod positional;
+mod python;
 mod strings;
 #[cfg(test)]
 mod test_support;
@@ -46,6 +48,7 @@ pub use annotation_edits::{annotation_edits, AnnotationEdit, AnnotationTarget, S
 pub use binding_ranges::{binding_ranges, BindingKind, BindingRange};
 pub use default::parse_tree;
 pub use docparse::doc_links;
+pub use python::parse_python_tree;
 
 /// A syntax error located in the source (an ERROR/MISSING node from tree-sitter).
 #[derive(Debug, Clone, PartialEq)]
@@ -60,7 +63,7 @@ pub struct SyntaxError {
 /// language core. Every flavor converges on the same canonical [`Program`]
 /// before any semantic analysis runs, so nothing past lowering may inspect
 /// which flavor produced a program. Implements [FLAVOR-BOUNDARY],
-/// [FLAVOR-FRONTEND] (docs/specs/0023-LanguageFlavors.md).
+/// [FLAVOR-FRONTEND] (docs/specs/language/0023-LanguageFlavors.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Flavor {
     /// C-style braces, parens-and-named-argument calls, explicit currying. The
@@ -70,6 +73,9 @@ pub enum Flavor {
     /// Layout (offside-rule) blocks, whitespace application, curry-by-default.
     /// Surface specified in spec 0024.
     Ml,
+    /// Python concrete syntax with the same Osprey types, effects and runtime.
+    /// Implements [FLAVOR-PYTHON-BOUNDARY].
+    Python,
 }
 
 impl std::fmt::Display for Flavor {
@@ -79,6 +85,7 @@ impl std::fmt::Display for Flavor {
         f.write_str(match self {
             Flavor::Default => "default",
             Flavor::Ml => "ml",
+            Flavor::Python => "python",
         })
     }
 }
@@ -86,13 +93,16 @@ impl std::fmt::Display for Flavor {
 impl std::str::FromStr for Flavor {
     type Err = String;
 
-    /// Parse a flavor name (`default` | `ml`). Unknown names are an error so a
+    /// Parse a flavor name (`default` | `ml` | `python`). Unknown names are an error so a
     /// typo fails loudly instead of silently selecting the Default frontend.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             "default" => Ok(Flavor::Default),
             "ml" => Ok(Flavor::Ml),
-            other => Err(format!("unknown flavor '{other}' (available: default, ml)")),
+            "python" => Ok(Flavor::Python),
+            other => Err(format!(
+                "unknown flavor '{other}' (available: default, ml, python)"
+            )),
         }
     }
 }
@@ -128,6 +138,7 @@ pub fn parse_program_with_flavor(source: &str, flavor: Flavor) -> Parsed {
     match flavor {
         Flavor::Default => default::parse(source),
         Flavor::Ml => ml::parse_ml(source),
+        Flavor::Python => python::parse(source),
     }
 }
 
@@ -139,11 +150,13 @@ fn flavor_marker(source: &str) -> Option<&str> {
         let t = line.trim();
         t.strip_prefix("// osprey: flavor=")
             .or_else(|| t.strip_prefix("//osprey: flavor="))
+            .or_else(|| t.strip_prefix("# osprey: flavor="))
+            .or_else(|| t.strip_prefix("#osprey: flavor="))
             .map(str::trim)
     })
 }
 
-/// The flavor implied by a path's extension: `.ospml` ⇒ ML, `.osp` ⇒ Default.
+/// The flavor implied by an extension: `.ospml` ⇒ ML, `.osp` ⇒ Default, `.py` ⇒ Python.
 /// Any other extension yields `None` (no opinion). [FLAVOR-SELECT]
 #[must_use]
 pub(crate) fn flavor_from_extension(path: &str) -> Option<Flavor> {
@@ -153,6 +166,7 @@ pub(crate) fn flavor_from_extension(path: &str) -> Option<Flavor> {
     {
         Some("ospml") => Some(Flavor::Ml),
         Some("osp") => Some(Flavor::Default),
+        Some("py") => Some(Flavor::Python),
         _ => None,
     }
 }
@@ -161,7 +175,7 @@ pub(crate) fn flavor_from_extension(path: &str) -> Option<Flavor> {
 /// file marker > extension > Default. A marker and extension that disagree are a
 /// hard error rather than a silent guess, so the CLI and the editor agree on the
 /// same frontend for the same file. Implements [FLAVOR-SELECT]
-/// (docs/specs/0023-LanguageFlavors.md).
+/// (docs/specs/language/0023-LanguageFlavors.md).
 ///
 /// # Errors
 /// Returns the disagreement message when a marker and the extension select

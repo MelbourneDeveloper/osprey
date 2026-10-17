@@ -19,9 +19,9 @@
  *   default/tracing backends. Path-copying still never mutates a published
  *   node. Conventions: collection_runtime.h. [GC-ARC-PERCEUS].
  *
- * Implements [TYPE-LIST], [TYPE-LIST-OPS] from docs/specs/0004-TypeSystem.md.
+ * Implements [TYPE-LIST], [TYPE-LIST-OPS] from docs/specs/language/0004-TypeSystem.md.
  *
- * Backs the list builtins of docs/specs/0012-Built-InFunctions.md — [BUILTIN-LIST],
+ * Backs the list builtins of docs/specs/runtime/0012-Built-InFunctions.md — [BUILTIN-LIST],
  * [BUILTIN-LIST-GET], [BUILTIN-LIST-APPEND], [BUILTIN-LIST-PREPEND],
  * [BUILTIN-LIST-CONCAT], [BUILTIN-LIST-REVERSE] and [BUILTIN-COLLECTION-LENGTH].
  * The iterator at the bottom also carries the linear scan emitted for

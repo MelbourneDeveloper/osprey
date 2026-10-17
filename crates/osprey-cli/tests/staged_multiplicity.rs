@@ -1,4 +1,4 @@
-//! Multiplicity — the second axis of `docs/specs/0017-AlgebraicEffects.md`
+//! Multiplicity — the second axis of `docs/specs/language/0017-AlgebraicEffects.md`
 //! ([MULTI-AXIS]).
 //!
 //! Stage says WHEN a request is answered; multiplicity says HOW MANY TIMES. A
@@ -189,7 +189,7 @@ fn an_abort_declaration_is_rejected_until_a_dropped_continuation_unwinds() {
     // its value. Abandoning ends the suspended computation with `pthread_exit`,
     // and a killed thread runs no epilogue — the discarded frames' owned heap
     // operands are never released
-    // (docs/specs/0017-AlgebraicEffects.md, "Known limits of abandoning a
+    // (docs/specs/language/0017-AlgebraicEffects.md, "Known limits of abandoning a
     // region"). Compiling the arm under today's substituting rule would make
     // the `perform` RETURN, which is the opposite of what the declaration says.
     //

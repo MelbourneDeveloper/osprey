@@ -59,11 +59,14 @@ loss after one step 3.8539085307403895
 | `model/model.osp` | `gpt2::Model` — the configuration, the weights, LayerNorm, attention, the blocks, the forward pass keeping every block's activations, and the KV-cached step; every tensor is `B` |
 | `generate/` | A one-file project: greedy sampling over the forward pass and the cached steps; `main` picks the handler |
 | `train/` | A one-file project: the loss, the backward pass and one SGD step over the same forward pass; `main` picks the handler |
+| [`python/`](python/README.md) | The same program in typed Python syntax, self-contained: the `Tensor` effect and both handlers, the tokenizer, the loader, the model and the sampler as `.py` modules, printing the Default generator's output byte for byte |
 | `reference.py` | The independent pure-Python oracle for both programs |
+
+Run the Python syntax flavor with `make gpt2 FLAVOR=python GPU=metal TOKENS=20`. It performs the same `Tensor` operations, including the KV-cached step, and prints the same bytes as this generator for the same stdin.
 
 A standalone script cannot import across files, so each program is its own
 project naming `model/` as a second source root
-([modules](../../docs/specs/0025-ModulesAndNamespaces.md)), the layout the
+([modules](../../docs/specs/language/0025-ModulesAndNamespaces.md)), the layout the
 graphics examples use. `osprey examples/gpt2/generate --run` runs a project
 directory; the Makefile targets add `--memory=arc`.
 
@@ -113,7 +116,7 @@ To run the compiler interactively from the repository root:
 OSPREY_GPU=auto osprey examples/gpt2/generate --run --memory=arc
 ```
 
-Enter the prompt, the token count and the backend (`gpu` or `lists`) on three lines. Set `OSPREY_GPU_TRACE=1` to report every completed dispatch. Under `BACKEND=gpu` with a device selected, every kernel the model performs — embeddings, LayerNorm, attention scores and softmax, GELU, the residual adds, every reduction, the next token's index, the training loss — and every matrix product executes on that device, compiled from the same Osprey source the host runs ([GPU-BACKEND-DEVICE](../../docs/specs/0034-GPUComputation.md#device-backends--gpu-backend-device)). Both adapters use the same software binary64 arithmetic, preserving the host's accumulation order without float32 substitution. What stays on the CPU: tokenization, building and loading buffers, and one download of each value the program reads back — the logits a token's index is taken from, and the loss. Every buffer is resident on the device from the first kernel that touches it ([GPU-BUFFER-RESIDENT](../../docs/specs/0034-GPUComputation.md#device-resident-buffers--gpu-buffer-resident)): the weights upload once, a layer's intermediate buffers never leave the device, and a buffer's device copy is released with the buffer. A kernel the device dialect cannot express aborts the run naming itself rather than running on the CPU; `GPU=host` runs the same program on the CPU and `BACKEND=lists` runs it over plain lists without touching the GPU surface at all.
+Enter the prompt, the token count and the backend (`gpu` or `lists`) on three lines. Set `OSPREY_GPU_TRACE=1` to report every completed dispatch. Under `BACKEND=gpu` with a device selected, every kernel the model performs — embeddings, LayerNorm, attention scores and softmax, GELU, the residual adds, every reduction, the next token's index, the training loss — and every matrix product executes on that device, compiled from the same Osprey source the host runs ([GPU-BACKEND-DEVICE](../../docs/specs/runtime/0034-GPUComputation.md#device-backends--gpu-backend-device)). Both adapters use the same software binary64 arithmetic, preserving the host's accumulation order without float32 substitution. What stays on the CPU: tokenization, building and loading buffers, and one download of each value the program reads back — the logits a token's index is taken from, and the loss. Every buffer is resident on the device from the first kernel that touches it ([GPU-BUFFER-RESIDENT](../../docs/specs/runtime/0034-GPUComputation.md#device-resident-buffers--gpu-buffer-resident)): the weights upload once, a layer's intermediate buffers never leave the device, and a buffer's device copy is released with the buffer. A kernel the device dialect cannot express aborts the run naming itself rather than running on the CPU; `GPU=host` runs the same program on the CPU and `BACKEND=lists` runs it over plain lists without touching the GPU surface at all.
 
 The device's `exp`, `ln` and `tanh` are correctly rounded; a host libm is not on every argument. The generated text is identical on every path. The training loss agrees to fifteen significant digits and differs in the last (`4.503189215447316` on the host, `4.503189215447317` on Metal). Across all 150 numbers the step prints, the largest difference from the host is 2.4 × 10⁻¹³ and no number larger than 10⁻⁶ differs by more than 4 parts in 10¹³, so a gradient sum that cancels to about `1e-15`, such as `wpe`, differs in every digit. Metal and OpenCL print identical bytes apart from the device name.
 
@@ -170,10 +173,7 @@ lowerings and wasm32 on every `make test`.
 
 ## How it is written
 
-- **Weights** come through the `load` operation: `tensor("h.3.ln_2.bias")` is a
-  `B`, and a tensor that failed to load is empty and reported by name. Under
-  `onGpu`, `load` is `gpuLoadTensor`; under `onLists`, the same loader read back
-  into a list. Shapes are stated at each `matMul`, because tensors are rank-1.
+- **Weights** come through the `load` operation: `tensor("h.3.ln_2.bias")` is a `B`. A failed load aborts with its error instead of substituting an empty tensor. Under `onGpu`, `load` uses `gpuLoadTensor`; under `onLists`, the same loader reads back into a list. Shapes are stated at each `matMul`, because tensors are rank-1.
 - **Tokenizer** — GPT-2 encodes bytes, and merge *i* of `merges.txt` is token
   `256 + i`, so the merge list alone is the vocabulary; `vocab.json` is never
   read. Pre-tokenization approximates GPT-2's regular expression for ASCII

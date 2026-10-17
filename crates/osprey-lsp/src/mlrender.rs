@@ -23,6 +23,7 @@ pub const fn fence(flavor: Flavor) -> &'static str {
     match flavor {
         Flavor::Default => "osprey",
         Flavor::Ml => "osprey-ml",
+        Flavor::Python => "python",
     }
 }
 
@@ -33,6 +34,85 @@ pub fn signature(flavor: Flavor, sig: &str) -> String {
     match flavor {
         Flavor::Default => sig.to_owned(),
         Flavor::Ml => ml_signature(sig),
+        Flavor::Python => python_signature(sig),
+    }
+}
+
+fn python_signature(sig: &str) -> String {
+    let Some(rest) = sig.strip_prefix("fn ") else {
+        return sig.to_owned();
+    };
+    let Some((head, params, tail)) = split_params(rest) else {
+        return sig.to_owned();
+    };
+    let params = python_parameters(&params);
+    let tail = tail.trim().strip_prefix("->").map_or_else(
+        || tail.clone(),
+        |ty| format!(" -> {}", python_type(ty.trim())),
+    );
+    format!(
+        "def {}({params}){tail}",
+        head.replace('<', "[").replace('>', "]")
+    )
+}
+
+fn python_parameters(params: &str) -> String {
+    split_top(params)
+        .iter()
+        .map(|param| {
+            param.split_once(':').map_or_else(
+                || param.to_owned(),
+                |(name, ty)| format!("{name}: {}", python_type(ty.trim())),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn python_type(ty: &str) -> String {
+    python_callable(ty).unwrap_or_else(|| python_type_tokens(ty))
+}
+
+fn python_callable(ty: &str) -> Option<String> {
+    let (_, params, tail) = ty.strip_prefix("fn").and_then(split_params)?;
+    let result = tail.trim().strip_prefix("->")?;
+    Some(format!(
+        "Callable[[{}], {}]",
+        split_top(&params)
+            .iter()
+            .map(|part| python_type(part))
+            .collect::<Vec<_>>()
+            .join(", "),
+        python_type(result.trim())
+    ))
+}
+
+fn python_type_tokens(ty: &str) -> String {
+    let mut word = String::new();
+    let mut output = String::new();
+    for ch in ty.chars().chain(std::iter::once('\0')) {
+        if ch.is_alphanumeric() || ch == '_' {
+            word.push(ch);
+            continue;
+        }
+        output.push_str(python_type_word(&word));
+        word.clear();
+        match ch {
+            '<' => output.push('['),
+            '>' if !output.ends_with('-') => output.push(']'),
+            '\0' => (),
+            other => output.push(other),
+        }
+    }
+    output.replace("::", ".")
+}
+
+fn python_type_word(word: &str) -> &str {
+    match word {
+        "string" => "str",
+        "List" => "list",
+        "Map" => "dict",
+        other => other,
     }
 }
 
@@ -262,6 +342,22 @@ fn split_top(list: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn python_signatures_preserve_identifiers_and_render_nested_types() {
+        assert_eq!(fence(Flavor::Python), "python");
+        assert_eq!(
+            signature(
+                Flavor::Python,
+                "fn substring(value: List<string>) -> string"
+            ),
+            "def substring(value: list[str]) -> str"
+        );
+        assert_eq!(
+            signature(Flavor::Python, "fn keep(string: int) -> int"),
+            "def keep(string: int) -> int"
+        );
+    }
 
     #[test]
     fn ml_documents_get_the_ml_fence_and_default_documents_do_not() {

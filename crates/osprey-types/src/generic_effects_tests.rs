@@ -1,6 +1,6 @@
 //! Spec-driven assertions for **generic effects** ([EFFECTS-GENERIC-DECL],
 //! [EFFECTS-GENERIC-INSTANTIATION], [EFFECTS-GENERIC-RUNTIME],
-//! [EFFECTS-GENERIC-ROWS], docs/specs/0017-AlgebraicEffects.md).
+//! [EFFECTS-GENERIC-ROWS], docs/specs/language/0017-AlgebraicEffects.md).
 //!
 //! Discharge across instantiations is already exercised by
 //! `effect_rows_tests.rs`; this module states the parts of the generic-effect

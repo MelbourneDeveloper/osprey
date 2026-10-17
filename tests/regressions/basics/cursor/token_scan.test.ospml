@@ -23,7 +23,7 @@ exactArithmetic work =
 // `Success value` / `Error message` patterns lower to the same nodes as the
 // braced Default flavor — byte-identical IR.
 //
-// Spec: docs/specs/0012-Built-InFunctions.md (Cursor Access)
+// Spec: docs/specs/runtime/0012-Built-InFunctions.md (Cursor Access)
 
 (** ASCII '0' and '9' as named constants (zero-arg fns are in scope everywhere;
     top-level bindings are not visible inside fn bodies). *)

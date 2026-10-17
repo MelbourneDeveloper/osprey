@@ -6,7 +6,7 @@
 // the host backend documents ([GPU-MAP], [GPU-FOLD], [GPU-ZIPWITH],
 // [GPU-IOTA], [GPU-GET], [GPU-SCAN], [GPU-FILTER], [GPU-BUFFER-FUSE],
 // [GPU-CONVERT], [GPU-BACKEND-HOST], [GPU-DEVICE] —
-// docs/specs/0034-GPUComputation.md).
+// docs/specs/runtime/0034-GPUComputation.md).
 
 /// The zero-length buffers every combinator is pushed through; the annotation
 /// supplies the element type an empty literal cannot.

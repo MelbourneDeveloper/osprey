@@ -5,14 +5,14 @@ use osprey_syntax::Flavor;
 
 pub(crate) const USAGE: &str =
     "usage: osprey <file-or-project> [--check | --ast | --llvm | --compile | --run | \
---symbols | --list-tests | --doctests | --deps] [--quiet] [--debug] [--profile] [--flavor default|ml] \
-[--memory=default|gc|arc] [--target=native|wasm32|ios|ios-sim|android-arm64|android-x64] [--entry-only] [-o <out>] \
+--symbols | --list-tests | --doctests | --deps] [--quiet] [--debug] [--profile] [--flavor default|ml|python] \
+[--memory=default|gc|arc] [--target=native|wasm32|ios|ios-sim|android-arm64|android-x64|python] [--entry-only] [-o <out>] \
 [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
        osprey build [project] [--quiet] [--debug] [--memory=default|gc|arc] \
-[--target=native|wasm32|ios|ios-sim|android-arm64|android-x64] [-o <out>]\n\
+[--target=native|wasm32|ios|ios-sim|android-arm64|android-x64|python] [-o <out>]\n\
        osprey test [path] [--filter <name>] [--quiet] [--coverage] \
 [--coverage-json <path>] [--memory=default|gc|arc]\n\
-       osprey fmt [--check | --stdout] [--flavor default|ml] <path...>\n\
+       osprey fmt [--check | --stdout] [--flavor default|ml|python] <path...>\n\
        osprey --hover <name>\n\
        osprey --docs [<file-or-project> | --source <file-or-project>] --docs-dir <dir> \
 [--docs-format markdown|html] [--docs-theme osprey|midnight|paper] \
@@ -61,11 +61,11 @@ pub(crate) struct Cli {
     pub(super) debug_options: crate::debug_options::DebugOptions,
     /// Profile the run [PROF-CLI-RUN]: build with line tables + frame pointers
     /// at full optimization, sample via the in-runtime profiler, then export
-    /// and report (docs/specs/0028-Profiler.md).
+    /// and report (docs/specs/tooling/0028-Profiler.md).
     pub(super) profile: bool,
     /// Explicit source flavor from `--flavor`; `None` when unset, so flavor
     /// resolution falls through to the marker/extension precedence
-    /// ([FLAVOR-SELECT], docs/specs/0023-LanguageFlavors.md).
+    /// ([FLAVOR-SELECT], docs/specs/language/0023-LanguageFlavors.md).
     pub(super) flavor: Option<Flavor>,
 }
 
@@ -199,7 +199,7 @@ fn parse_value_option(
         "--flavor" => {
             cli.flavor = Some(parse_flavor(required_value(
                 rest,
-                "--flavor requires a value (default|ml)",
+                "--flavor requires a value (default|ml|python)",
             )?)?);
         }
         flag if flag.starts_with("--") => return parse_named_value(cli, flag),
@@ -268,9 +268,9 @@ optimized code; debugging needs -O0)\n{USAGE}"
 /// [WASM-TARGET] [IOS-TARGET-TRIPLE]
 pub(super) fn parse_target(value: &str) -> Result<String, String> {
     match value {
-        "native" | "wasm32" | "ios" | "ios-sim" | "android-arm64" | "android-x64" => Ok(value.to_string()),
+        "native" | "wasm32" | "ios" | "ios-sim" | "android-arm64" | "android-x64" | "python" => Ok(value.to_string()),
         other => Err(format!(
-            "unknown target '{other}' (available: native, wasm32, ios, ios-sim, android-arm64, android-x64)\n{USAGE}"
+            "unknown target '{other}' (available: native, wasm32, ios, ios-sim, android-arm64, android-x64, python)\n{USAGE}"
         )),
     }
 }

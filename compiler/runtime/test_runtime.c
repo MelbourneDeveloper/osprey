@@ -1,6 +1,6 @@
 // Osprey testing framework run state + TAP emission. Implements
 // [TESTING-RUNTIME], [TESTING-TAP], [TESTING-EXIT], [TESTING-FILTER]
-// (docs/specs/0027-TestingFramework.md). Called only from compiler-emitted IR
+// (docs/specs/language/0027-TestingFramework.md). Called only from compiler-emitted IR
 // (crates/osprey-codegen/src/testing.rs); dependency-free C11 so the unit
 // compiles unchanged into the native, GC, and wasm runtime archives.
 //

@@ -198,6 +198,9 @@ mod tests {
         match flavor {
             Flavor::Default => format!("fn scale(x) = {body}\nlet result = scale({value})\n"),
             Flavor::Ml => format!("scale x = {body}\nresult = scale ({value})\n"),
+            Flavor::Python => {
+                format!("def scale(x):\n    return {body}\nresult = scale({value})\n")
+            }
         }
     }
 

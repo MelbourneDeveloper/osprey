@@ -1,6 +1,6 @@
 # Plan 0016 — Managing effects
 
-**Contract:** [Algebraic Effects](../specs/0017-AlgebraicEffects.md).
+**Contract:** [Algebraic Effects](../specs/language/0017-AlgebraicEffects.md).
 **Try it:** [runnable handler examples](../../examples/handlers/README.md), [banking application](../../examples/projects/modules/README.md), and [mobile application](../../examples/mobile/README.md).
 **Status:** callable handlers, block-scoped handling, declared operation modes, return transformations, and static handler selection are implemented. Full scoped row polymorphism and continuation ownership/replay remain unfinished; the evidence and gates below define their status. This plan owns delivery of handlers, rows, staging, and continuations, replacing plans 0008, 0024, and 0028.
 
@@ -39,7 +39,7 @@ Historical review reproductions may retain removed syntax; current guides and ap
 | Shared staged callback | One `!e`-annotated helper runs the same `Read` callback under a statically discharged handler and a runtime-selected handler in both flavors and all three native memory backends. A static-only IR check finds no effect dispatch. The static case has byte-exact native, wasm32 and mobile goldens. This is a closed-program prototype, not independently quantified stage/row polymorphism. | `examples/handlers/staged-rows.*`, `handler_values.rs`, `staged_effects.rs`, `open_row_static.test.osp{,ml}` |
 | Reactive signals | Checked may-read dependencies drive immutable snapshots and selective synchronous refresh. Generic identities, callback resolution, branch unions and unknown remainders survive static discharge; old values remain owned independently. Default/ML dashboard and native fiber/control compositions are executable gates. | `reactive_signals.test.*`, `staged_shared.test.*`, `staged_hygiene.rs`, `signalDependencies`, `signalSnapshot`, `signalRefresh` |
 | Editor and docs row display | Written function-row bounds survive inference in every signature view. Separate checker-backed descriptions now show transitive required operations, concrete generic instances, host runtime operations and unresolved callback effects in hover, signature help, completion, `--symbols` and API pages. Both-flavor transport tests prove unsaved edits replace stale descriptions. Scoped handler-instance and replay-boundary views remain open; this does not close step 4's row-polymorphism gate. | `effect_rows_exports_tests.rs`, `analysis/more_tests.rs`, `server/tests/features.rs`, `crates/osprey-cli/tests/cases/api_docs_extra.rs`, `[LSP-EFFECT-REQUIREMENTS]` in spec 0020 |
-| Targets | Static discharge and dynamic value handlers have portable paths. Explicit dynamic resumption is unavailable in the current wasm backend and must be rejected before linking. Target limitations do not change language semantics. | [WebAssembly](../specs/0022-WebAssemblyTarget.md), target capability tests |
+| Targets | Static discharge and dynamic value handlers have portable paths. Explicit dynamic resumption is unavailable in the current wasm backend and must be rejected before linking. Target limitations do not change language semantics. | [WebAssembly](../specs/compiler/0022-WebAssemblyTarget.md), target capability tests |
 
 The curried-ML effect-loss report
 [#184](https://github.com/Nimblesite/osprey/issues/184) now passes with the

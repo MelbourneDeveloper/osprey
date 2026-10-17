@@ -9,7 +9,7 @@
 //! case travels with it: `--list-tests` carries the one-line `summary` the
 //! Test Explorer shows beside the case name and the full rendered `doc`
 //! markdown its hover shows ([TESTING-DOC]). Implements [TESTING-LIST]
-//! (docs/specs/0027-TestingFramework.md).
+//! (docs/specs/language/0027-TestingFramework.md).
 
 use crate::analysis::json_str;
 use osprey_ast::{DocComment, Expr, Position, Program, Stmt};

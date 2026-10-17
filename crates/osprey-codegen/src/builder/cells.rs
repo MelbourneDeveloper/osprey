@@ -21,6 +21,7 @@ impl CellSlot {
 
 impl Codegen {
     pub(crate) fn bind_cell(&mut self, name: &str, cell: CellSlot, declaration: bool) {
+        let _ = self.handler_value_captures.remove(name);
         self.emit_debug_cell(name, &cell, declaration);
         let _ = self.cell_slots.insert(name.to_string(), cell);
     }

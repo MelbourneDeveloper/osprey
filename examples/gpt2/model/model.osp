@@ -9,8 +9,8 @@
 // This is plan 0023's reference application (docs/plans/0023-gpu-computation.md)
 // and its stage 5, effect-selected execution: one model, two interpretations,
 // chosen per lexical region ([STAGE-BACKEND], [GPU-DEVICE]). Under `onGpu`,
-// matrix products dispatch to Metal or OpenCL when a device is selected; the
-// other combinators retain their host implementation.
+// kernels and matrix products run on Metal or OpenCL when a device is selected,
+// with intermediate buffers kept on the device between operations.
 
 namespace gpt2;
 

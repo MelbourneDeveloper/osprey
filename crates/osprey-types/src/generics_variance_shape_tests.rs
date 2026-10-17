@@ -1,5 +1,5 @@
 //! Variance position checking over the SHAPES a declaration can take
-//! ([TYPE-VARIANCE-POSITIONS], docs/specs/0004-TypeSystem.md): positions reached
+//! ([TYPE-VARIANCE-POSITIONS], docs/specs/language/0004-TypeSystem.md): positions reached
 //! through the built-in constructors, a parameter used in both directions at
 //! once, several parameters with mixed markers, and union variants — named and
 //! positional.

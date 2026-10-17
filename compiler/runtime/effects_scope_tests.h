@@ -1,5 +1,5 @@
 // Scope tests share the existing effects runtime suite's assertion counter.
-// Canonical contract: docs/specs/0017-AlgebraicEffects.md, handler scope.
+// Canonical contract: docs/specs/language/0017-AlgebraicEffects.md, handler scope.
 #ifndef OSPREY_EFFECTS_SCOPE_TESTS_H
 #define OSPREY_EFFECTS_SCOPE_TESTS_H
 

@@ -88,4 +88,4 @@ Osprey sends one `{model, view, commands}` envelope per render. The host returns
 
 The deterministic native tour is byte-compared with [`expectedoutput`](expectedoutput) by `crates/osprey-cli/tests/project_e2e.rs`. Browser builds regenerate `src/web/bundle.ospml`; edit its inputs rather than the generated module.
 
-See the [effects guide](../../handlers/README.md), [effects specification](../../../docs/specs/0017-AlgebraicEffects.md), [WebAssembly target](../../../docs/specs/0022-WebAssemblyTarget.md) and [module specification](../../../docs/specs/0025-ModulesAndNamespaces.md).
+See the [effects guide](../../handlers/README.md), [effects specification](../../../docs/specs/language/0017-AlgebraicEffects.md), [WebAssembly target](../../../docs/specs/compiler/0022-WebAssemblyTarget.md) and [module specification](../../../docs/specs/language/0025-ModulesAndNamespaces.md).

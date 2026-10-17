@@ -1,5 +1,5 @@
 //! Cross-flavor **LLVM IR** equivalence ([FLAVOR-IR-EQUIV],
-//! docs/specs/0023-LanguageFlavors.md). The headline guarantee of the
+//! docs/specs/language/0023-LanguageFlavors.md). The headline guarantee of the
 //! many-CSTs-one-AST design: a program written in the ML flavor (`.ospml`) and
 //! its Default-flavor twin (`.osp`) lower to the SAME canonical AST, therefore
 //! the codegen backend emits **byte-identical LLVM IR** for both. Currying is a

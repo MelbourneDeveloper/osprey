@@ -4,7 +4,7 @@
 // blending, gpuIota-driven gathers (de-interleave, transpose, edge-clamped
 // stencils), and per-frame pipelines that combine six buffers at once
 // ([GPU-ZIPWITH], [GPU-IOTA], [GPU-GET], [GPU-FOLD], [GPU-SCAN], [GPU-FILTER]
-// — docs/specs/0034-GPUComputation.md). The simulation half is deliberately
+// — docs/specs/runtime/0034-GPUComputation.md). The simulation half is deliberately
 // fixed point: a frame that must replay identically on every backend cannot
 // afford float reassociation, and integer kernels are what a physics step and
 // a blitter actually run.

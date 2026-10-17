@@ -4,9 +4,9 @@
 // This suite OWNS http_shared.c's coverage number: it is the only suite that
 // exercises every helper in the unit rather than whichever subset a transport
 // happens to reach. Spec anchors:
-//   [HTTP-CLIENT]                 docs/specs/0014-HTTP.md
-//   [BUILTIN-WEBSOCKET-FRAMING]   docs/specs/0015-WebSockets.md
-//   [BUILTIN-WEBSOCKET-HANDSHAKE] docs/specs/0015-WebSockets.md
+//   [HTTP-CLIENT]                 docs/specs/runtime/0014-HTTP.md
+//   [BUILTIN-WEBSOCKET-FRAMING]   docs/specs/runtime/0015-WebSockets.md
+//   [BUILTIN-WEBSOCKET-HANDSHAKE] docs/specs/runtime/0015-WebSockets.md
 #include "http_shared.h"
 #include <assert.h>
 // `signal`/`SIGPIPE`/`SIG_IGN` below. macOS pulls this in transitively through

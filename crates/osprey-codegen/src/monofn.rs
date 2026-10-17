@@ -16,12 +16,12 @@
 //! and lowers to a direct recursive call. Two call sites with different
 //! argument types get two definitions; two with the same types share one.
 //!
-//! Implements [GPU-KERNEL-FORM] (docs/specs/0034-GPUComputation.md): a
+//! Implements [GPU-KERNEL-FORM] (docs/specs/runtime/0034-GPUComputation.md): a
 //! recursive helper reached from a kernel — a row walk over a flat matrix is
 //! the canonical one — is a valid kernel, so it must compile without the
 //! annotations Osprey's inference otherwise makes redundant. Also
 //! [TYPE-FN-GENERIC]; the function-value contract is [TYPE-GENERICS-FN] in
-//! `docs/specs/0004-TypeSystem.md` (plan 0002 retired).
+//! `docs/specs/language/0004-TypeSystem.md` (plan 0002 retired).
 
 use crate::builder::{Codegen, FnSig, ParamSig};
 use crate::error::{CodegenError, Result};

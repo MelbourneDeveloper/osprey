@@ -1,7 +1,7 @@
 // Tracing garbage collector backend for Osprey — the swappable `@osp_alloc`
 // implementation selected at link time by `osprey --memory=gc`. Implements
 // [MEM-BACKENDS] and [GC-TRACE-CONSERVATIVE]
-// (docs/specs/0018-MemoryManagement.md).
+// (docs/specs/compiler/0018-MemoryManagement.md).
 //
 // Algorithm: a CONSERVATIVE, NON-MOVING mark & sweep over the managed heap
 // reachable from the C stack, the machine registers, and the program's data/BSS

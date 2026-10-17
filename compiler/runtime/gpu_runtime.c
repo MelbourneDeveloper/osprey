@@ -1,6 +1,6 @@
 // Dense scalar buffers for GPU computation — the host execution backend
 // [GPU-BACKEND-HOST] behind toGpu/fromGpu and every gpu* combinator
-// (docs/specs/0034-GPUComputation.md). A buffer is { length, data, device,
+// (docs/specs/runtime/0034-GPUComputation.md). A buffer is { length, data, device,
 // stale }: length in elements, data a contiguous array of raw 8-byte scalar
 // words (int bits, double bits, or 0/1 bools) — the staging layout a device
 // transfer consumes — device the selected adapter's object holding the same

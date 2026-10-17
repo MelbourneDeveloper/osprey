@@ -2,13 +2,25 @@
 // the mobile menu drawer, and the prose Table-of-Contents.
 const { test, expect } = require("@playwright/test");
 const { paintedColours } = require("./helpers");
+const { mkdir, readFile, writeFile } = require("node:fs/promises");
+const { execFileSync } = require("node:child_process");
+const path = require("node:path");
 
 async function executeExample(source, file) {
-  const { writeFile } = require("node:fs/promises");
-  const { execFileSync } = require("node:child_process");
-  const path = require("node:path");
+  await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, source);
-  return execFileSync(path.resolve("../target/release/osprey"), [file, "--run", "--quiet"], { encoding: "utf8", timeout: 20_000 });
+  return execFileSync(path.resolve("../target/release/osprey"), [file, "--run", "--quiet"], { cwd: path.dirname(file), encoding: "utf8", timeout: 20_000 });
+}
+
+async function verifyDraftExample(source, file) {
+  expect(await executeExample(source, file)).toBe("Saved / Retry: offline\n");
+  expect(await readFile(path.join(path.dirname(file), "draft.txt"), "utf8")).toBe("Ship it.");
+  const offline = source.replace('print("${disk(saveDraft)} / ${offline(saveDraft)}")', 'print(offline(saveDraft))')
+    .replace('print "${disk saveDraft} / ${offline saveDraft}"', 'print (offline saveDraft)');
+  const isolated = path.join(path.dirname(file), "offline", path.basename(file));
+  expect(offline).not.toBe(source);
+  expect(await executeExample(offline, isolated)).toBe("Retry: offline\n");
+  await expect(readFile(path.join(path.dirname(isolated), "draft.txt"))).rejects.toMatchObject({ code: "ENOENT" });
 }
 
 // stdout of a program that runs, or the compiler's diagnostic for one it rejects.
@@ -27,16 +39,21 @@ test.describe("homepage flight and source examples", () => {
       await page.locator(`.flavor-controls button[data-flavor="${flavor}"]`).click();
       const source = page.locator(`#example-${flavor}`);
       await expect(source).toBeVisible();
-      const file = testInfo.outputPath(`greeting.${extension}`);
-      const output = await executeExample(await source.textContent(), file);
-      expect(output).toBe(`${await page.locator(".hero .code-result samp").textContent()}\n`);
+      const file = testInfo.outputPath(`${flavor}/save-draft.${extension}`);
+      const text = await source.textContent();
+      await verifyDraftExample(text, file);
+      if (flavor === "default") {
+        const readme = await readFile(path.resolve("../README.md"), "utf8");
+        expect(readme.match(/```osprey\n([\s\S]*?)\n```/)[1]).toBe(text);
+      }
+      expect(`${await page.locator(".hero .code-result samp").textContent()}\n`).toBe("Saved / Retry: offline\n");
     }
   });
 
   test("the effects guide preserves runnable authored examples in both flavors", async ({ page }, testInfo) => {
     await page.goto("/docs/effects/");
     const blocks = page.locator('pre > code.language-osprey, pre > code.language-osprey-ml');
-    const outputs = ["Hello, Ada / Hello, Grace\n", "Hello, Ada / Hello, Grace\n", "Hello, Ada\n", "Order accepted\nOrder accepted\n", "41\n", "Submitted / Cancelled\n", "Report: Hello, Ada\n"];
+    const outputs = ["Saved / Retry: offline\n", "Saved / Retry: offline\n", "Retry: offline\n", "Saved: Ship it.\n", "30\n", "Submitted / Cancelled\n", "Report: Saved\n"];
     await expect(blocks).toHaveCount(outputs.length);
     for (let i = 0; i < outputs.length; i++) {
       const block = blocks.nth(i);
@@ -102,7 +119,7 @@ test.describe("homepage flight and source examples", () => {
     const page = await context.newPage();
     await page.goto("/");
     await expect(page.locator(".hero-title")).toBeVisible();
-    await expect(page.locator("#example-default")).toContainText("handler Account");
+    await expect(page.locator("#example-default")).toContainText("handler Drafts");
     await expect(page.locator("#motion-toggle")).toBeHidden();
     await page.getByRole("link", { name: "Explore effects" }).click();
     await expect(page).toHaveURL(/\/docs\/effects\/$/);
@@ -152,6 +169,7 @@ test.describe("desktop interactions", () => {
   });
 
   test("wasm demo seeds a browser SQLite db and runs queries", async ({ page }) => {
+    await page.route("https://cdn.jsdelivr.net/**", (route) => route.abort());
     for (const asset of ["/wasm/wasi-shim.mjs", "/wasm/studio.osp", "/wasm/build/studio.osp.wasm"]) {
       const res = await page.request.get(asset);
       expect(res.status(), `${asset} status`).toBe(200);

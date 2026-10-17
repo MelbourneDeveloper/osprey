@@ -2,7 +2,7 @@
 
 **Subsystem:** syntax, AST, types, codegen, native runtime  
 **Status:** reserved syntax; typed compilation rejects it  
-**Spec boundary:** [CONCURRENCY-SELECT-REJECT](../specs/0011-LightweightFibersAndConcurrency.md#reserved-select-syntax-concurrency-select-reject)
+**Spec boundary:** [CONCURRENCY-SELECT-REJECT](../specs/language/0011-LightweightFibersAndConcurrency.md#reserved-select-syntax-concurrency-select-reject)
 
 ## Current boundary
 
@@ -60,7 +60,7 @@
 - [ ] Type-check each operation against its channel element type, merge arm
       result types, then remove `[CONCURRENCY-SELECT-REJECT]` from
       `osprey-types/src/expr.rs` and from
-      [spec 0011](../specs/0011-LightweightFibersAndConcurrency.md).
+      [spec 0011](../specs/language/0011-LightweightFibersAndConcurrency.md).
 - [ ] Lower the runtime's selected-arm index to control flow, replacing the
       loud-failure `gen_select` above.
 - [ ] Deterministic-mode tie-breaking defined and tested

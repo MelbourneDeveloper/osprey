@@ -1,5 +1,5 @@
 //! GPU computation builtins — the host execution backend [GPU-BACKEND-HOST]
-//! (docs/specs/0034-GPUComputation.md). `toGpu`/`fromGpu` copy between
+//! (docs/specs/runtime/0034-GPUComputation.md). `toGpu`/`fromGpu` copy between
 //! persistent lists and dense scalar buffers; the combinators (`gpuMap`,
 //! `gpuFold`, `gpuZipWith`, `gpuScan`, `gpuFilter`, `gpuIota`, `gpuGet`) run
 //! kernels as native counted loops over those buffers. The dense unboxed

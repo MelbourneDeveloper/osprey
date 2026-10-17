@@ -1,0 +1,5 @@
+{
+  "default": "effect Drafts { save: fn(string, string) -> Result<int, Error> }\nfn saveDraft() = match perform Drafts.save(\"draft.txt\", \"Ship it.\") {\n    Success _ => \"Saved\"\n    Error { message } => \"Retry: ${message}\"\n}\n\nlet disk = handler Drafts {\n    save path text => writeFile(path, text)\n}\nlet offline = handler Drafts {\n    save _ _ => Error { message: \"offline\" }\n}\n\nprint(\"${disk(saveDraft)} / ${offline(saveDraft)}\")",
+  "ml": "effect Drafts\n    save : (string, string) => Result<int, Error>\nsaveDraft () = match perform Drafts.save \"draft.txt\" \"Ship it.\"\n    Success _ => \"Saved\"\n    Error message => \"Retry: ${message}\"\n\ndisk = handler Drafts\n    save path text => writeFile path text\noffline = handler Drafts\n    save _ _ => Error(message = \"offline\")\n\nprint \"${disk saveDraft} / ${offline saveDraft}\"",
+  "output": "Saved / Retry: offline"
+}

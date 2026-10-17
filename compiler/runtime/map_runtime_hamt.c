@@ -10,7 +10,7 @@
  * 500-LoC limit.
  *
  * Implements [TYPE-MAP] node-level invariants from
- * docs/specs/0004-TypeSystem.md.
+ * docs/specs/language/0004-TypeSystem.md.
  */
 
 static uint32_t hash_int(int64_t key) {

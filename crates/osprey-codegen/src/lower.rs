@@ -281,7 +281,7 @@ fn emit_main_boot(cg: &mut Codegen) {
     // Anchor the profiler into the link and give it a deterministic activation
     // point: static archives only extract referenced objects, so without this
     // call a fiber-less program would link no profiler at all. A no-op unless
-    // OSPREY_PROFILE is set [PROF-ACTIVATE-ENV], docs/specs/0028-Profiler.md.
+    // OSPREY_PROFILE is set [PROF-ACTIVATE-ENV], docs/specs/tooling/0028-Profiler.md.
     cg.add_extern("declare void @osp_prof_boot()");
     cg.emit("call void @osp_prof_boot()");
     // Anchor the MEMORY backend the same way: an allocation-free program

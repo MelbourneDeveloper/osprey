@@ -1,6 +1,6 @@
 // Osprey -> Windows graphics bridge: a Win32 window backed by a Direct3D 12
 // swap chain, exposing the same flat C ABI ospgfx.m exposes on macOS
-// ([FFI-LINK-DIRECTIVES], [FFI-PTR] — docs/specs/0019-ForeignFunctionInterface.md).
+// ([FFI-LINK-DIRECTIVES], [FFI-PTR] — docs/specs/compiler/0019-ForeignFunctionInterface.md).
 //
 // UNVERIFIED ON THE MACHINE THAT WROTE IT. This backend was authored on macOS,
 // which has no MSVC, no Windows SDK, no mingw-w64 and no fxc or dxc, so not one

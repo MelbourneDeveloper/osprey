@@ -16,6 +16,17 @@ import { ospreyGrammar } from "./src/js/osprey-grammar.mjs";
 const SITE_URL = "https://www.ospreylang.dev";
 const AUTHOR_URL = "https://www.christianfindlay.com/";
 
+function copyBrowserLibraries(config) {
+  config.addPassthroughCopy({
+    "node_modules/prismjs/components/prism-core.min.js": "assets/vendor/prism/prism-core.min.js",
+    "node_modules/prismjs/components/prism-sql.min.js": "assets/vendor/prism/prism-sql.min.js",
+    "node_modules/prismjs/LICENSE": "assets/vendor/prism/LICENSE",
+    "node_modules/sql.js/dist/sql-wasm.js": "assets/vendor/sqlite/sql-wasm.js",
+    "node_modules/sql.js/dist/sql-wasm.wasm": "assets/vendor/sqlite/sql-wasm.wasm",
+    "node_modules/sql.js/LICENSE": "assets/vendor/sqlite/LICENSE",
+  });
+}
+
 // ML flavor (.ospml) — offside layout, curry-by-default, whitespace application,
 // `\x => e` lambdas and `:=` mutation. Both flavors share effect keywords and
 // the token palette; ML omits the Default `fn` keyword.
@@ -347,6 +358,7 @@ export default function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy("src/css");
   eleventyConfig.addPassthroughCopy("src/js");
   eleventyConfig.addPassthroughCopy("src/playground");
+  copyBrowserLibraries(eleventyConfig);
   // Publish WebAssembly demo assets for the native /wasm/ page. The deploy
   // pipeline runs `make wasm-site` first so generated binaries land here.
   eleventyConfig.addPassthroughCopy({

@@ -13,6 +13,8 @@ pub struct ProjectConfig {
     pub name: String,
     /// Directories scanned for production sources, relative to the manifest.
     pub source_roots: Vec<PathBuf>,
+    /// Literal Python-flavor files selected without sweeping up Python tools.
+    pub python_sources: Vec<PathBuf>,
     /// Optional default namespace for files without an explicit declaration.
     pub default_namespace: Option<String>,
     /// Optional entry source, relative to the manifest directory.
@@ -54,6 +56,7 @@ impl ProjectConfig {
             default_namespace: Some(name.clone()),
             name,
             source_roots: vec![PathBuf::from(source)],
+            python_sources: Vec::new(),
             entry: None,
             flavor: None,
             allow_wildcard_imports: false,
@@ -117,6 +120,9 @@ fn apply_key(
         ("project", "name") => parse_string(value).map(|v| config.name = v),
         ("project", "source_roots") => parse_list(value).map(|roots| {
             config.source_roots = roots.into_iter().map(PathBuf::from).collect();
+        }),
+        ("project", "python_sources") => parse_list(value).map(|paths| {
+            config.python_sources = paths.into_iter().map(PathBuf::from).collect();
         }),
         ("project", "default_namespace") => {
             parse_string(value).map(|v| config.default_namespace = Some(v))

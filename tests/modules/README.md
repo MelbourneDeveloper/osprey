@@ -1,9 +1,9 @@
 # Module and namespace assertion suites
 
-Eleven Default/ML twin pairs covering [Modules and Namespaces](../../docs/specs/0025-ModulesAndNamespaces.md).
+Eleven Default/ML twin pairs covering [Modules and Namespaces](../../docs/specs/language/0025-ModulesAndNamespaces.md).
 Each pair is one program written on two surfaces and held to ONE golden, so
 every claim below is asserted twice and the flavors are proved byte-identical
-([FLAVOR-IR-EQUIV](../../docs/specs/0023-LanguageFlavors.md)).
+([FLAVOR-IR-EQUIV](../../docs/specs/language/0023-LanguageFlavors.md)).
 
 | Pair | Spec sections |
 | --- | --- |

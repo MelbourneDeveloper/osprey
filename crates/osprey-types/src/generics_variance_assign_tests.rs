@@ -1,6 +1,6 @@
 //! Spec-driven assertions for assignment sites under declared variance
 //! ([TYPE-VARIANCE-ASSIGN], [TYPE-VARIANCE-COERCION],
-//! docs/specs/0004-TypeSystem.md).
+//! docs/specs/language/0004-TypeSystem.md).
 //!
 //! `generics_variance_tests.rs` states where a marker may be WRITTEN. This
 //! module states what writing it does to ASSIGNMENT — and the answer the spec

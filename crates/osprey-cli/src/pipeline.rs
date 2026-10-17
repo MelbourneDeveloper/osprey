@@ -159,6 +159,9 @@ pub(super) fn target_error(cli: &Cli, input: &CompilationInput) -> Option<ExitCo
     }
     match cli.target.as_str() {
         "wasm32" => reject_cross_target_options(cli, "wasm32", None).err(),
+        "python" => app_target_error(&cli.mode, crate::python_target::validate(cli), || {
+            target_ir(cli, input)
+        }),
         _ => mobile_target_error(cli, input),
     }
 }
@@ -196,6 +199,9 @@ pub(super) fn target_ir(cli: &Cli, input: &CompilationInput) -> Result<String, S
     let program = input.backend_program();
     let path = input.debug_path();
     let entry_only = cli.exports.entry_only();
+    if cli.target == "python" {
+        return crate::python_target::source(program, path).map(|(ir, _)| ir);
+    }
     if let Some(target) = android::Target::parse(&cli.target) {
         return android::source(program, path, target, entry_only).map(|(ir, _)| ir);
     }
@@ -300,6 +306,9 @@ fn build_mobile(
 ) -> Result<(), ExitCode> {
     let path = input.debug_path();
     let program = input.backend_program();
+    if cli.target == "python" {
+        return crate::python_target::build(cli, input, out);
+    }
     let entry_only = cli.exports.entry_only();
     if let Some(target) = android::Target::parse(&cli.target) {
         return android::build(path, program, out, target, entry_only);
@@ -329,6 +338,9 @@ pub(super) fn output_path(src: &str, output: Option<&str>, target: &str) -> Path
 /// runs the executable directly; wasm runs it under a WASI host (`wasmtime`).
 pub(super) fn run_program(cli: &Cli, input: &CompilationInput) -> ExitCode {
     match cli.target.as_str() {
+        "python" => {
+            toolchain::fail("Python libraries must run inside a Python host; use python -m osprey")
+        }
         "wasm32" => match reject_debug_cross_target(cli) {
             Some(code) => code,
             None => wasm::run(input.debug_path(), input.backend_program()),

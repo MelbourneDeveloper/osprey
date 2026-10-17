@@ -28,7 +28,7 @@ const WEB_IMPORTS: &[&str] = &["osprey_web_render", "osprey_web_command"];
 pub(crate) fn validate(program: &Program, target: &str) -> Result<(), String> {
     if !matches!(
         target,
-        "wasm32" | "ios" | "ios-sim" | "android-arm64" | "android-x64"
+        "wasm32" | "ios" | "ios-sim" | "android-arm64" | "android-x64" | "python"
     ) {
         return Ok(());
     }
@@ -80,6 +80,9 @@ impl Capabilities<'_> {
 }
 
 fn builtin_feature(target: &str, name: &str) -> Option<&'static str> {
+    if target == "python" && FIBER_FNS.contains(&name) {
+        return Some("fiber concurrency");
+    }
     let groups = [
         (crate::sandbox::HTTP_FNS, "HTTP"),
         (crate::sandbox::WEBSOCKET_FNS, "WebSocket"),
@@ -315,7 +318,7 @@ impl AstVisitor for Capabilities<'_> {
             | Expr::Send { .. }
             | Expr::Recv(_)
             | Expr::Select { .. }
-                if self.target == "wasm32" =>
+                if matches!(self.target, "wasm32" | "python") =>
             {
                 self.reject("fiber concurrency");
             }

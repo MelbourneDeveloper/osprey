@@ -52,7 +52,7 @@ The ML spelling is in [handlers.ospml](handlers.ospml). You can also install a h
 | [Eff](handlers.eff) | `handler` with `effect Name k -> k person` | `with ada handle greet ()` |
 | [Effekt](handlers.effekt) | A function wrapping `try`/`with name` | `reading("Ada") { greet() }` |
 
-Effekt uses scoped computation blocks here; this is the same behavior, not a claim that its handler representation is identical to OCaml's records or Koka's functions. Osprey currently uses callable closures for handler values. The [effects spec](../../docs/specs/0017-AlgebraicEffects.md) defines the unified target; [plan 0016](../../docs/plans/0016-algebraic-effects-and-handlers.md) records what remains to implement.
+Effekt uses scoped computation blocks here; this is the same behavior, not a claim that its handler representation is identical to OCaml's records or Koka's functions. Osprey currently uses callable closures for handler values. The [effects spec](../../docs/specs/language/0017-AlgebraicEffects.md) defines the unified target; [plan 0016](../../docs/plans/0016-algebraic-effects-and-handlers.md) records what remains to implement.
 
 ## Continuation semantics
 

@@ -1,5 +1,5 @@
 // Osprey sampling CPU profiler — platform sampler backends. Implements
-// [PROF-COLLECT-SAMPLER] (docs/specs/0028-Profiler.md).
+// [PROF-COLLECT-SAMPLER] (docs/specs/tooling/0028-Profiler.md).
 //
 // macOS: a dedicated sampler thread suspends each registered thread, reads its
 // register state, walks the frame-pointer chain, and resumes it — no signals,

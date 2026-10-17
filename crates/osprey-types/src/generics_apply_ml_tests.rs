@@ -1,6 +1,6 @@
 //! The ML half of **call-site type application** ([TYPE-GENERICS-APPLY],
-//! docs/specs/0004-TypeSystem.md; spelling in [FLAVOR-ML-GENERICS],
-//! docs/specs/0024-MLFlavorSyntax.md).
+//! docs/specs/language/0004-TypeSystem.md; spelling in [FLAVOR-ML-GENERICS],
+//! docs/specs/language/0024-MLFlavorSyntax.md).
 //!
 //! Both surfaces lower to the same canonical node ([FLAVOR-BOUNDARY]), so every
 //! Default assertion in `generics_apply_tests.rs` has a twin here and the two

@@ -863,7 +863,7 @@ fn run_reports_an_uninvokable_c_compiler() {
     assert!(!o.stderr.is_empty(), "{}", o.stderr);
 }
 
-// --- testing framework (docs/specs/0027-TestingFramework.md) ---------------
+// --- testing framework (docs/specs/language/0027-TestingFramework.md) ---------------
 
 const PASSING_TESTS: &str = "test(\"adds\", fn() => expect(1 + 1, 2))\n\
 test(\"labeled\", fn() => check(\"sum\", 4, 2 + 2))\n";

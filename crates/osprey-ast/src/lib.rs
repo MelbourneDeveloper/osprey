@@ -25,7 +25,7 @@ pub mod symbol;
 mod visit;
 pub use doc::{DocComment, DocExample, DocScope};
 pub use generics::{EffectRef, TypeParam, Variance};
-pub use handler_value::handler_value;
+pub use handler_value::{handler_function, handler_value};
 pub use multiplicity::{
     Multiplicity, OperationMode, OperationTable, CONTROL_KEYWORD, REPLAYABLE_KEYWORD,
 };

@@ -29,8 +29,8 @@
       "path": ".github"
     },
     {
-      "name": "homebrew-package",
-      "path": "homebrew-package"
+      "name": "scripts/homebrew",
+      "path": "scripts/homebrew"
     }
   ],
   "settings": {

@@ -1,5 +1,5 @@
 // Osprey line-coverage collection. Implements [TESTING-COVERAGE-RUNTIME]
-// (docs/specs/0027-TestingFramework.md). Called only from compiler-emitted IR
+// (docs/specs/language/0027-TestingFramework.md). Called only from compiler-emitted IR
 // (crates/osprey-codegen/src/coverage.rs); dependency-free C11 so the unit
 // compiles unchanged into the native, GC, and wasm runtime archives.
 //

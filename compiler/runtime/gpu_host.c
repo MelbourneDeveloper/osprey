@@ -1,5 +1,5 @@
 // Host-backend operations on dense buffers beyond the buffer primitive itself
-// (docs/specs/0034-GPUComputation.md): the row-major dense product behind
+// (docs/specs/runtime/0034-GPUComputation.md): the row-major dense product behind
 // `gpuMatMul` [GPU-MATMUL], and the two ways a trained model's weights enter a
 // program without passing through a List — raw little-endian binary32 words
 // at a byte offset (`gpuLoad`, [GPU-BUFFER-LOAD]: the layout of llm.c's

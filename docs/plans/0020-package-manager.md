@@ -1,10 +1,10 @@
 # Plan 0020 — Package Registry and Manager
 
 **Status:** specified, not implemented. The normative contracts are
-[spec 0029](../specs/0029-PackageManagement.md) and
-[spec 0030](../specs/0030-PackageRegistryTrustAndDiscovery.md), with canonical
-types in [spec 0031](../specs/0031-PackageDomainModel.md) and score/ranking math
-in [spec 0032](../specs/0032-PackageEvidenceAndDiscovery.md); the cited evidence
+[spec 0029](../specs/ecosystem/0029-PackageManagement.md) and
+[spec 0030](../specs/ecosystem/0030-PackageRegistryTrustAndDiscovery.md), with canonical
+types in [spec 0031](../specs/ecosystem/0031-PackageDomainModel.md) and score/ranking math
+in [spec 0032](../specs/ecosystem/0032-PackageEvidenceAndDiscovery.md); the cited evidence
 is [collected separately](../package-manager-research.md). This plan contains no
 product decision gates: phases validate the fixed design rather than reopening it.
 

@@ -1,5 +1,5 @@
 //! Staged effects ([STAGE-RESIDUE], [STAGE-SIGNALS-DIRTY],
-//! docs/specs/0017-AlgebraicEffects.md).
+//! docs/specs/language/0017-AlgebraicEffects.md).
 //!
 //! The claim a static effect makes is not "usually optimised away" but
 //! *absent*: after the rewrite, the emitted IR contains no handler-runtime
@@ -205,7 +205,7 @@ fn main() = {
 }
 
 // ---------------------------------------------------------------------------
-// The rules of docs/specs/0017-AlgebraicEffects.md that reach past discharge: the
+// The rules of docs/specs/language/0017-AlgebraicEffects.md that reach past discharge: the
 // target a static row may be built for, the offload boundary a kernel is, and
 // the identity a reactive read carries. Each test below states the spec's
 // contract in the form the spec states it, so the rule cannot regress into a

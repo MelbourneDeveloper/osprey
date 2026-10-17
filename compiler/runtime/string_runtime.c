@@ -372,7 +372,7 @@ char *osp_float_to_string(double d) {
  * report through `int64_t *out` + a returned `const char *` message (NULL on
  * success); the message is a static .rodata string (process lifetime). The
  * codegen side (strings.rs `cursor_int`) lowers that into the Result errmsg
- * slot — see docs/specs/0012-Built-InFunctions.md (Cursor Access). */
+ * slot — see docs/specs/runtime/0012-Built-InFunctions.md (Cursor Access). */
 
 int64_t osp_string_byte_length(const char *s) {
     if (!s) return 0;

@@ -18,7 +18,7 @@ These commands assume `osprey` is on your executable search path and the named s
 | Build native debug code | `osprey hello.osp --compile --debug -o hello-debug` |
 | Run with native profiling | `osprey hello.osp --run --profile` |
 
-For a multi-file project, supply its directory or `osprey.toml` in place of the source path. `osprey build project-directory` is the project build form. Discovery, entry selection, and flavor overrides follow [Modules and Namespaces](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0025-ModulesAndNamespaces.md).
+For a multi-file project, supply its directory or `osprey.toml` in place of the source path. `osprey build project-directory` is the project build form. Discovery, entry selection, and flavor overrides follow [Modules and Namespaces](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0025-ModulesAndNamespaces.md).
 
 `--check` also enforces target capability restrictions. WebAssembly and mobile accept only `--memory=default`; native debug and profiler flags are not portable target options. Mobile compilation emits a static archive and C header and cannot be executed by `--run` without a platform host. Profiling produces additional output files; use it on a real workload and keep its output directory intentional.
 
@@ -54,7 +54,7 @@ The following qualifications describe the current implementation. A future desig
 | Optimization and GPU | Tail-call optimization is not implemented. Current GPU kernel execution uses host loops; device execution remains planned. |
 | Foreign resources | C integration crosses Osprey's memory-safety boundary. Files, response handles, sockets, and other external resources still need their explicit cleanup APIs. |
 
-The narrow authorities are the [effects delivery plan](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0016-algebraic-effects-and-handlers.md), [fiber contract](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0011-LightweightFibersAndConcurrency.md), [memory contract](https://github.com/Nimblesite/osprey/blob/main/docs/specs/0018-MemoryManagement.md), and the target specifications linked in Chapter 12. Package, structured-concurrency, and GPU delivery status lives in plans 0020, 0026, and 0023 respectively.
+The narrow authorities are the [effects delivery plan](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0016-algebraic-effects-and-handlers.md), [fiber contract](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0011-LightweightFibersAndConcurrency.md), [memory contract](https://github.com/Nimblesite/osprey/blob/main/docs/specs/compiler/0018-MemoryManagement.md), and the target specifications linked in Chapter 12. Package, structured-concurrency, and GPU delivery status lives in plans 0020, 0026, and 0023 respectively.
 
 ## Appendix E — Flight Log source map
 

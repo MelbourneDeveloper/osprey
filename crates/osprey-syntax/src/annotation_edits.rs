@@ -60,6 +60,7 @@ pub fn annotation_edits(source: &str, flavor: Flavor) -> Vec<AnnotationEdit> {
     let mut edits = match flavor {
         Flavor::Default => default_edits(source),
         Flavor::Ml => crate::ml::annotation_edits(source),
+        Flavor::Python => crate::python::annotation_edits(source),
     };
     edits.extend(crate::fragment_ranges::collect(
         source,

@@ -86,7 +86,7 @@ pub(crate) fn invalid_use(name: &str, ty: &Type) -> Option<String> {
         "print" if !is_printable(ty) => Some(format!("cannot convert value for printing: {ty}")),
         "toString" if !is_printable(ty) => Some(format!("cannot convert value to string: {ty}")),
         // GPU buffer elements are scalars [GPU-BUFFER-ELEM]
-        // (docs/specs/0034-GPUComputation.md).
+        // (docs/specs/runtime/0034-GPUComputation.md).
         "toGpu" if !is_gpu_source(ty) => Some(format!(
             "`toGpu` supports only {GPU_SOURCE_DISPLAY}; got {ty}"
         )),
@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     fn gpu_constraints_accept_scalar_containers_and_reject_the_rest() {
-        // [GPU-BUFFER-ELEM] (docs/specs/0034-GPUComputation.md)
+        // [GPU-BUFFER-ELEM] (docs/specs/runtime/0034-GPUComputation.md)
         assert!(invalid_use("toGpu", &Type::list(Type::int())).is_none());
         assert!(invalid_use("toGpu", &Type::list(Type::string())).is_some());
         assert!(invalid_use("toGpu", &Type::int()).is_some());

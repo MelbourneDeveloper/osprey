@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "osprey-interop"
+version = "0.0.0.dev0"
+description = "Call native Osprey functions from Python and Python from Osprey"
+requires-python = ">=3.10"
+
+[project.scripts]
+osprey-dataset-audit = "osprey.dataset_audit.cli:main"
+
+[project.optional-dependencies]
+dataset-audit = ["transformers>=4.45,<6", "jinja2>=3.1,<4"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["osprey*"]

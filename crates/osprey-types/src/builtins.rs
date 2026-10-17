@@ -61,7 +61,7 @@ fn poly(env: &mut TypeEnv, name: &str, vars: Vec<u32>, params: Vec<Type>, ret: T
 
 /// Built-ins a user function may redefine: the testing names are common
 /// identifiers, so a same-named user function shadows the built-in instead of
-/// erroring. Implements [TESTING-SHADOWING] (docs/specs/0027-TestingFramework.md).
+/// erroring. Implements [TESTING-SHADOWING] (docs/specs/language/0027-TestingFramework.md).
 pub(crate) const SHADOWABLE_BUILTINS: &[&str] = &[
     "test",
     "expect",
@@ -125,7 +125,7 @@ fn runtime_mono(env: &mut TypeEnv, name: &str, params: Vec<Type>, ret: Type) {
 }
 
 /// The testing framework's built-ins. Implements [TESTING-BUILTINS]
-/// (docs/specs/0027-TestingFramework.md).
+/// (docs/specs/language/0027-TestingFramework.md).
 fn testing(e: &mut TypeEnv) {
     // test(name, body): run `body` as one named test case. The body returns any
     // type — Unit for a Default-flavor imperative case, a `Verdict` for the pure

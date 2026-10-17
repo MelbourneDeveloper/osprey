@@ -37,7 +37,41 @@ def corpus_jobs(target, override=None):
     )
 
 
+class BuildFragments(unittest.TestCase):
+    def test_node_dependency_guard_follows_nested_build_fragments(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Makefile").write_text("\n".join(f"target{n}:" for n in range(20)) + "\ninclude tasks.mk\n")
+            (root / "tasks.mk").write_text("include website.mk\n")
+            for prerequisite, succeeds in [("$(WEBSITE_NODE_DEPS)", True), ("", False)]:
+                with self.subTest(prerequisite=prerequisite):
+                    (root / "website.mk").write_text(f"site: {prerequisite}\n\tcd website && npm run build\n")
+                    result = subprocess.run(
+                        ["node", str(ROOT / "scripts/verify-node-deps-guard.mjs")],
+                        cwd=root, capture_output=True, text=True,
+                    )
+                    self.assertEqual(result.returncode == 0, succeeds, result.stderr)
+                    self.assertIn("1 node-tool recipes" if succeeds else "site: runs a node tool in website/", result.stderr)
+
+
 class CorpusScheduling(unittest.TestCase):
+    def test_native_worker_isolates_writes_and_preserves_failure_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            compiler = root / "target/release/osprey"
+            compiler.parent.mkdir(parents=True)
+            compiler.write_text('#!/bin/sh\nprintf payload > worker-artifact\nprintf failed\nexit 7\n')
+            compiler.chmod(0o755)
+            result = subprocess.run(
+                ["zsh", str(ROOT / "crates/run_test_corpus.sh"), "--worker", "default", str(root), "1", "unused.osp"],
+                cwd=root, env=dict(os.environ, OSPREY_ROOT=str(root)), capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((root / "1.status").read_text(), "7\n")
+            self.assertEqual((root / "1.stdout").read_text(), "failed")
+            self.assertFalse((root / "worker-artifact").exists())
+            self.assertEqual((root / "1.work/worker-artifact").read_text(), "payload")
+
     def test_android_defaults_to_one_worker_per_device(self):
         for target in ["android", "android-x64", "android-arm64"]:
             with self.subTest(target=target):

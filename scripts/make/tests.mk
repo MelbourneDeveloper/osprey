@@ -1,0 +1,371 @@
+# --- rust (crates/) ---------------------------------------------------------
+# cargo test is fail-fast at the binary level by
+# default (a failing test binary aborts the run); coverage via cargo-llvm-cov.
+# `--profile ci` is the workspace's fast-compile profile (see root Cargo.toml).
+# `_runtime_wasm` is a prerequisite because the coverage gate below already
+# DEPENDS on it: osprey-cli's wasm end-to-end test (crates/osprey-cli/src/wasm.rs)
+# self-skips unless wasm-ld, a WASI sysroot and libosprey_runtime_wasm.a are all
+# present, and skipping it drops osprey-cli from 96.7% to 94.8% — under its 95%
+# floor. Without this line the archive is whatever an earlier target happened to
+# leave behind, so a plain `make clean && make ci` fails on a coverage number
+# that says nothing about the code that changed. Build what the gate measures.
+_test_rust: _runtime_wasm
+	@echo "==> [rust] running tests with coverage..."
+	set -o pipefail && RUST_TEST_THREADS=$${RUST_TEST_THREADS:-4} cargo llvm-cov --workspace --profile ci --lcov --output-path lcov.info 2>&1 | tee test.log
+
+# Per-crate enforcement: each rust crate NAMED IN $(COVERAGE_THRESHOLDS_FILE) is
+# gated independently against its own threshold (floor 95% + monotonic ratchet).
+# lcov SF records are grouped by their crates/<name>/ path; a single crate below
+# its gate fails the whole target. Aggregating the workspace into one number
+# would let a well-covered crate mask an under-tested one — exactly what the
+# ratchet exists to prevent.
+#
+# ⚠️ THIS GATE IS INCOMPLETE, and the loop below cannot notice. It iterates the
+# JSON's keys, not the workspace's crates, so a crate absent from the JSON is
+# compiled, instrumented, measured by llvm-cov and then DISCARDED. Measured
+# 2026-08-27: crates/ has 11 members, the JSON names 9. osprey-fmt is at 98.8%
+# (487/493) and would pass; osprey-project is at 83.9% (3063/3652) — 3652 lines
+# eleven points under the floor this gate claims to enforce, invisible to it.
+# _coverage_check_c_runtime already solved exactly this for C: it walks
+# C_SHIPPED_UNITS and FAILS on any shipped unit that is neither gated nor
+# explicitly exempt, because "an ungated library cannot regress visibly". Rust
+# needs the same completeness loop over crates/*/Cargo.toml, with osprey-project
+# ratcheted in at its measured value so the check can land without masking it.
+_coverage_check_rust:
+	@if [ ! -f "$(COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
+	if [ ! -f lcov.info ]; then echo "[rust] FAIL: lcov.info not produced"; exit 1; fi; \
+	fail=0; \
+	for crate in $$(jq -r '.projects | to_entries[] | select(.value.language=="rust") | .key' "$(COVERAGE_THRESHOLDS_FILE)"); do \
+	  threshold=$$(jq -r --arg c "$$crate" '.projects[$$c].threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	  set -- $$(awk -F: -v c="$$crate" 'index($$0,"SF:")==1{in_c=index($$2,"/crates/" c "/")>0} in_c&&/^LH:/{h+=$$2} in_c&&/^LF:/{f+=$$2} END{printf "%d %d",h+0,f+0}' lcov.info); \
+	  lh=$$1; lf=$$2; \
+	  if [ "$$lf" -eq 0 ]; then echo "[rust] $$crate FAIL: no lines found in lcov.info"; fail=1; continue; fi; \
+	  pct=$$(awk "BEGIN{printf \"%.1f\", $$lh/$$lf*100}"); \
+	  pct_int=$$(awk "BEGIN{printf \"%d\", $$lh/$$lf*100}"); \
+	  if [ "$$pct_int" -lt "$$threshold" ]; then \
+	    echo "[rust] $$crate FAIL: $${pct}% < $${threshold}% ($$lh/$$lf lines)"; fail=1; \
+	  else \
+	    echo "[rust] $$crate OK: $${pct}% >= $${threshold}% ($$lh/$$lf lines)"; \
+	  fi; \
+	done; \
+	if [ "$$fail" -ne 0 ]; then echo "[rust] FAIL: one or more crates below threshold"; exit 1; fi; \
+	echo "[rust] OK: all crates meet their thresholds"
+
+# Hardened C runtime unit tests (assertion-driven; a failed assert aborts the
+# binary). Covers the string cursor (BUILTIN-STRING-CURSOR), the error-message
+# contract ([ERR-PAYLOAD]), complete HTTP reads/writes, the fiber/channel and
+# websocket surface and the reclaiming memory
+# backend and both persistent containers: memory_arc.c (header, registry,
+# retain/release, every layout kind's drop walk, the shim allocators) and
+# list_runtime.c / map_runtime.c / map_runtime_hamt.c (trie + HAMT persistence,
+# O(1) views, node refcounting) [GC-ARC-PERCEUS], [MEM-BACKENDS]. Built as
+# executables (no `-c`), so they link the runtime TUs directly. Runs on
+# `make test`; Windows CI uses its own steps.
+#
+# The container suites link memory_runtime.o — the DEFAULT backend's no-op
+# hooks — so they test container semantics with reference counting neutralised;
+# memory_arc_tests covers the counting itself.
+OSSL_CFLAGS = $(OSSL) `pkg-config --cflags openssl 2>/dev/null || echo ""`
+OSSL_LIBS   = `pkg-config --libs openssl 2>/dev/null || echo "-lssl -lcrypto"`
+RT_THREADS  = runtime/fiber_runtime.c runtime/system_runtime.c runtime/file_runtime.c runtime/effects_runtime.c runtime/effects_coro.c \
+              runtime/profiler_runtime.c runtime/profiler_sampler.c
+# Frame-pointer profile for the profiler suite: its unwind tests need -g and
+# real frame chains, and it predates the WARN core, so it keeps its own flags.
+PROF_T = -O2 -g -fno-omit-frame-pointer -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -std=c11 -D_GNU_SOURCE
+
+# --- C runtime suite TABLE ---------------------------------------------------
+# One row per test binary. C_SRC_<name> lists sources relative to compiler/,
+# C_FLAGS_<name> extra compile flags, C_LIBS_<name> trailing libraries, and
+# C_PROFILE_<name> optionally replaces the default $(T) flag core. BOTH the
+# hardened run (_test_c_runtime) and the per-library coverage gate
+# (_coverage_check_c_runtime) iterate this same table, so adding one row wires
+# a suite into testing AND coverage measurement.
+C_TEST_SUITES ?= memory_gc_stack_root_tests memory_arc_tests memory_gc_tests \
+  memory_pool_tests memory_runtime_tests memory_golden_tests gpu_runtime_tests gpu_shader_tests gpu_opencl_tests gpu_selection_tests gpu_no_device_tests \
+  list_tests map_tests string_runtime_tests json_runtime_tests \
+  effects_runtime_tests builtins_runtime_tests test_system_runtime \
+  test_file_runtime \
+  test_http_length_validation http_server_send_tests http_server_request_tests \
+  fiber_runtime_tests http_runtime_tests http_shared_tests \
+  websocket_runtime_tests profiler_runtime_tests \
+  coverage_runtime_tests
+C_SRC_memory_gc_stack_root_tests = runtime/memory_gc_stack_root_tests.c runtime/memory_gc.c
+C_LIBS_memory_gc_stack_root_tests = -pthread
+C_SRC_memory_arc_tests = runtime/memory_arc_tests.c runtime/memory_arc.c
+C_LIBS_memory_arc_tests = -pthread
+C_SRC_memory_gc_tests = runtime/memory_gc_tests.c runtime/memory_gc.c
+C_LIBS_memory_gc_tests = -pthread
+C_SRC_memory_pool_tests = runtime/memory_pool_tests.c
+C_SRC_memory_runtime_tests = runtime/memory_runtime_tests.c runtime/memory_runtime.c
+C_SRC_memory_golden_tests = runtime/memory_golden_tests.c runtime/memory_arc.c runtime/gpu_runtime.c runtime/gpu_host.c runtime/file_runtime.c
+C_LIBS_memory_golden_tests = -pthread
+C_FLAGS_memory_golden_tests = $(GPU_DEVICE_FLAGS)
+C_LIBS_memory_golden_tests += $(GPU_DEVICE_LINK) $(GPU_DEVICE_LIBS)
+C_SRC_gpu_runtime_tests = runtime/gpu_runtime_tests.c runtime/gpu_runtime.c runtime/gpu_host.c runtime/file_runtime.c runtime/memory_runtime.c
+C_FLAGS_gpu_runtime_tests = $(GPU_DEVICE_FLAGS)
+C_LIBS_gpu_runtime_tests = $(GPU_DEVICE_LINK) $(GPU_DEVICE_LIBS)
+C_SRC_gpu_device_tests = runtime/gpu_device_tests.c runtime/gpu_runtime.c runtime/gpu_host.c runtime/file_runtime.c runtime/memory_runtime.c
+C_FLAGS_gpu_device_tests = $(GPU_DEVICE_FLAGS)
+C_LIBS_gpu_device_tests = $(GPU_DEVICE_LINK) $(GPU_DEVICE_LIBS)
+C_SRC_gpu_shader_tests = runtime/gpu_shader_tests.c
+C_FLAGS_gpu_shader_tests = -ffp-contract=off
+C_LIBS_gpu_shader_tests = -lm
+C_SRC_gpu_opencl_tests = runtime/gpu_opencl_tests.c runtime/gpu_opencl.c runtime/file_runtime.c runtime/memory_runtime.c
+C_FLAGS_gpu_opencl_tests = -DOSPREY_GPU_TESTING=1
+C_LIBS_gpu_opencl_tests = -pthread $(if $(filter Linux,$(UNAME_S)),-ldl)
+C_SRC_gpu_selection_tests = runtime/gpu_selection_tests.c runtime/gpu_runtime_tests.c runtime/gpu_runtime.c runtime/gpu_host.c runtime/file_runtime.c runtime/memory_runtime.c
+C_FLAGS_gpu_selection_tests = -DOSPREY_GPU_BUFFER_SUITE=1 -DOSPREY_GPU_METAL=1 -DOSPREY_GPU_OPENCL=1
+C_SRC_gpu_no_device_tests = $(C_SRC_gpu_selection_tests)
+C_FLAGS_gpu_no_device_tests = -DOSPREY_GPU_BUFFER_SUITE=1
+ifeq ($(UNAME_S),Darwin)
+C_TEST_SUITES += gpu_metal_tests
+C_SRC_gpu_metal_tests = runtime/gpu_metal_tests.m runtime/gpu_metal.m runtime/file_runtime.c runtime/memory_runtime.c
+C_FLAGS_gpu_metal_tests = -fobjc-arc -DOSPREY_GPU_METAL=1
+C_LIBS_gpu_metal_tests = -framework Foundation -framework Metal -pthread
+endif
+C_SRC_list_tests = runtime/list_tests.c runtime/list_runtime.c runtime/memory_runtime.c
+C_SRC_map_tests = runtime/map_tests.c runtime/map_runtime.c runtime/map_runtime_hamt.c runtime/memory_runtime.c
+C_SRC_string_runtime_tests = runtime/string_runtime_tests.c runtime/string_runtime.c runtime/string_runtime_list.c runtime/list_runtime.c runtime/memory_runtime.c
+C_SRC_json_runtime_tests = runtime/json_runtime_tests.c runtime/json_grammar_tests.c runtime/json_runtime.c
+C_LIBS_json_runtime_tests = -pthread
+C_SRC_effects_runtime_tests = runtime/effects_runtime_tests.c runtime/effects_runtime.c runtime/effects_coro.c runtime/memory_arc.c runtime/gpu_runtime.c runtime/file_runtime.c runtime/profiler_runtime.c runtime/profiler_sampler.c
+C_LIBS_effects_runtime_tests = -pthread
+C_SRC_builtins_runtime_tests = runtime/builtins_runtime_tests.c runtime/random_entropy_tests.c runtime/ffi_runtime.c runtime/random_runtime.c runtime/term_runtime.c runtime/test_runtime.c
+C_SRC_test_system_runtime = runtime/test_system_runtime.c runtime/test_system_failures.c runtime/system_runtime.c runtime/file_runtime.c runtime/memory_runtime.c
+C_LIBS_test_system_runtime = -pthread
+C_SRC_test_file_runtime = runtime/test_file_runtime.c runtime/file_runtime.c runtime/memory_runtime.c
+C_FLAGS_test_http_length_validation = $(OSSL_CFLAGS)
+C_SRC_test_http_length_validation = runtime/test_http_length_validation.c
+C_FLAGS_http_server_send_tests = $(OSSL_CFLAGS)
+C_SRC_http_server_send_tests = runtime/http_server_send_tests.c runtime/memory_runtime.c
+C_LIBS_http_server_send_tests = -pthread
+C_FLAGS_http_server_request_tests = $(OSSL_CFLAGS)
+C_SRC_http_server_request_tests = runtime/http_server_request_tests.c runtime/memory_runtime.c
+C_LIBS_http_server_request_tests = -pthread
+C_SRC_fiber_runtime_tests = runtime/fiber_runtime_tests.c runtime/memory_runtime.c $(RT_THREADS)
+C_LIBS_fiber_runtime_tests = -pthread
+C_FLAGS_http_runtime_tests = $(OSSL_CFLAGS)
+C_SRC_http_runtime_tests = runtime/http_runtime_tests.c runtime/http_client_runtime.c runtime/http_server_runtime.c runtime/http_server_request.c runtime/http_server_response.c runtime/http_shared.c runtime/string_runtime.c runtime/memory_runtime.c runtime/random_runtime.c $(RT_THREADS)
+C_LIBS_http_runtime_tests = -pthread $(OSSL_LIBS)
+# http_shared.c's coverage number is OWNED by this suite: it is the only one
+# that drives every helper in the unit rather than the subset one transport
+# reaches. Keep it that way -- the gate takes the MAX across suites, never a
+# union, so splitting these tests across transports would lower the number
+# while testing exactly as much.
+C_FLAGS_http_shared_tests = $(OSSL_CFLAGS)
+C_SRC_http_shared_tests = runtime/http_shared_tests.c runtime/http_shared.c runtime/random_runtime.c
+C_LIBS_http_shared_tests = -pthread $(OSSL_LIBS)
+# Owns websocket_client_runtime.c and websocket_server_runtime.c. Binds real
+# loopback ports (18086/18087) and runs a real accept loop, so it is single
+# threaded across suites by construction -- the Makefile runs suites serially.
+C_FLAGS_websocket_runtime_tests = $(OSSL_CFLAGS)
+C_SRC_websocket_runtime_tests = runtime/websocket_runtime_tests.c runtime/websocket_client_runtime.c runtime/websocket_server_runtime.c runtime/http_shared.c runtime/random_runtime.c runtime/memory_runtime.c
+C_LIBS_websocket_runtime_tests = -pthread $(OSSL_LIBS)
+C_PROFILE_profiler_runtime_tests = $(PROF_T)
+C_SRC_profiler_runtime_tests = runtime/profiler_runtime_tests.c runtime/profiler_runtime.c runtime/profiler_sampler.c
+C_LIBS_profiler_runtime_tests = -pthread
+C_SRC_coverage_runtime_tests = runtime/coverage_runtime_tests.c runtime/coverage_runtime.c
+
+# Build + run one suite (expanded inside a `cd compiler` shell, hence bin/).
+C_SUITE_CMD = echo "--- $(1)" && $(CC) $(or $(C_PROFILE_$(1)),$(T)) $(C_FLAGS_$(1)) $(C_SRC_$(1)) $(C_LIBS_$(1)) -o bin/$(1) && ./bin/$(1)
+
+_test_gc_stack_root:
+	@echo "==> [c-runtime] GC caller-stack root regression..."
+	@cd compiler && $(call C_SUITE_CMD,memory_gc_stack_root_tests)
+
+_test_c_runtime: $(GPU_DEVICE_NATIVE)
+	@echo "==> [c-runtime] memory/gpu/effects/json/builtins/system/string/HTTP/fiber suites..."
+	@cd compiler && set -e; $(foreach s,$(C_TEST_SUITES),$(call C_SUITE_CMD,$(s)) && ) true
+
+_test_gpu_device: $(GPU_DEVICE_NATIVE)
+	@cd compiler && $(call C_SUITE_CMD,gpu_device_tests)
+
+# Per-library C line-coverage gate. Rebuilds every table suite with gcov
+# instrumentation into compiler/bin/cov/<suite>/, reruns it there (a failing
+# suite still contributes whatever it covered before aborting), reduces each
+# suite's gcov summaries, and gates every `language: "c"` entry in
+# coverage-thresholds.json at its threshold. A library's number is the MAX
+# line coverage across the suites linking it — per-TU summaries cannot be
+# unioned, so max is the honest lower bound.
+#
+# The gate reads the JSON and looks each key up in the summaries, so a runtime
+# .c that no key names is compiled, instrumented, summarised — and discarded.
+# effects_coro.c reached 375 lines of the whole continuation core in exactly
+# that state, split out of an already-gated effects_runtime.c and inheriting
+# none of its 90% floor. The completeness check below closes it: every unit that
+# SHIPS must be gated or exempt, and an unlisted one fails the gate.
+#
+# "Ships" is decided by ARCHIVE MEMBERSHIP, not by a name pattern over
+# runtime/*.c. The first cut of this check skipped `test_*` to get past the test
+# harness sources — and so skipped runtime/test_runtime.c, which is a real
+# member of every native archive, leaving the gate green with it ungated and its
+# exemption entry doing nothing. Membership is the fact the check actually
+# wants; a filename never was. Units built only for wasm (web_runtime.c,
+# wasm_builtins_runtime.c) are absent from these lists and so are not required —
+# they do not build natively, so gcov has nothing to measure.
+C_SHIPPED_UNITS = $(sort $(basename $(notdir $(FIB_OBJ) $(HTTP_OBJ) \
+                    $(FIB_OBJ_GC) $(HTTP_OBJ_GC) $(FIB_OBJ_ARC) $(HTTP_OBJ_ARC))))
+# No native unit is exempt any more. term_runtime.c and test_runtime.c used to
+# be: every one of their cases runs in a FORKED CHILD, whose gcov counters were
+# never flushed back, so gcov reported 0% against thousands of passing
+# assertions. The harness now calls __gcov_dump before the child _exits
+# (compiler/runtime/test_gcov.h), which is what that exemption was waiting for.
+C_COV_EXEMPT ?=
+GCOV_TOOL ?= $(shell if $(CC) --version 2>/dev/null | grep -qi clang; then \
+    if command -v xcrun >/dev/null 2>&1; then echo "xcrun llvm-cov gcov"; \
+    else echo "llvm-cov gcov"; fi; \
+  else echo gcov; fi)
+
+_coverage_check_c_runtime:
+	@echo "==> [c-runtime] per-library line coverage (gcov)..."
+	@rm -rf compiler/bin/cov
+	@set -e; cd compiler/bin && mkdir -p cov && cd cov; \
+	$(foreach s,$(C_TEST_SUITES),mkdir -p $(s) && (cd $(s) && $(CC) $(or $(C_PROFILE_$(s)),$(T)) --coverage -DOSP_COVERAGE_DUMP $(C_FLAGS_$(s)) $(addprefix ../../../,$(C_SRC_$(s))) $(C_LIBS_$(s)) -o $(s) && { ./$(s) >/dev/null 2>&1 || true; } && { $(GCOV_TOOL) *.gcda > summary.txt 2>/dev/null || true; }) && ) true
+	@command -v jq >/dev/null || { echo "[c] FAIL: jq is required to read $(COVERAGE_THRESHOLDS_FILE); a gate that cannot run must not report success"; exit 1; }
+	@libs=$$(jq -r --arg platform "$(if $(filter Darwin,$(UNAME_S)),darwin,$(if $(filter Linux,$(UNAME_S)),linux,windows))" '.projects | to_entries[] | select(.value.language=="c" and ((.value.platform // $$platform)==$$platform)) | .key' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	if [ -z "$$libs" ]; then echo "[c] FAIL: no C entries in $(COVERAGE_THRESHOLDS_FILE) -- the gate would pass vacuously"; exit 1; fi; \
+	fail=0; \
+	for n in $(C_SHIPPED_UNITS); do \
+	  printf '%s\n' $(C_COV_EXEMPT) $$libs | grep -qx "$$n" || { \
+	    echo "[c] FAIL: runtime/$$n.c ships in a native archive but is neither gated in $(COVERAGE_THRESHOLDS_FILE) nor in C_COV_EXEMPT -- an ungated library cannot regress visibly"; fail=1; }; \
+	done; \
+	for lib in $$libs; do \
+	  thr=$$(jq -r --arg l "$$lib" '.projects[$$l].threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	  best=$$(for f in compiler/bin/cov/*/summary.txt; do \
+	    [ -f "$$f" ] || continue; \
+      sed -n "\#File '.*/runtime/$$lib\.[cm]'#{n;s/Lines executed:\([0-9.]*\)% of .*/\1/p;}" "$$f"; \
+	  done | sort -rn | head -1); \
+	  if [ -z "$$best" ]; then echo "[c] $$lib FAIL: no coverage data (no suite links it, or its suite died before dumping)"; fail=1; continue; fi; \
+	  best_int=$${best%.*}; \
+	  if [ "$${best_int:-0}" -lt "$$thr" ]; then \
+	    echo "[c] $$lib FAIL: $${best}% < $${thr}%"; fail=1; \
+	  else \
+	    echo "[c] $$lib OK: $${best}% >= $${thr}%"; \
+	  fi; \
+	done; \
+	if [ "$$fail" -ne 0 ]; then echo "[c] FAIL: one or more C libraries below threshold"; exit 1; fi; \
+	echo "[c] OK: all C libraries meet their thresholds"
+
+# [PROF-TEST] end-to-end profiler gate: --profile runs, exports, and reports.
+_test_profiler:
+	@echo "==> [profiler] osprey --profile end-to-end..."
+	@bash scripts/test_profiler.sh
+
+# Assertion-driven language corpus: recursively runs both *.test.osp and
+# *.test.ospml suites. These inspect internal values rather than stdout goldens.
+# Some loopback integration twins intentionally use the same fixed port so their
+# Default and ML sources lower to identical IR; one worker prevents port races.
+_test_language_corpus:
+	@echo "==> [language] Default + ML assertion corpus..."
+	@OSPREY_TEST_JOBS=1 ./$(BIN) test tests
+
+# _test_goldens: byte-exact stdout comparison against the .expectedoutput
+# goldens. Distinct from the target above, which runs the same corpus through
+# the built-in TAP runner and so only ever observes whether the in-language
+# assertions passed. An assertion can only state what someone thought to write
+# down as a value; the goldens pin the ENTIRE observable output — print ORDER,
+# exact formatting, and the TAP tally that exposes a deleted assertion.
+_test_goldens:
+	@echo "==> [language] golden stdout comparison..."
+	@OSPREY_TEST_JOBS=1 zsh crates/run_test_corpus.sh default
+
+# _test_wasm_goldens: the same corpus, the same goldens, the OTHER code
+# generator. Every program that links on wasm32 is compiled to a module, run
+# under Node's WASI host, and held to the byte-exact output the native backend
+# produces; the rest report as named skips because they use a feature the
+# portable runtime deliberately does not port [WASM-TARGET]. Without this the
+# wasm target is gated by three hand-picked example programs, which cannot
+# notice a backend that miscompiles arithmetic, strings, maps or pattern
+# matching everywhere else.
+_test_wasm_goldens:
+	@echo "==> [wasm32] golden stdout comparison under WASI..."
+	@OSPREY_TARGET=wasm32 zsh crates/run_test_corpus.sh
+
+# _conformance-gc: run every assertion suite under the tracing GC backend.
+_conformance-gc:
+	@echo "==> [conformance] assertion corpus under --memory=gc..."
+	@OSPREY_TEST_JOBS=1 zsh crates/run_test_corpus.sh gc
+
+# _conformance-arc: run every assertion suite under the Perceus ARC backend;
+# every suite must pass and end with zero live ARC objects. OSPREY_ARC_DEBUG=1 makes
+# memory_arc.c report its live count at exit, which is the only automatic check
+# for the [GC-ARC-PERCEUS] zero-leak bar.
+_conformance-arc:
+	@echo "==> [conformance] assertion corpus under --memory=arc..."
+	@OSPREY_ARC_DEBUG=1 OSPREY_TEST_JOBS=1 zsh crates/run_test_corpus.sh arc
+
+# --- vscode-extension -------------------------------------------------------
+# The extension's LSP server spawns the `osprey` binary at runtime, so the
+# integration tests need a real compiler on PATH: the Rust binary is staged as
+# `osprey`. vscode-test runs with V8 coverage; c8 merges the profiles into
+# coverage/coverage-summary.json.
+#
+# `_vsix_bundle` is a prerequisite because staging PATH is NOT enough:
+# `resolveServerCommand` prefers the extension's BUNDLED compiler
+# (bin/<os>-<arch>/osprey) over PATH, so a bundle left behind by an earlier
+# build silently shadows the one under test. That is a local-only trap — CI
+# checks out a tree with no bin/ and falls through to PATH — which makes it
+# exactly the kind of failure a developer cannot reproduce from a green CI run.
+# Restaging keeps `make test` honest about which compiler it just tested.
+_test_vscode_extension: _vsix_bundle $(EXT_NODE_DEPS)
+	@echo "==> [vscode-extension] staging osprey as 'osprey' for LSP integration..."
+	$(MKDIR) target/path-bin
+	cp $(BIN) target/path-bin/osprey
+	@echo "==> [vscode-extension] running tests with V8 coverage..."
+	$(RM) $(EXT_DIR)/coverage
+	cd $(EXT_DIR) && set -o pipefail && \
+	  PATH="$(CURDIR)/target/path-bin:$$PATH" \
+	  npm run pretest 2>&1 | tee test.log && \
+	  PATH="$(CURDIR)/target/path-bin:$$PATH" \
+	  ./node_modules/.bin/vscode-test --coverage --coverage-output coverage \
+	    --coverage-reporter text-summary --coverage-reporter json-summary --coverage-reporter html 2>&1 | tee -a test.log
+# The VS Code CLI otherwise waits for an interactive install prompt on WSL.
+	@echo "==> [vscode-extension] testing the installed VSIX and its bundled compiler..."
+	$(MAKE) _vsix_package
+	cd $(EXT_DIR) && set -o pipefail && DONT_PROMPT_WSL_INSTALL=1 npm run test:vsix 2>&1 | tee -a test.log
+
+# Gates EVERY metric the summary reports, not lines alone. Lines-only was the
+# dishonest half of this gate: branches and functions were measured, printed by
+# the text-summary reporter, and then thrown away, so a module could add an
+# untested `else` arm or an unreachable handler without moving the number the
+# gate reads. All four are held to the one threshold the project declares.
+_coverage_check_vscode_extension:
+	@if [ ! -f "$(COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
+	THRESHOLD=$$(jq -r '.projects["vscode-extension"].threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	SUMMARY="$(EXT_DIR)/coverage/coverage-summary.json"; \
+	if [ ! -f "$$SUMMARY" ]; then \
+	  echo "[vscode-extension] FAIL: coverage-summary.json not produced"; exit 1; \
+	fi; \
+	SHORTFALL=""; \
+	for METRIC in lines statements branches functions; do \
+	  PCT=$$(jq -r --arg m "$$METRIC" '.total[$$m].pct' "$$SUMMARY"); \
+	  if [ "$$PCT" = "null" ]; then \
+	    echo "[vscode-extension] FAIL: the summary reports no $$METRIC total"; exit 1; \
+	  fi; \
+	  PCT_INT=$$(echo "$$PCT" | awk '{printf "%d", $$1}'); \
+	  echo "[vscode-extension] $$METRIC: $${PCT}% (threshold: $${THRESHOLD}%)"; \
+	  if [ "$$PCT_INT" -lt "$$THRESHOLD" ]; then SHORTFALL="$$SHORTFALL $$METRIC=$${PCT}%"; fi; \
+	done; \
+	if [ -n "$$SHORTFALL" ]; then \
+	  echo "[vscode-extension] FAIL: below $${THRESHOLD}% -$$SHORTFALL"; exit 1; \
+	fi; \
+	echo "[vscode-extension] OK: lines, statements, branches and functions all >= $${THRESHOLD}%"
+
+# =============================================================================
+# Repo-Specific Targets
+# =============================================================================
+
+# _tui: Build, then launch the interactive TUI demo (live GitHub API browser).
+#       Runs in the current terminal so the raw-mode key reader gets real stdin.
+_tui: build
+	@echo "==> launching TUI demo (live GitHub API browser)"
+	./$(BIN) examples/tui/api_browser.osp --run
+
+# _gpu-demo: Render the gpu* kernel demo (fractal, shaded sphere, composite)
+#            on the host backend [GPU-BACKEND-HOST]; the raster suite uses
+#            gpuScan/gpuFilter, which have no device form yet, so a selected
+#            device would decline it. For pixels on the actual GPU, see `make graphics`.
+#            FLAVOR=ml renders the ML twin, which prints byte-identical output.
+_gpu-demo: build
+	@echo "==> rendering gpu* kernel demo on the host backend (CPU)"
+	./$(BIN) tests/core/gpu/raster.test.$(if $(filter ml,$(FLAVOR)),ospml,osp) --run

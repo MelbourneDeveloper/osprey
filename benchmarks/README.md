@@ -167,7 +167,7 @@ VM. Notes and limits:
 - **`C (wasm)` needs a wasi-sdk** that ships the wasm `compiler-rt` builtins;
   stock `clang` + `wasi-libc` often lacks it, so the column auto-hides when a
   trivial probe fails to link (set `OSPREY_WASI_SYSROOT` to point at one).
-- **Target capabilities still apply.** The WASM runtime supports file, input, random, collection and value-effect operations. It rejects unavailable capabilities such as fibers, sockets and general FFI before linking ([spec 0022](../docs/specs/0022-WebAssemblyTarget.md)). All 22 current Osprey benchmark cases built and passed their output oracle on WebAssembly in the 2026-10-03 refresh.
+- **Target capabilities still apply.** The WASM runtime supports file, input, random, collection and value-effect operations. It rejects unavailable capabilities such as fibers, sockets and general FFI before linking ([spec 0022](../docs/specs/compiler/0022-WebAssemblyTarget.md)). All 22 current Osprey benchmark cases built and passed their output oracle on WebAssembly in the 2026-10-03 refresh.
 
 ### Constant vs randomized input
 
@@ -231,11 +231,11 @@ Blocked on language features Osprey doesn't expose today (left out, not faked):
 
 `collatz`, `digitsum`, and `isqrt` were unblocked by adding the `intDiv` builtin
 (truncating, divide-by-zero-checked integer division — the `/` operator stays
-float-only per spec; see [BUILTIN-INTDIV](../docs/specs/0012-Built-InFunctions.md)).
+float-only per spec; see [BUILTIN-INTDIV](../docs/specs/runtime/0012-Built-InFunctions.md)).
 The four data-structure cases (`wordfreq`, `textstats`, `listops`, `exprtree`)
 were unblocked by the persistent `Map`/`List`, string builtins, recursive unions,
 and the new cryptographically-secure `random`/`randomBelow` builtins
-([BUILTIN-RANDOM](../docs/specs/0012-Built-InFunctions.md)). As Osprey grows a
+([BUILTIN-RANDOM](../docs/specs/runtime/0012-Built-InFunctions.md)). As Osprey grows a
 math stdlib, numeric conversions, and mutable arrays, the remaining classics
 above become expressible and should be added here.
 

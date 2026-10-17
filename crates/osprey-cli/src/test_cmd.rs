@@ -1,7 +1,7 @@
 //! `osprey test` — discover and run test suites. Implements
 //! [TESTING-CLI-RUN], [TESTING-FILE-CONVENTION], [TESTING-FILTER],
 //! [TESTING-COVERAGE-CLI], [TESTING-PARALLEL], [TESTING-NATIVE-CACHE]
-//! (docs/specs/0027-TestingFramework.md).
+//! (docs/specs/language/0027-TestingFramework.md).
 //!
 //! `path` (default `.`) is a single file run as-is, or a directory searched
 //! recursively for `*.test.osp` / `*.test.ospml`, sorted for determinism,

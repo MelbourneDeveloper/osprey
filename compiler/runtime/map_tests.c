@@ -14,7 +14,7 @@
  * [BUILTIN-MAP-SET], [BUILTIN-MAP-REMOVE], [BUILTIN-MAP-MERGE],
  * [BUILTIN-MAP-CONTAINS], [BUILTIN-COLLECTION-LENGTH] and the iteration behind
  * [BUILTIN-MAP-KEYS] / [BUILTIN-MAP-VALUES]
- * (docs/specs/0012-Built-InFunctions.md), plus
+ * (docs/specs/runtime/0012-Built-InFunctions.md), plus
  * [TYPE-MAP] / [TYPE-MAP-LOOKUP] / [TYPE-MAP-OPS] and container ownership
  * [MEM-BACKENDS-ELEMENTS] / [GC-ARC-PERCEUS] for INT / STRING / BOOL keys:
  * persistence of every source map, pointer-identical alias returns, all three

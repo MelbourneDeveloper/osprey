@@ -2,7 +2,7 @@
 
 Two examples compiled to `wasm32-wasip1` and run under `wasmtime`, Node's WASI,
 and in the browser. See
-[`docs/specs/0022-WebAssemblyTarget.md`](../../docs/specs/0022-WebAssemblyTarget.md)
+[`docs/specs/compiler/0022-WebAssemblyTarget.md`](../../docs/specs/compiler/0022-WebAssemblyTarget.md)
 for the design.
 
 - **`hello.osp`** — a one-screen language tour (algebraic effects, union types +
@@ -37,8 +37,8 @@ database, ⌘/Ctrl-Enter to execute), result tables for every shipped query, the
 The headline is the **flavor toggle**: switch between the `studio.osp` (Default)
 and `studio.ospml` (ML) WebAssembly builds and the dashboard is identical, because
 both lower to the same canonical AST and emit the same bytes
-([`docs/specs/0023-LanguageFlavors.md`](../../docs/specs/0023-LanguageFlavors.md),
-[`0024-MLFlavorSyntax.md`](../../docs/specs/0024-MLFlavorSyntax.md)).
+([`docs/specs/language/0023-LanguageFlavors.md`](../../docs/specs/language/0023-LanguageFlavors.md),
+[`0024-MLFlavorSyntax.md`](../../docs/specs/language/0024-MLFlavorSyntax.md)).
 
 ```sh
 make wasm-serve     # build both flavors + sql-driven page, serve, open the browser

@@ -1,7 +1,7 @@
 //! Spec-driven assertions for **declared generics**: the binder and the
 //! construction site ([TYPE-GENERICS-DECL], [GENERICS-CTOR-ARITY],
-//! [TYPE-GENERICS-FN], docs/specs/0004-TypeSystem.md; ML spellings in
-//! [FLAVOR-ML-GENERICS], docs/specs/0024-MLFlavorSyntax.md).
+//! [TYPE-GENERICS-FN], docs/specs/language/0004-TypeSystem.md; ML spellings in
+//! [FLAVOR-ML-GENERICS], docs/specs/language/0024-MLFlavorSyntax.md).
 //!
 //! The call site is stated separately in `generics_apply_tests.rs`; this module
 //! covers the two positions that already ship, and the permutations of each
@@ -139,6 +139,43 @@ print("${nom(1)}")"#,
 }
 
 spec_cases! {
+    /// [FLAVOR-PYTHON-TYPING] Missing annotations retain shared HM polymorphism.
+    python_omitted_annotations_infer_polymorphic_calls: accepts(Python, r#"def identity(x):
+    return x
+alias = identity
+number = alias(7)
+text = alias("seven")
+print(f"{number} {text}")
+"#);
+
+    /// Inference checks higher-order unannotated bodies instead of assuming Any.
+    python_unannotated_higher_order_body_is_checked: rejects_with(Python, r#"def scale(x):
+    return x * 1.5
+def apply(f, x):
+    return f(x)
+bad = apply(scale, "text")
+"#, "operator `*` requires int or float");
+
+    /// A closure whose concrete ABI remains unknowable fails in the shared checker.
+    python_still_generic_closure_value_requires_a_constraint: rejects_with(Python, r#"def mk(x):
+    return lambda y: x
+print(f"{mk(1)}")
+"#, "a closure value with a still-generic type");
+
+    /// Explicit annotations constrain the inferred implementation.
+    python_annotation_conflicts_fail_in_the_shared_checker: rejects_with(Python, r#"def identity(x: int) -> int:
+    return x
+bad = identity("text")
+"#, "cannot unify");
+
+    /// A consuming annotation supplies the closure ABI rather than erasing it.
+    python_callable_annotation_constrains_returned_closure: accepts(Python, r#"from typing import Callable
+def mk(x):
+    return lambda y: x
+held: Callable[[str], int] = mk(9)
+print(f"{held("ignored")}")
+"#);
+
     /// "HM inference is unchanged: unannotated functions stay implicitly
     /// polymorphic."
     an_unannotated_function_stays_implicitly_polymorphic: accepts(Default, r#"fn id(x) = x

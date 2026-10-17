@@ -13,7 +13,7 @@ module Backends {
 
     /// Broken-code quarantine: a failed load or product used to become an empty
     /// tensor, and the model generated from fabricated zeros. It aborts instead.
-    fn orAbort(result) = match result {
+    export fn orAbort(result) = match result {
         Success { value } => value
         Error { message } => osprey_gpu_panic(message)
     }
@@ -65,8 +65,8 @@ module Backends {
     }
 
     /// GPU buffers: each operation is a kernel, a product or a loader of the
-    /// GPU surface, and `device` reports which backend executes them. Products
-    /// dispatch to Metal or OpenCL when `OSPREY_GPU` selects a device.
+    /// GPU surface, and `device` reports which backend executes them. Kernels
+    /// and products run on Metal or OpenCL when `OSPREY_GPU` selects a device.
     export fn onGpu(work) = {
         handle static Tensor<GpuBuffer<float>> {
             build n f => gpuIota(n) |> gpuMap(f)

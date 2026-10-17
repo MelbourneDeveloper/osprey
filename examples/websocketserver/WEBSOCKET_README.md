@@ -12,4 +12,4 @@ Open `examples/websocketserver/websocket_test.html` in a browser. It connects to
 text messages to the echo loop. Stop the server with Ctrl-C.
 
 The language API and framing limits are specified in
-[`docs/specs/0015-WebSockets.md`](../../docs/specs/0015-WebSockets.md).
+[`docs/specs/runtime/0015-WebSockets.md`](../../docs/specs/runtime/0015-WebSockets.md).

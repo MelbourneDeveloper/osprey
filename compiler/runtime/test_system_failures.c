@@ -1,5 +1,5 @@
 // Every failure path of the process runtime [BUILTIN-PROCESS-FAILURE]
-// (docs/specs/0012-Built-InFunctions.md). Separate from the behavioural half
+// (docs/specs/runtime/0012-Built-InFunctions.md). Separate from the behavioural half
 // only because the interposers below replace malloc, fork, pthread_create and
 // pthread_mutex_init for the WHOLE binary, and may be defined in one object.
 #include <assert.h>

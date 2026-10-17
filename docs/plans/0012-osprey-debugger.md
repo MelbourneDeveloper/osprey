@@ -18,7 +18,7 @@ Remaining gaps include:
 - **Build and launch controls are partially completed.** The native CLI implements `--debug-info=dwarf|none`, `--debug-opt=none`, `--debug-memory=off`, `--debug-out`, IR preservation and symbol preservation. Debug and profile builds collect macOS symbols before deleting objects, and collection failure fails the build. Unsupported optimizer and memory-inspection modes are rejected explicitly. The editor accepts `compilerPath` and `preserveArtifacts` and forces `--debug-opt=none`; real adapter tests inspect the retained binary and source-specific IR in both flavors. Console selection supports internal output and integrated/external terminals; terminal launches require a verified LLDB-DAP 21+ adapter. Optimized debugging and memory inspection modes remain unfinished.
 
 A debug-metadata coverage metric — Layer 6 — is still needed to detect omissions across all executable expression forms.
-**Spec:** [0021 - Debugger](../specs/0021-Debugger.md)
+**Spec:** [0021 - Debugger](../specs/tooling/0021-Debugger.md)
 
 ## Summary
 
@@ -716,7 +716,7 @@ Acceptance:
 ### Phase 0 - Spec and safety rails
 
 - [x] Write this plan.
-- [x] Add `docs/specs/0021-Debugger.md` once phase 1 behavior is real enough to
+- [x] Add `docs/specs/tooling/0021-Debugger.md` once phase 1 behavior is real enough to
       become language/tooling contract.
 - [ ] Add issue checklist and labels for debugger phases.
 
