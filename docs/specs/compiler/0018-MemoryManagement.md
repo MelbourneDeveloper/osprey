@@ -112,6 +112,8 @@ access remains synchronized.
 
 ### Perceus ARC [GC-ARC-PERCEUS]
 
+The ownership and `dup`/`drop` discipline follows Perceus (Reinking, Xie, de Moura, Leijen), implemented from the extended technical report [MSR-TR-2020-42](https://www.microsoft.com/en-us/research/wp-content/uploads/2020/11/perceus-tr-v1.pdf) rather than the PLDI 2021 paper, because the report carries the full `λ₁` calculus and insertion algorithm.
+
 The ARC backend stores a 16-byte header before each managed body: a layout word,
 a signed reference count, and the body size. Retain/release first probe the live
 allocation registry, so literals, foreign pointers, and other unmanaged
