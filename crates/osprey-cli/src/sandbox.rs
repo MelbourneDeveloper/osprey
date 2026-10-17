@@ -159,13 +159,14 @@ mod tests {
         let mut policy = Policy::allow_all();
         policy.fs = false;
         let v = violations(
-            &prog("let c = readFile(\"a.txt\")\nlet w = writeFile(\"b\", c)\n"),
+            &prog("let c = readFile(\"a.txt\")\nlet w = writeFile(\"b\", c)\nlet t = loadTensor(\"m\", \"w\")\n"),
             policy,
         );
-        assert_eq!(v.len(), 2, "both readFile and writeFile are gated: {v:?}");
+        assert_eq!(v.len(), 3, "readFile, writeFile and loadTensor are gated: {v:?}");
         assert!(v.iter().all(|m| m.contains("--no-fs")));
-        assert!(v.iter().any(|m| m.contains("readFile")));
-        assert!(v.iter().any(|m| m.contains("writeFile")));
+        for f in ["readFile", "writeFile", "loadTensor"] {
+            assert!(v.iter().any(|m| m.contains(f)), "{f} is not gated: {v:?}");
+        }
         // HTTP/process still allowed under --no-fs.
         assert_eq!(
             violations(&prog("let p = spawnProcess(\"echo\", f)\n"), policy),

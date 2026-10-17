@@ -323,6 +323,24 @@ mod tests {
     }
 
     #[test]
+    fn load_tensor_reads_a_host_list_without_the_gpu_surface() {
+        // [BUILTIN-FILE-TENSOR] One call into the backend-neutral safetensors
+        // reader, wrapped like readFile: no GpuBuffer is built and copied out.
+        let parsed = osprey_syntax::parse_program(
+            "let w = loadTensor(\"m.safetensors\", \"w\")\n\
+             let first = match w { Success { value } => listGet(value, 0) ?: 0.0  Error { message } => 0.0 }\n",
+        );
+        assert!(parsed.errors.is_empty(), "syntax errors: {:?}", parsed.errors);
+        let ir = crate::compile_program(&parsed.program).expect("loadTensor codegen");
+        let call = ir.find("call i8* @osprey_load_tensor(");
+        assert!(call.is_some(), "{ir}");
+        let (before, after) = ir.split_at(call.unwrap_or(0));
+        assert!(before.rfind("call void @osp_io_error_clear()").is_some(), "{ir}");
+        assert!(after.contains("call i8* @osp_io_error_take()"), "{ir}");
+        assert!(!ir.contains("osprey_gpu_"), "loadTensor reached the GPU surface: {ir}");
+    }
+
+    #[test]
     fn websocket_builtins_lower_to_the_c_runtime_abi() {
         // [BUILTIN-WEBSOCKET] Camel-case language names must not escape into
         // LLVM: the archive exports snake-case C symbols.
