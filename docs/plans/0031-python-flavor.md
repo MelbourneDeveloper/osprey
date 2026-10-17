@@ -1,6 +1,6 @@
 # Plan 0031 — Python syntax, Osprey semantics
 
-**Status:** frontend subset implemented and under targeted verification: routing, basic expressions/functions, restricted records, typed foreign signatures, standard typing imports/Callable, HM inference, Unit, Result/list matching, dynamic/static handler values, forwarding and generic single-shot resumption. GPT-2 generation is proven on the host and on Metal/OpenCL hardware; complete frontend, tooling, the phase E edge-case checks and training acceptance remain open; no complete-flavor claim.
+**Status:** frontend subset implemented and under targeted verification: routing, basic expressions/functions, restricted records, typed foreign signatures, standard typing imports/Callable, HM inference, Unit, Result/list matching, dynamic/static handler values, forwarding and generic single-shot resumption. GPT-2 generation is proven on the host and on Metal/OpenCL hardware; complete frontend, tooling and the phase E edge-case checks remain open; training (phase F) is deferred; no complete-flavor claim.
 **Contract:** [spec 0041](../specs/language/0041-PythonFlavorSyntax.md). The existing [flavor boundary](../specs/language/0023-LanguageFlavors.md) remains authoritative for shipped frontends.
 **Outcome:** familiar `.py` source, lowered from its own CST into the same Osprey AST, with effect-selected CPU/GPU GPT-2 execution. Python runtime compatibility and unmeasured comparisons with Mojo are outside the claim.
 
@@ -30,7 +30,7 @@ The local ownership note is `.git/agent-coordination/python-flavor.md`. Before i
 | Project graph | `crates/osprey-project/`; CLI `project.rs` | Opt-in discovery, imports/aliases, exports and qualified constructors implemented; 27 mixed graphs remain |
 | Authoring tools | `crates/osprey-fmt/`, `osprey-lsp/`, `vscode-extension/` | Indentation formatting and signature rendering implemented; complete format/rename/debug coverage and explicit editor ownership remain |
 | Corpus | `crates/run_test_corpus.sh`, backend runners | Python triples with the same goldens and rejections |
-| Model | `examples/gpt2/python/` | Forward model and sampler execute on the host and on Metal/OpenCL hardware with the shared Tensor identity; the phase E edge-case checks and training acceptance remain |
+| Model | `examples/gpt2/python/` | Forward model and sampler execute on the host and on Metal/OpenCL hardware with the shared Tensor identity; the phase E edge-case checks remain; training is deferred |
 | Device validation | GPU runtime tests, [plan 0023](0023-gpu-computation.md) | Execute this exact new port on strict device backends; existing device evidence does not validate future frontend changes |
 
 `Flavor::Python` now routes `.py` and explicit selections to a pinned in-process Python CST lowerer. Project allowlisting is implemented; complete test/docs/editor discovery remains open. Adding this route does not by itself deliver the complete flavor. Existing `reference.py` has mutable arrays, Python classes, dictionaries, exceptions, slicing, tuples, stdlib imports, and ordinary loops; it cannot simply be renamed or silently accepted as Osprey.
@@ -88,13 +88,15 @@ Current evidence: the native compiler's `python_gpt2_forward_tensors_match_the_i
 
 First verify tiny tensors against the independent reference: transpose, ordered reductions, linear, LayerNorm, GELU, causal scores/probabilities, residuals, one block, final projection, first-index tie, and EOS. Test malformed tensor/shape errors, empty/overlong prompts, zero/negative token counts, a one-token prompt, context exhaustion, and unavailable devices. Keep these checks weight-download-free in the ordinary corpus.
 
-The generation manifest opts in to `../backends.py`, `../tokenizer.py`, `../model.py` and `generate.py`; its only source root is the Python port directory, which holds no `.osp` file. Keep `reference.py` and the other program's entry excluded. Add the training project and its `FLAVOR=python` routing during phase F; preserve `BACKEND=lists|gpu`, `GPU=host|auto|metal|opencl`, prompt/token options and ARC.
+The generation manifest opts in to `../backends.py`, `../tokenizer.py`, `../model.py` and `generate.py`; its only source root is the Python port directory, which holds no `.osp` file. Keep `reference.py` and the other program's entry excluded. Phase F is deferred, so there is no Python training project; preserve `BACKEND=lists|gpu`, `GPU=host|auto|metal|opencl`, prompt/token options and ARC.
 
 Run the real checkpoint against the independent reference and Default example for at least `The capital of France is` and `Melbourne is the capital of`, including 0/1/20/50-token requests where context allows. Compare token IDs and decoded bytes, EOS/tie behavior and process status. Record weights hash and exact commands. List/device-specific floating-point differences follow spec 0034; fabricated zeros or an unnoticed CPU fallback fail acceptance.
 
 **Exit:** the new Python model, same body under both Tensor handlers, completes strict CPU and actual-device generation. Device identity plus dispatch evidence is mandatory. Missing hardware is recorded as unverified delivery, never a passing acceleration test.
 
 ## Phase F — backward pass and training
+
+**Deferred.** The training port is not being done at the moment: [`examples/gpt2/train`](../../examples/gpt2/train) stays Default-only and `make gpt2-train` rejects `FLAVOR=python`. The rest of this phase records the work for when it resumes.
 
 Port `linear_back`, `layer_norm_back`, `gelu_slope`, `attention_back`, `block_back`, loss/backprop, embedding gradients, checksums and one SGD update from the reference. Reuse its function names and tensor ordering, changing mutation to immutable buffers/folds. Reuse the new forward helpers, not another transformer copy. This phase is not yet represented by a proposed `train.py` file.
 
@@ -135,5 +137,5 @@ These are planned assertions, not existing passing tests. Extend the established
 - [ ] Phase C: effects, continuations, staged requirements, fibers and signals.
 - [ ] Phase D: project/editor/tooling/target integration and complete required CI.
 - [ ] Phase E: tiny and real GPT-2 generation on CPU and hardware GPU.
-- [ ] Phase F: backward pass and full training on CPU and hardware GPU.
+- [ ] Phase F: backward pass and full training on CPU and hardware GPU (deferred: not being ported at the moment).
 - [ ] Phase G: measured evidence, runnable publication and spec/status synchronization.

@@ -41,4 +41,6 @@ Pass `--device metal`, `--device opencl` or `--device auto` for a strict hardwar
 
 The generator comparison itself is `python_gpt2_generator_output_is_byte_identical_to_the_default_generator` in `crates/osprey-cli/tests/cross_flavor_equiv.rs`. It needs the downloaded checkpoint, so it runs with `cargo test -p osprey-cli --test cross_flavor_equiv -- --ignored`; the checkpoint-free message comparison and the no-`.osp` check run in every suite.
 
+Only generation is ported. The [training program](../train) is not being ported at the moment and stays Default-only; `make gpt2-train` rejects `FLAVOR=python`.
+
 The [port notes](../../../docs/plans/python-flavor-port/README.md) show the concrete changes from reference Python.
