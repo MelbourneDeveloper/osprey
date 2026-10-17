@@ -51,7 +51,7 @@ def expected(module):
 def project(directory):
     """The check program over the self-contained Python-flavor modules: no `.osp` source."""
     (directory / "check.py").write_text((PORT / "check.py").read_text())
-    modules = ", ".join(f'"{Path(os.path.relpath(PORT / name, directory)).as_posix()}"' for name in ("backends.py", "model.py"))
+    modules = ", ".join(f'"{Path(os.path.relpath(PORT / name, directory)).as_posix()}"' for name in ("backends.py", "cpu.py", "gpu.py", "model.py"))
     (directory / "osprey.toml").write_text(f'''[project]
 name = "python-gpt2-check"
 source_roots = [".", "{PORT.as_posix()}"]
@@ -74,6 +74,8 @@ def parsed(text):
             continue
         if line.startswith("@device:"):
             continue
+        if line.startswith("check stopped:"):
+            raise AssertionError(line)
         name, numbers = line.split(":", 1)
         if name in result:
             raise AssertionError(f"duplicate tensor {name}")

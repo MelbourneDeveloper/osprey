@@ -11,6 +11,7 @@ use debug_metadata::DebugState;
 mod debug_types;
 mod emit;
 mod function_state;
+pub(crate) use function_state::Linkage;
 mod function_types;
 mod layouts;
 mod signatures;
@@ -41,6 +42,8 @@ pub(crate) struct CodegenOptions {
     /// Which lowering the GPU combinators use for their kernels
     /// [GPU-KERNEL-EXTRACT].
     pub gpu_kernels: crate::gpu_kernel::GpuKernelMode,
+    /// Which functions the module exposes to the linker [CODEGEN-LINKAGE].
+    pub linkage: Linkage,
 }
 
 /// A lambda kept for inline application at its direct call sites: its
@@ -165,6 +168,8 @@ pub(crate) struct Codegen {
     lambda_count: usize,
     /// The kernel lowering this module compiles under [GPU-KERNEL-EXTRACT].
     gpu_kernels: crate::gpu_kernel::GpuKernelMode,
+    /// Which functions the module exposes to the linker [CODEGEN-LINKAGE].
+    linkage: Linkage,
     /// Monotonic id naming each extracted GPU kernel. A counter of its OWN —
     /// sharing `lambda_count` would renumber `__closure_fn_N` in every program
     /// that mixes closures with kernels.
@@ -353,6 +358,7 @@ impl Codegen {
             operation_ids: HashMap::new(),
             lambda_count: 0,
             gpu_kernels: options.gpu_kernels,
+            linkage: options.linkage,
             kernel_count: 0,
             obj_layouts: HashMap::new(),
             obj_count: 0,

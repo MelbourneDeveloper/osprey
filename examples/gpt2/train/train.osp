@@ -157,14 +157,19 @@ fn dlogitAt(probs, idsT, t, count, i) = {
 /// probability itself.
 fn targetProb(probs, idsT, r) = range(0, vocabSize) |> fold(0.0, fn(a, v) => a + at(probs, r * vocabSize + v) * onehot(toFloat(v) == at(idsT, r + 1)))
 
+/// The mean of `0.0 - ln p0 - ln p1 …` over the first t - 1 positions, as a
+/// one-element tensor, so even the final negation and division run where the
+/// handler runs every other operation; its one element, i = 0, sums from
+/// position i. Negating the in-order sum is exact.
+fn meanLoss(probs, idsT, t, count) = perform Backends::Tensor.build(1, fn(i) => (0.0 - (range(i, t - 1) |> fold(0.0, fn(a, r) => a + ln(targetProb(probs, idsT, r))))) / count)
+
 /// Mean next-token cross-entropy over the first t - 1 positions of xf [t, width],
-/// and its gradient into xf and into the tied output embedding. Negating the
-/// in-order sum is exact, so the loss is the host's `0.0 - ln p0 - ln p1 …`.
+/// and its gradient into xf and into the tied output embedding.
 fn lossHead(w, xf, ids, t) = {
     let probs = softmaxRows(Model::product(xf, w.wteT, t, width, vocabSize), t)
     let count = toFloat(t - 1)
     let idsT = idTensor(ids)
-    let loss = (0.0 - total(perform Backends::Tensor.build(t - 1, fn(r) => ln(targetProb(probs, idsT, r))))) / count
+    let loss = at(meanLoss(probs, idsT, t, count), 0)
     let dlogits = perform Backends::Tensor.build(t * vocabSize, fn(i) => dlogitAt(probs, idsT, t, count, i))
     Head {
         loss: loss,

@@ -33,6 +33,9 @@ enum Ret {
     /// `Some(msg)` is the FALLBACK reason, used only when the call recorded
     /// none of its own on the failure channel [BUILTIN-FILE-ERRMSG].
     ResultStr(Option<&'static str>),
+    /// `Result<List<float>, _>`: the C `i8*` is a fresh float list; `null` ⇒
+    /// Error, with the same fallback rule as `ResultStr`.
+    ResultFloats(Option<&'static str>),
 }
 
 /// One builtin's lowering: its C symbol, parameter LLVM types, and return
@@ -62,6 +65,12 @@ fn lookup(name: &str) -> Option<Sig> {
         // --- file I/O [BUILTIN-FILE] (system_runtime.c) ---
         "readFile" => sig("read_file", &[Str], Ret::ResultStr(Some("File read error"))),
         "writeFile" => sig("write_file", &[Str, Str], Ret::ResultInt),
+        // [BUILTIN-FILE-TENSOR] (tensor_file.c): host floats, no GpuBuffer.
+        "loadTensor" => sig(
+            "osprey_load_tensor",
+            &[Str, Str],
+            Ret::ResultFloats(Some("loadTensor: could not read the tensor")),
+        ),
         // --- processes [BUILTIN-PROCESS] (system_runtime.c); arg 2 is callback ---
         "spawnProcess" => sig("spawn_process_with_handler", &[Str, Ptr], Ret::ResultInt),
         "awaitProcess" => sig("fiber_await_process", &[I64], Ret::Int),
@@ -228,7 +237,41 @@ fn emit(cg: &mut Codegen, sig: &Sig, ops: &[String]) -> Result<Value> {
             crate::arc::own(cg, &Value::new(&r, LType::Str));
             result_from_nullable(cg, &r, err, Some(&reason))
         }
+        Ret::ResultFloats(err) => {
+            let owner = crate::collections::list_owner(Some("double"));
+            fallible_handle(cg, sig.cname, &params, &op_refs, &owner, err)
+        }
     }
+}
+
+/// Call a runtime producer of a fresh handle tagged `owner` and wrap it:
+/// `Success(handle)`, or `Error(reason)` with the message the producer
+/// recorded, falling back to `fallback` when it recorded none
+/// [BUILTIN-FILE-ERRMSG].
+pub(crate) fn fallible_handle(
+    cg: &mut Codegen,
+    callee: &str,
+    params: &str,
+    operands: &[&str],
+    owner: &str,
+    fallback: Option<&str>,
+) -> Result<Value> {
+    clear_io_error(cg);
+    let raw = cg.call("i8*", callee, params, operands);
+    let reason = take_io_error(cg);
+    let handle = Value::handle(&raw, owner.to_string());
+    // Own the fresh handle; the Result payload store dups its own +1, so this
+    // one drops at region end (null on the error path — a no-op).
+    crate::arc::own(cg, &handle);
+    let is_null = cg.emit_reg(format!("icmp eq i8* {raw}, null"));
+    crate::result::make_result_if_err_because(
+        cg,
+        handle,
+        LType::Ptr,
+        &is_null,
+        fallback,
+        Some(&reason),
+    )
 }
 
 /// Retire any reason the calling thread is holding, so a failure recorded by an
@@ -274,7 +317,7 @@ mod tests {
         );
         let ir = crate::compile_program(&parsed.program).expect("terminal codegen");
         for (function, callee) in [("configure", "term_raw_mode"), ("nap", "fiber_sleep")] {
-            let marker = format!("define i64 @{function}(");
+            let marker = format!("define internal i64 @{function}(");
             let start = ir
                 .find(&marker)
                 .unwrap_or_else(|| panic!("missing {function}"));
@@ -320,6 +363,34 @@ mod tests {
         // one is never reported as the placeholder.
         assert!(ir.contains("File read error"), "fallback dropped: {ir}");
         assert!(ir.contains("icmp ne i8* "), "no reason-present test: {ir}");
+    }
+
+    #[test]
+    fn load_tensor_reads_a_host_list_without_the_gpu_surface() {
+        // [BUILTIN-FILE-TENSOR] One call into the backend-neutral safetensors
+        // reader, wrapped like readFile: no GpuBuffer is built and copied out.
+        let parsed = osprey_syntax::parse_program(
+            "let w = loadTensor(\"m.safetensors\", \"w\")\n\
+             let first = match w { Success { value } => listGet(value, 0) ?: 0.0  Error { message } => 0.0 }\n",
+        );
+        assert!(
+            parsed.errors.is_empty(),
+            "syntax errors: {:?}",
+            parsed.errors
+        );
+        let ir = crate::compile_program(&parsed.program).expect("loadTensor codegen");
+        let call = ir.find("call i8* @osprey_load_tensor(");
+        assert!(call.is_some(), "{ir}");
+        let (before, after) = ir.split_at(call.unwrap_or(0));
+        assert!(
+            before.rfind("call void @osp_io_error_clear()").is_some(),
+            "{ir}"
+        );
+        assert!(after.contains("call i8* @osp_io_error_take()"), "{ir}");
+        assert!(
+            !ir.contains("osprey_gpu_"),
+            "loadTensor reached the GPU surface: {ir}"
+        );
     }
 
     #[test]

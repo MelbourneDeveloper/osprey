@@ -1,14 +1,17 @@
-# GPT-2 in Python syntax
+# GPT-2 in the Python flavor
 
-The whole program is Python-flavor source: no `.osp` module is imported and the project's one source root holds none. [backends.py](backends.py) declares the `Tensor` static effect and answers it twice, over host lists and over GPU buffers, and spells the arithmetic policy with a `Fault` effect, two handler classes and `with`. [tokenizer.py](tokenizer.py) is the byte-level BPE tokenizer. [model.py](model.py) holds the constants, the records, the checkpoint loader, the forward pass and the KV-cached step. [generate.py](generate/generate.py) is the Default sampler in Python syntax.
+The whole program is Osprey source in the Python flavor: no `.osp` module is imported and the project's one source root holds none. These `.py` files start with `# osprey: flavor=python` and are compiled by `osprey`; they are not Python, and CPython cannot run them. The real Python in this example is [reference.py](../reference.py), the independent oracle. [backends.py](backends.py) declares the `Tensor` static effect and spells the arithmetic policy with a `Fault` effect, two handler classes and `with`. [cpu.py](cpu.py) answers `Tensor` over host lists and [gpu.py](gpu.py) over GPU buffers. [tokenizer.py](tokenizer.py) is the byte-level BPE tokenizer. [model.py](model.py) holds the constants, the records, the checkpoint loader, the forward pass and the KV-cached step. [generate.py](generate/generate.py) is the Default sampler in the Python flavor. The [Python flavor guide](https://www.ospreylang.dev/docs/python-flavor/) explains the flavor and how it differs from Python.
 
 ```python
+# osprey: flavor=python
+# backends.py
 @static_effect
 class Tensor[B]:
     def build(size: int, kernel: Kernel) -> B: ...
     def mat_mul(a: B, b: B, rows: int, inner: int, cols: int) -> B: ...
 
 
+# gpu.py
 @static_handler(Tensor[GpuBuffer[float]])
 class on_gpu:
     def build(n, f):
@@ -18,6 +21,7 @@ class on_gpu:
         return or_abort(gpuMatMul(a, b, rows, inner, cols))
 
 
+# model.py
 def product(a, b, rows, inner, cols):
     return perform(Tensor.mat_mul(a, b, rows, inner, cols))
 ```

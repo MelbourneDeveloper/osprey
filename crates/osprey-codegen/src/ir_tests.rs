@@ -40,8 +40,11 @@ fn debug_module(src: &str) -> String {
 }
 
 /// The body of one emitted function, so an assertion about its instructions
-/// cannot be satisfied by an unrelated function elsewhere in the module.
+/// cannot be satisfied by an unrelated function elsewhere in the module. A
+/// missing header fails here, so a negative assertion on the body can never
+/// pass against an empty string.
 fn function_body(ir: &str, header: &str) -> String {
+    shows(ir, &[header]);
     ir.split(header)
         .nth(1)
         .and_then(|rest| rest.split("\n}").next())

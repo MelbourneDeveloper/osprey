@@ -23,6 +23,12 @@ pub(crate) static FILES: &[BuiltinDoc] = &[
         ["filename" => "Path to the file to write", "content" => "Content to write to the file"],
         "let result = writeFile(\"output.txt\", \"Hello, World!\")\nprint(\"File written\")",
     ),
+    builtin_doc!(
+        "loadTensor",
+        "Reads one named F64, F32, F16 or BF16 tensor out of a safetensors file as a List<float>, every element widened exactly. Nothing touches the GPU surface.",
+        ["path" => "Path to the .safetensors file", "name" => "Tensor name in its header, e.g. \"wte.weight\""],
+        "match loadTensor(\"model.safetensors\", \"wte.weight\") {\n  Success { value } => print(\"${listLength(value)} floats\")\n  Error { message } => print(message)\n}",
+    ),
 ];
 
 /// HTTP built-in documentation [BUILTIN-HTTP] [HTTP-RESPONSE-HANDLE]. Prose

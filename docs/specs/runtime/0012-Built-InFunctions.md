@@ -517,6 +517,17 @@ seeking to the end claimed it would be — a FIFO, socket or character device
 cannot be seeked and reports its size as `-1`, so a seek-derived length reads
 those sources as empty and truncates or overruns their contents.
 
+### `loadTensor(path: string, name: string) -> Result<List<float>, Error>` — [BUILTIN-FILE-TENSOR]
+
+Reads the tensor `name` out of the safetensors file at `path` as a host list. Every `F64`, `F32`, `F16` or `BF16` element widens exactly to the `float` it holds, in file order. A missing name, an unsupported dtype, malformed `data_offsets`, and a file that ends before the tensor does are each an `Error` naming the reason; none of them yields a shorter list. The reader is the one `gpuLoadTensor` uses ([GPU-BUFFER-TENSOR](0034-GPUComputation.md)), so the two loaders accept and refuse the same files, but `loadTensor` builds no `GpuBuffer` and calls nothing on the GPU surface. A program that loads its weights this way and never names a GPU built-in links no GPU code. Like `gpuLoadTensor`, it may answer an operation of a static handler; `--no-fs` refuses it.
+
+```osprey
+match loadTensor("model.safetensors", "wte.weight") {
+    Success { value } => print("${listLength(value)} floats")
+    Error { message } => print(message)  // loadTensor: wte.weight: no tensor of that name in the header
+}
+```
+
 ### Failure reasons — [BUILTIN-FILE-ERRMSG]
 
 An `Error` from a file operation carries the operation, the subject and the

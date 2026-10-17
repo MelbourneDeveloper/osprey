@@ -5,7 +5,7 @@ title: "import (Keyword)"
 description: "Import declaration keyword. Used to bring modules and their exports into the current scope."
 ---
 
-`import` brings a logical namespace, module or selected public members into scope. Files can use either syntax flavor; paths on disk do not determine imported names. Use `::` for module members and `.` for record fields.
+`import` brings a logical namespace, module or selected public members into scope. Files can use any syntax flavor; paths on disk do not determine imported names. Use `::` for module members and `.` for record fields.
 
 ## Example
 

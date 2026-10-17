@@ -1,9 +1,10 @@
-// Go to Implementations / Find All Implementations against the INSTALLED VSIX
-// and its bundled compiler, over the repository's own example projects copied
+// Go to Implementations / Find All Implementations, and Go to Definition,
+// against the INSTALLED VSIX and its bundled compiler, over the repository's own example projects copied
 // verbatim into the test workspace. Every case names a cursor position by its
 // source text and asserts the EXACT set of locations the editor receives, so a
 // missing handler, an extra one, or a range off by one column fails.
-// [LSP-IMPLEMENTATIONS-EFFECT-HANDLERS]
+// [LSP-IMPLEMENTATIONS-EFFECT-HANDLERS] [LSP-DEFINITION-EFFECT-OPERATIONS]
+// [LSP-DEFINITION-LOCAL]
 //
 // gpt2 is the Default flavor across three projects that share `../model`;
 // modules is the ML flavor with a qualified handler value, a `handler` bound
@@ -29,6 +30,8 @@ interface Case {
 }
 
 const BACKENDS = "gpt2/model/backends.osp";
+const CPU = "gpt2/model/cpu.osp";
+const GPU = "gpt2/model/gpu.osp";
 const MODEL = "gpt2/model/model.osp";
 const GENERATE = "gpt2/generate/generate.osp";
 const TRAIN = "gpt2/train/train.osp";
@@ -73,25 +76,27 @@ const TENSOR_PERFORMS: Record<string, string[]> = {
 };
 
 const TENSOR_HEADS = [
-  site(BACKENDS, "handle static Tensor<List<float>>", "Tensor"),
-  site(BACKENDS, "handle static Tensor<GpuBuffer<float>>", "Tensor"),
+  site(CPU, "handle static Tensor<List<float>>", "Tensor"),
+  site(GPU, "handle static Tensor<GpuBuffer<float>>", "Tensor"),
 ];
 
-/** The arm answering `op` in each handler: onLists first, then onGpu. */
+/** The arm answering `op` in each handler: onLists in cpu.osp, then onGpu in gpu.osp. */
 const tensorArms = (op: string): Site[] =>
-  occurrences(2).map((at) => site(BACKENDS, `\n            ${op} `, op, at));
+  [CPU, GPU].map((file) => site(file, `\n            ${op} `, op));
+
+const tensorDeclaration = (op: string): Site =>
+  site(BACKENDS, `\n        ${op}: fn(`, op);
+
+const tensorPerforms = (op: string, files: string[]): Site[] =>
+  files.map((file) => site(file, `perform Backends::Tensor.${op}(`, op));
 
 const tensorOperationCases = (): Case[] =>
-  Object.entries(TENSOR_PERFORMS).flatMap(([op, files]) => [
-    {
-      from: site(BACKENDS, `\n        ${op}: fn(`, op),
-      expect: tensorArms(op),
-    },
-    ...files.map((file) => ({
-      from: site(file, `perform Backends::Tensor.${op}(`, op),
+  Object.entries(TENSOR_PERFORMS).flatMap(([op, files]) =>
+    [tensorDeclaration(op), ...tensorPerforms(op, files)].map((from) => ({
+      from,
       expect: tensorArms(op),
     })),
-  ]);
+  );
 
 const tensorEffectCases = (): Case[] =>
   [
@@ -204,12 +209,36 @@ const metricsCases = (): Case[] => [
 // --- words that name no effect and no operation ------------------------------
 
 const NOTHING: Site[] = [
-  site(BACKENDS, "fn orAbort(result)", "orAbort"),
+  site(GPU, "fn orAbort(result)", "orAbort"),
   site(BACKENDS, "export type Kernel", "Kernel"),
-  site(BACKENDS, "handle static Tensor<List<float>>", "List"),
+  site(CPU, "handle static Tensor<List<float>>", "List"),
   site(MODEL, "perform Backends::Tensor.get", "Backends"),
   site(ROUTES, "perform Ledger::Store.owner", "Ledger"),
   site(LEDGER, "export sqlite db", "sqlite"),
+];
+
+// --- Go to Definition: operations, parameters and arm parameters -------------
+
+/** Every arm and `perform` of an operation lands on its declaration; `work()`
+ * lands on its own handler's parameter, and an arm's body on the arm's. */
+const definitionCases = (): Case[] => [
+  ...Object.entries(TENSOR_PERFORMS).flatMap(([op, files]) =>
+    [...tensorArms(op), ...tensorPerforms(op, files)].map((from) => ({
+      from,
+      expect: [tensorDeclaration(op)],
+    })),
+  ),
+  ...[
+    [GPU, "fn onGpu(work)"],
+    [CPU, "fn onLists(work)"],
+  ].map(([file, binding]) => ({
+    from: site(file, "\n        work()", "work"),
+    expect: [site(file, binding, "work")],
+  })),
+  {
+    from: site(GPU, "gpuZipWith(a, b, f)", "f"),
+    expect: [site(GPU, "zipWith a b f =>", "f")],
+  },
 ];
 
 // --- the runner --------------------------------------------------------------
@@ -271,14 +300,18 @@ async function expected(workspace: string, sites: Site[]): Promise<string[]> {
   return described.sort();
 }
 
-async function implementationsAt(
+type Provider =
+  "vscode.executeImplementationProvider" | "vscode.executeDefinitionProvider";
+
+async function locationsAt(
+  provider: Provider,
   workspace: string,
   document: vscode.TextDocument,
   position: vscode.Position,
 ): Promise<string[]> {
   const found = await vscode.commands.executeCommand<
     (vscode.Location | vscode.LocationLink)[]
-  >("vscode.executeImplementationProvider", document.uri, position);
+  >(provider, document.uri, position);
   return (found ?? [])
     .map((item) => {
       const [uri, range] =
@@ -293,10 +326,29 @@ async function implementationsAt(
     .sort();
 }
 
-function title(test: Case): string {
+function title(test: Case, answer = "implementation"): string {
   const { file, context, word, occurrence = 0 } = test.from;
   const where = `${file} ${JSON.stringify(context.trim())}#${occurrence}`;
-  return `${word} at ${where} → ${test.expect.length} implementation(s)`;
+  return `${word} at ${where} → ${test.expect.length} ${answer}(s)`;
+}
+
+/** Wait until `provider` answers `each.from` with exactly `each.expect`. */
+async function assertAnswers(
+  provider: Provider,
+  workspace: string,
+  each: Case,
+  label: string,
+): Promise<void> {
+  const document = await documentOf(workspace, each.from.file);
+  const position = rangeAt(document, each.from).start;
+  const want = await expected(workspace, each.expect);
+  assert.ok(want.length > 0, "a positive case expects locations");
+  const got = await waitFor(
+    () => locationsAt(provider, workspace, document, position),
+    (found) => JSON.stringify(found) === JSON.stringify(want),
+    `${label}; expected ${JSON.stringify(want)}`,
+  );
+  assert.deepStrictEqual(got, want);
 }
 
 suite("Installed VSIX: Go to Implementations on effects and operations", () => {
@@ -322,16 +374,12 @@ suite("Installed VSIX: Go to Implementations on effects and operations", () => {
   ];
   for (const each of positive) {
     test(title(each), async () => {
-      const document = await documentOf(workspace, each.from.file);
-      const position = rangeAt(document, each.from).start;
-      const want = await expected(workspace, each.expect);
-      assert.ok(want.length > 0, "a positive case expects locations");
-      const got = await waitFor(
-        () => implementationsAt(workspace, document, position),
-        (found) => JSON.stringify(found) === JSON.stringify(want),
-        `${title(each)}; expected ${JSON.stringify(want)}`,
+      await assertAnswers(
+        "vscode.executeImplementationProvider",
+        workspace,
+        each,
+        title(each),
       );
-      assert.deepStrictEqual(got, want);
       answered.add(each.from.file);
     });
   }
@@ -345,7 +393,12 @@ suite("Installed VSIX: Go to Implementations on effects and operations", () => {
       const document = await documentOf(workspace, from.file);
       const position = rangeAt(document, from).start;
       assert.deepStrictEqual(
-        await implementationsAt(workspace, document, position),
+        await locationsAt(
+          "vscode.executeImplementationProvider",
+          workspace,
+          document,
+          position,
+        ),
         [],
       );
     });
@@ -356,4 +409,13 @@ suite("Installed VSIX: Go to Implementations on effects and operations", () => {
     assert.strictEqual(Object.keys(STORE).length, 8);
     assert.ok(positive.length >= 90, `${positive.length} positive cases`);
   });
+
+  // Hover on gpu.osp's `zipWith` arm named `Tensor.zipWith`, but Go to
+  // Definition found nothing there, nor on `work()`.
+  for (const each of definitionCases()) {
+    const label = title(each, "definition");
+    test(label, () =>
+      assertAnswers("vscode.executeDefinitionProvider", workspace, each, label),
+    );
+  }
 });

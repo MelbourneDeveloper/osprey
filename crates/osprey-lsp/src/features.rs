@@ -55,7 +55,16 @@ pub(crate) fn definition(
     let Some(word) = word_under(text, line, character, enc) else {
         return Vec::new();
     };
-    let local: Vec<Location> = declarations(text, &project.program(uri, text), &word, enc)
+    let operation = crate::effects::operation_definition(text, uri, line, character, enc, project);
+    if !operation.is_empty() {
+        return operation;
+    }
+    let program = project.program(uri, text);
+    if let Some(binding) = scope::binding(text, &program, &word, (line, character), enc) {
+        let at = binding.at;
+        return vec![located(uri, (at.line, at.start, at.line, at.end))];
+    }
+    let local: Vec<Location> = declarations(text, &program, &word, enc)
         .into_iter()
         .map(|o| located(uri, (o.line, o.start, o.line, o.end)))
         .collect();
@@ -159,7 +168,10 @@ fn sibling_declarations(
         .collect()
 }
 
-/// All references to the identifier at `(line, character)`.
+/// All references to the identifier at `(line, character)`: a scoped binding
+/// inside its scope ([LSP-REFERENCES-LOCAL]), anything else by whole-word scan
+/// across the project, which reaches every arm and `perform` of an effect
+/// operation ([LSP-REFERENCES-EFFECT-OPERATIONS]).
 #[must_use]
 pub(crate) fn references(
     text: &str,
@@ -174,7 +186,14 @@ pub(crate) fn references(
     let Some(word) = word_under(text, line, character, enc) else {
         return Vec::new();
     };
-    let declarations = declarations(text, &project.program(uri, text), &word, enc);
+    let program = project.program(uri, text);
+    if let Some(binding) = scope::binding(text, &program, &word, (line, character), enc) {
+        return scope::uses(text, &word, &binding, include_declaration, enc)
+            .into_iter()
+            .map(|o| located(uri, (o.line, o.start, o.line, o.end)))
+            .collect();
+    }
+    let declarations = declarations(text, &program, &word, enc);
     let decls: Vec<(u32, u32)> = declarations.iter().map(|o| (o.line, o.start)).collect();
     let mut found: Vec<Location> = occurrences(text, &word, enc)
         .into_iter()
@@ -309,7 +328,7 @@ fn declarations(
         .collect()
 }
 
-fn declaration_occurrence(
+pub(super) fn declaration_occurrence(
     text: &str,
     symbol: &SymbolInfo,
     enc: PositionEncoding,
@@ -400,6 +419,8 @@ fn step_call(c: char, names: &mut Vec<String>, commas: &mut Vec<u32>, last: &mut
         _ => {}
     }
 }
+
+pub(crate) mod scope;
 
 #[cfg(test)]
 mod tests;

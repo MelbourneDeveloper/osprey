@@ -15,7 +15,7 @@ Current version: **{% if releases.latest %}{{ releases.latest.tag }}{% else %}de
 
 ## Algebraic effects
 
-Start with the [practical guide](/docs/effects/). Both source flavors support:
+Start with the [practical guide](/docs/effects/). The Default and ML flavors support:
 
 - Callable `handler` values, captured handler factories, composition and rest-of-block `handle`.
 - Typed value operations and explicit `control` operations; native control handlers can resume once or abandon the computation.
@@ -48,7 +48,7 @@ The release list was unavailable when this page was built. See
 - Hindley–Milner type inference, algebraic data types and exhaustive pattern
   matching for supported patterns
 - User-defined generics, declaration-site variance, generic effects and explicit
-  call-site type arguments in both flavors.
+  call-site type arguments in Default and ML.
 - Immutable persistent lists and maps
 - [Dense computation buffers](/spec/0034-gpucomputation/) with typed kernels and explicit arithmetic policies. Kernels and matrix products run on Metal or OpenCL when `OSPREY_GPU` selects a device, and on the CPU otherwise; buffers stay on the device between kernels. Known let-bound kernels retain their original captures when extracted.
 - Lightweight native fibers and channels
@@ -60,8 +60,8 @@ The release list was unavailable when this page was built. See
   language-server commands
 - Mixed-flavor projects with live cross-file editor analysis, project layout warnings, visible state boundaries and compiler-checked import repairs
 - Module signatures and opaque types. Opaque records, unions and manifest aliases are abstract outside their module, and importers are checked against a signature's declared types
-- [HTML API documentation](/docs/documentation/) for public modules in both
-  flavors, with executable examples, Markdown guides, custom CSS, three themes,
+- [HTML API documentation](/docs/documentation/) for public modules in Default
+  and ML, with executable examples, Markdown guides, custom CSS, three themes,
   offline search and responsive navigation
 
 The runnable programs in

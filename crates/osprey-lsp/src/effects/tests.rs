@@ -7,10 +7,13 @@ mod unix {
     /// line makes an unrelated comment fail these tests.
     const CREDIT_PERFORM: &str = "credit id cents note";
     const CREDIT_OPERATION: &str = "credit";
-    /// examples/gpt2/model/backends.osp declares `Tensor` and discharges it
-    /// twice; model.osp performs it and reaches backends.osp as a sibling
-    /// through the generate and train manifests' `../model` source root.
+    /// examples/gpt2/model/backends.osp declares `Tensor`; cpu.osp and gpu.osp
+    /// discharge it once each, and model.osp performs it. All four are
+    /// siblings through the generate and train manifests' `../model` source
+    /// root.
     const BACKENDS: &str = "gpt2/model/backends.osp";
+    const CPU: &str = "gpt2/model/cpu.osp";
+    const GPU: &str = "gpt2/model/gpu.osp";
     const MODEL: &str = "gpt2/model/model.osp";
     const TENSOR: &str = "Tensor";
     const TENSOR_HANDLES: [&str; 2] = [
@@ -54,12 +57,30 @@ mod unix {
         (line, start, line, start.saturating_add(width(word)))
     }
 
+    type Feature = fn(&str, &str, u32, u32, PositionEncoding) -> Vec<crate::model::Location>;
+
     /// Implementations of `word` where it appears inside `context`, as the
     /// file name and span of each location.
     fn implementations_at(relative: &str, context: &str, word: &str) -> Vec<(String, Span)> {
+        located_at(
+            crate::test_support::implementations,
+            relative,
+            context,
+            word,
+        )
+    }
+
+    /// The locations `feature` answers for `word` inside `context`, as the
+    /// file name and span of each.
+    fn located_at(
+        feature: Feature,
+        relative: &str,
+        context: &str,
+        word: &str,
+    ) -> Vec<(String, Span)> {
         let (source, uri) = example_source(relative);
         let (line, column, ..) = span_in(&source, context, word);
-        crate::test_support::implementations(&source, &uri, line, column, PositionEncoding::Utf16)
+        feature(&source, &uri, line, column, PositionEncoding::Utf16)
             .into_iter()
             .map(|location| {
                 let file = location.uri.rsplit('/').next().unwrap_or_default();
@@ -124,11 +145,11 @@ mod unix {
     // manifests share the `../model` source root.
     #[test]
     fn implementations_on_an_operation_list_each_handler_arm_once() {
-        let expected = spans_in(
-            BACKENDS,
-            &["get b i => listGet", "get b i => gpuGet"],
-            "get",
-        );
+        let expected = [
+            spans_in(CPU, &["get b i => listGet"], "get"),
+            spans_in(GPU, &["get b i => gpuGet"], "get"),
+        ]
+        .concat();
         for (relative, context) in [
             (BACKENDS, "get: fn(B, int) -> float"),
             (MODEL, "perform Backends::Tensor.get"),
@@ -144,11 +165,14 @@ mod unix {
     // It returned nothing: only operation names were ever resolved.
     #[test]
     fn implementations_on_an_effect_name_list_every_handler_that_discharges_it() {
-        let expected = spans_in(BACKENDS, &TENSOR_HANDLES, TENSOR);
-        for (relative, context) in [
-            (BACKENDS, "effect Tensor<B>"),
-            (BACKENDS, TENSOR_HANDLES[1]),
-            (MODEL, "perform Backends::Tensor.get"),
+        let cpu = spans_in(CPU, &TENSOR_HANDLES[..1], TENSOR);
+        let gpu = spans_in(GPU, &TENSOR_HANDLES[1..], TENSOR);
+        let siblings = [cpu.clone(), gpu.clone()].concat();
+        // The open buffer is searched first, so gpu.osp lists its own handler first.
+        for (relative, context, expected) in [
+            (BACKENDS, "effect Tensor<B>", siblings.clone()),
+            (GPU, TENSOR_HANDLES[1], [gpu, cpu].concat()),
+            (MODEL, "perform Backends::Tensor.get", siblings),
         ] {
             let found = implementations_at(relative, context, TENSOR);
             assert_eq!(found, expected, "from `{context}` in {relative}");
@@ -172,5 +196,104 @@ mod unix {
         let expected = spans_in(metrics, &["hit _path =>"], "hit");
         let found = implementations_at(metrics, "hit : string => int", "hit");
         assert_eq!(found, expected);
+    }
+
+    /// Where `zipWith` is declared, answered and performed, in each flavor's
+    /// GPT-2. The Python flavor spells the operation `zip_with`.
+    const ZIP_DEFAULT: Operation = Operation {
+        word: "zipWith",
+        declaration: (BACKENDS, "zipWith: fn(B, B, Combine) -> B"),
+        arms: [
+            (CPU, "zipWith a b f => range"),
+            (GPU, "zipWith a b f => gpuZipWith"),
+        ],
+        performs: &[
+            (MODEL, "perform Backends::Tensor.zipWith(a, b, addF)"),
+            (
+                "gpt2/train/train.osp",
+                "perform Backends::Tensor.zipWith(out.dx",
+            ),
+            (
+                "gpt2/train/train.osp",
+                "perform Backends::Tensor.zipWith(p, g",
+            ),
+        ],
+    };
+    const ZIP_PYTHON: Operation = Operation {
+        word: "zip_with",
+        declaration: ("gpt2/python/backends.py", "zip_with(a: B, b: B"),
+        arms: [
+            ("gpt2/python/cpu.py", "def zip_with(a, b, f)"),
+            ("gpt2/python/gpu.py", "def zip_with(a, b, f)"),
+        ],
+        performs: &[(
+            "gpt2/python/model.py",
+            "perform(Tensor.zip_with(a, b, add_f))",
+        )],
+    };
+
+    /// One effect operation's declaration, handler arms and `perform` sites,
+    /// each a file and the text that holds the operation's name.
+    struct Operation {
+        word: &'static str,
+        declaration: (&'static str, &'static str),
+        arms: [(&'static str, &'static str); 2],
+        performs: &'static [(&'static str, &'static str)],
+    }
+
+    impl Operation {
+        fn span(&self, (relative, context): (&str, &str)) -> (String, Span) {
+            let (source, _) = example_source(relative);
+            let file = relative.rsplit('/').next().unwrap_or_default();
+            (file.to_owned(), span_in(&source, context, self.word))
+        }
+
+        fn sites(&self) -> Vec<(&'static str, &'static str)> {
+            [&self.arms[..], self.performs, &[self.declaration]].concat()
+        }
+    }
+
+    // [LSP-DEFINITION-EFFECT-OPERATIONS]: hover on the `zipWith` arm of
+    // gpu.osp's `handle static Tensor` showed `Tensor.zipWith`, but
+    // go-to-definition found nothing, because it looked only for top-level
+    // symbols. Every arm and `perform` lands on the operation's declaration,
+    // in both flavors.
+    #[test]
+    fn definition_on_an_operation_lands_on_its_declaration() {
+        for operation in [ZIP_DEFAULT, ZIP_PYTHON] {
+            let expected = vec![operation.span(operation.declaration)];
+            for (relative, context) in operation.sites() {
+                let found = located_at(
+                    crate::test_support::definition,
+                    relative,
+                    context,
+                    operation.word,
+                );
+                assert_eq!(found, expected, "from `{context}` in {relative}");
+            }
+        }
+    }
+
+    // [LSP-REFERENCES-EFFECT-OPERATIONS]: find-references on an operation lists
+    // its declaration, every handler arm and every `perform`, each once, in
+    // both flavors.
+    #[test]
+    fn references_on_an_operation_list_its_declaration_arms_and_performs() {
+        let with_declaration: Feature = |text, uri, line, character, encoding| {
+            crate::test_support::references(text, uri, line, character, encoding, true)
+        };
+        for operation in [ZIP_DEFAULT, ZIP_PYTHON] {
+            let mut expected: Vec<_> = operation
+                .sites()
+                .into_iter()
+                .map(|site| operation.span(site))
+                .collect();
+            expected.sort();
+            for (relative, context) in operation.sites() {
+                let mut found = located_at(with_declaration, relative, context, operation.word);
+                found.sort();
+                assert_eq!(found, expected, "from `{context}` in {relative}");
+            }
+        }
     }
 }

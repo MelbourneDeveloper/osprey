@@ -70,7 +70,13 @@ pub(crate) const WEBSOCKET_FNS: &[&str] = &[
     "websocketServerListen",
     "websocketServerBroadcast",
 ];
-const FS_FNS: &[&str] = &["readFile", "writeFile"];
+const FS_FNS: &[&str] = &[
+    "readFile",
+    "writeFile",
+    "loadTensor",
+    "gpuLoadTensor",
+    "gpuLoad",
+];
 pub(crate) const PROCESS_FNS: &[&str] = &["spawnProcess", "awaitProcess", "cleanupProcess"];
 
 /// Every policy violation in `program`, as ready-to-print messages. Empty means
@@ -159,13 +165,24 @@ mod tests {
         let mut policy = Policy::allow_all();
         policy.fs = false;
         let v = violations(
-            &prog("let c = readFile(\"a.txt\")\nlet w = writeFile(\"b\", c)\n"),
+            &prog("let c = readFile(\"a.txt\")\nlet w = writeFile(\"b\", c)\nlet t = loadTensor(\"m\", \"w\")\nlet g = gpuLoadTensor(\"m\", \"w\")\nlet r = gpuLoad(\"m\", 0, 1)\n"),
             policy,
         );
-        assert_eq!(v.len(), 2, "both readFile and writeFile are gated: {v:?}");
+        assert_eq!(
+            v.len(),
+            5,
+            "every builtin that reads or writes a file is gated: {v:?}"
+        );
         assert!(v.iter().all(|m| m.contains("--no-fs")));
-        assert!(v.iter().any(|m| m.contains("readFile")));
-        assert!(v.iter().any(|m| m.contains("writeFile")));
+        for f in [
+            "readFile",
+            "writeFile",
+            "loadTensor",
+            "gpuLoadTensor",
+            "gpuLoad",
+        ] {
+            assert!(v.iter().any(|m| m.contains(f)), "{f} is not gated: {v:?}");
+        }
         // HTTP/process still allowed under --no-fs.
         assert_eq!(
             violations(&prog("let p = spawnProcess(\"echo\", f)\n"), policy),

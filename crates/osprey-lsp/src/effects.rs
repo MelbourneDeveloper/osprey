@@ -346,7 +346,7 @@ fn operation_id(effect: &str, operation: &str) -> OperationId {
 
 mod implementations;
 
-pub(crate) use implementations::implementations;
+pub(crate) use implementations::{implementations, operation_definition};
 
 #[cfg(test)]
 mod tests;

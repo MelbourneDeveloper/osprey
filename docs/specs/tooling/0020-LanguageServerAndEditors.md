@@ -90,9 +90,9 @@ The server exposes:
 | ---------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Diagnostics      | `textDocument/publishDiagnostics` | Push, via `DiagnosticsBus`. `[LSP-DIAGNOSTICS]`                                                                                                                                             |
 | Hover            | `textDocument/hover`              | Markdown. Functions/builtins → signature; **effect operations → qualified operation type plus owning-effect docs**; **`let`/`mut` bindings (local _and_ top-level) → their declared or inferred type**; **reserved keywords (`match`, `handle`, `in`, …) → a one-line meaning**; declaration docs rendered as prose. `[LSP-HOVER]` |
-| Go to definition | `textDocument/definition`         | AST-driven, anchored on the identifier; built-ins resolve to their own use. `[LSP-DEFINITION-BUILTIN]`                                                                                       |
+| Go to definition | `textDocument/definition`         | AST-driven, anchored on the identifier; effect operations resolve to their declaration, parameters and local bindings to the binding in scope, built-ins to their own use. `[LSP-DEFINITION-EFFECT-OPERATIONS]` `[LSP-DEFINITION-LOCAL]` `[LSP-DEFINITION-BUILTIN]` |
 | Find implementations | `textDocument/implementation` | An effect operation resolves to every matching handler arm, keyed by owning effect plus operation; an effect name resolves to every handler that discharges it. `[LSP-IMPLEMENTATIONS-EFFECT-HANDLERS]` |
-| Find references  | `textDocument/references`         | Whole-word scan; `includeDeclaration` honored.                                                                                                                                              |
+| Find references  | `textDocument/references`         | Whole-word scan; a parameter or local binding is scanned only inside its scope; `includeDeclaration` honored. `[LSP-REFERENCES-LOCAL]` `[LSP-REFERENCES-EFFECT-OPERATIONS]` |
 | Document symbols | `textDocument/documentSymbol`     | Flat `DocumentSymbol`s; range on the **name**, not the `fn`/`let`/`type` keyword.                                                                                                           |
 | Signature help   | `textDocument/signatureHelp`      | Active-parameter tracking; ignores `,`/`(`/`)` inside strings and `//` comments. Triggers on the **callee name** as well as inside its parentheses. `[LSP-WORKSPACE]`                       |
 | Completion       | `textDocument/completion`         | Position-filtered keywords/snippets + project declarations. `[LSP-COMPLETION-CONTEXT]`, `[LSP-WORKSPACE]`                                                                                    |
@@ -254,7 +254,9 @@ declarations:
   position (`ProgramTypes::param_types`), so `fn twice(n) = n * 2` hovers `n`
   as `n: int`. Scope is the enclosing declaration: the nearest function
   declared at or above the cursor. A parameter must not answer for a name in a
-  *later* declaration.
+  *later* declaration. `[LSP-HOVER-PARAM-DOCS]` The parameter's entry in its
+  function's `# Parameters` section ([DOC-SECTIONS](../language/0026-DocumentationComments.md#recognized-sections-doc-sections))
+  follows the type, so a documented `work` hovers with its description.
 - **A built-in type name in an annotation** (`int`, `string`, `Result`, …). No
   source file declares these, so there is nothing to navigate to; hover carries
   a one-line summary instead. A **declared** type resolves to its declaration
@@ -313,6 +315,16 @@ that hovers perfectly well — the built-in resolves to the identifier the curso
 sits on, a graceful self-definition. Implemented in
 [`osprey-lsp/src/features.rs`](../../../crates/osprey-lsp/src/features.rs)
 (`builtin_definition`), reusing the same built-in table as `[LSP-HOVER]`.
+
+### Effect operations `[LSP-DEFINITION-EFFECT-OPERATIONS]`
+
+An effect operation resolves to its declaration from every site that names it: a handler arm (`zipWith a b f => …` in a `handle` or `handler`, or a `def` in a Python-flavor `@handler` class), a `perform`, or the declaration itself. Identity is the owning effect plus the operation, as for `[LSP-IMPLEMENTATIONS-EFFECT-HANDLERS]`, and the open buffer is searched before the project siblings. A file that several manifests share answers once.
+
+### Parameters and local bindings `[LSP-DEFINITION-LOCAL]`
+
+A function parameter, a local binding in a function body and a handler-arm parameter resolve to the nearest binding written at or before the cursor inside the enclosing function, before any top-level declaration is considered. `work` in `fn onGpu(work)` and `work` in `fn onLists(work)` are therefore two names. The same rule holds in every flavor.
+
+`[LSP-REFERENCES-LOCAL]` Find-references on such a binding scans only its scope, from the binding to the next top-level declaration, and never crosses into sibling files. `[LSP-REFERENCES-EFFECT-OPERATIONS]` Find-references on an effect operation lists its declaration, every handler arm and every `perform` across the project, each once.
 
 ## Find implementations `[LSP-IMPLEMENTATIONS-EFFECT-HANDLERS]`
 

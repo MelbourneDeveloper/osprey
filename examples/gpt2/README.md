@@ -1,18 +1,38 @@
 # GPT-2 in Osprey
 
-The trained GPT-2 model, exactly as Hugging Face publishes it, written once
-against a static `Tensor` effect and run by two handlers: one over plain host
-lists, one on Osprey's GPU surface. No training from scratch, no conversion
-step, no Python at run time: the `load` operation reads the published
-`model.safetensors`, the byte-level BPE tokenizer is rebuilt from the published
-`merges.txt`, and the transformer performs `Tensor` operations that the handler
-a program installs decides how to execute. On the CPU both handlers print the
-same tokens, the same loss and the same 148 gradient sums; on a GPU the text is
-the same and the numbers agree to twelve digits.
+This is GPT-2: OpenAI's 124M-parameter language model, running the trained weights exactly as [Hugging Face publishes them](https://huggingface.co/openai-community/gpt2). Nothing is retrained, converted or delegated to a Python runtime. The `load` operation reads the published `model.safetensors`, the byte-level BPE tokenizer is rebuilt from the published `merges.txt`, and the transformer, the KV-cached generation loop and the greedy sampler are all Osprey source.
+
+The model is written in both the Default flavor and the Python flavor:
+
+- **Default flavor**: [`model/`](model) and [`generate/`](generate), plus a [training step](train).
+- **Python flavor**: [`python/`](python/README.md), Osprey source that looks like typed Python, with no `.osp` file anywhere in the project. Each file starts with `# osprey: flavor=python` and is compiled by `osprey`; CPython never runs it. The [Python flavor guide](https://www.ospreylang.dev/docs/python-flavor/) explains how it differs from Python.
+
+Given the same prompt, the Default and Python versions print exactly the same bytes on the CPU, on Metal and on OpenCL. The test `python_gpt2_generator_output_is_byte_identical_to_the_default_generator` compares them on each of those devices.
+
+## CPU or GPU is an algebraic effect
+
+The model never names a device or a buffer type. Every tensor operation it needs (build, read, combine, reduce, matrix product, load) is an operation of one static effect, `Tensor<B>`. The model *performs* those operations, and whichever handler the program installs around it decides what `B` is and where the arithmetic runs:
+
+| Handler | Default | Python | Runs on | `B` |
+| --- | --- | --- | --- | --- |
+| `onLists` / `on_lists` | [`model/cpu.osp`](model/cpu.osp) | [`python/cpu.py`](python/cpu.py) | the CPU | `List<float>` |
+| `onGpu` / `on_gpu` | [`model/gpu.osp`](model/gpu.osp) | [`python/gpu.py`](python/gpu.py) | Metal or OpenCL | `GpuBuffer<float>` |
+
+`BACKEND=lists` or `BACKEND=gpu` picks the handler. The model source is identical in both runs, and on the CPU both handlers print the same tokens, the same loss and the same 148 gradient sums; on a GPU the text is the same and the numbers agree to twelve digits.
+
+Why this matters:
+
+- **Where the arithmetic runs is chosen by the caller.** In a typical framework, device placement is a property of each tensor (`x.to("cuda")`) that the model code must thread through every layer. Here it is chosen once, by installing a handler around the computation; the transformer cannot even mention it.
+- **A new backend is a new handler, not a new model.** A backend is one handler answering ten operations. Adding one changes no model code.
+- **The compiler checks it.** A program that performs a `Tensor` operation without a handler is rejected at compile time. Because `Tensor` is a `static` effect, the handler is selected when the program is compiled, so the effect itself adds no run-time dispatch.
+- **The flavor doesn't change any of this.** Effects belong to Osprey's shared AST, so the Python flavor declares the same effect and the same two handlers (as `@static_effect` and `@static_handler` classes) and gets the same checking and the same output.
+
+## Run it
 
 ```
 make gpt2 PROMPT="The capital of France is" TOKENS=20 BACKEND=gpu
 make gpt2 PROMPT="The capital of France is" TOKENS=20 BACKEND=lists
+make gpt2 FLAVOR=python PROMPT="The capital of France is" TOKENS=20 BACKEND=gpu
 make gpt2-train PROMPT="The capital of France is" BACKEND=gpu
 make gpt2-train PROMPT="The capital of France is" BACKEND=lists
 ```
@@ -54,15 +74,15 @@ loss after one step 3.8539085307403895
 
 | Path | What it is |
 | --- | --- |
-| `model/backends.osp` | `gpt2::Backends` — the `Tensor<B>` effect (build, get, length, zipWith, reduce, indexOf, matMul, fromList, load, device) and its two handlers, `onLists` over `List<float>` and `onGpu` over `GpuBuffer<float>` |
+| `model/backends.osp` | `gpt2::Backends` — the `Tensor<B>` effect (build, get, length, zipWith, reduce, indexOf, matMul, fromList, load, device), the arithmetic policy `strictly` and the handler selector `under` |
+| `model/cpu.osp` | `gpt2::Cpu` — the CPU handler `onLists`, answering every `Tensor` operation over `List<float>` |
+| `model/gpu.osp` | `gpt2::Gpu` — the GPU handler `onGpu`, answering every `Tensor` operation over `GpuBuffer<float>` on Metal or OpenCL |
 | `model/tokenizer.osp` | `gpt2::Tokenizer` — the byte-level BPE tokenizer from `merges.txt` alone |
 | `model/model.osp` | `gpt2::Model` — the configuration, the weights, LayerNorm, attention, the blocks, the forward pass keeping every block's activations, and the KV-cached step; every tensor is `B` |
 | `generate/` | A one-file project: greedy sampling over the forward pass and the cached steps; `main` picks the handler |
 | `train/` | A one-file project: the loss, the backward pass and one SGD step over the same forward pass; `main` picks the handler |
-| [`python/`](python/README.md) | The same program in typed Python syntax, self-contained: the `Tensor` effect and both handlers, the tokenizer, the loader, the model and the sampler as `.py` modules, printing the Default generator's output byte for byte |
-| `reference.py` | The independent pure-Python oracle for both programs |
-
-Run the Python syntax flavor with `make gpt2 FLAVOR=python GPU=metal TOKENS=20`. It performs the same `Tensor` operations, including the KV-cached step, and prints the same bytes as this generator for the same stdin.
+| [`python/`](python/README.md) | The same program in the Python flavor (Osprey, not Python), self-contained: the `Tensor` effect and both handlers, the tokenizer, the loader, the model and the sampler as `.py` modules, printing the Default generator's output byte for byte |
+| `reference.py` | Real Python, run by CPython: the independent oracle both Osprey programs are checked against |
 
 A standalone script cannot import across files, so each program is its own
 project naming `model/` as a second source root
@@ -84,8 +104,8 @@ export fn layerNorm(x, t, g, b) = {
 }
 ```
 
-`onLists` answers `build` with `range |> map |> toList` and `matMul` with a
-`fold` over `k`; `onGpu` answers them with `gpuIota |> gpuMap` and `gpuMatMul`,
+`onLists` in `cpu.osp` answers `build` with `range |> map |> toList` and `matMul` with a
+`fold` over `k`; `onGpu` in `gpu.osp` answers them with `gpuIota |> gpuMap` and `gpuMatMul`,
 forwarding the model's callbacks to the kernels. `main` reads the backend name
 from stdin and `Backends::under` installs the handler it names around the whole
 run; any other name runs nothing:
@@ -132,6 +152,14 @@ The device's `exp`, `ln` and `tanh` are correctly rounded; a host libm is not on
 | One training step over the 5-token prompt | 25.2 s, 4.0 GB peak | 7.6 s, 5.9 GB peak | 7.8 s, 3.1 GB peak |
 | `reference.py --train`, the same step in pure Python (2026-10-15) | 5 min 49 s, 16.2 GB peak | | |
 
+| Measured 2026-10-17, Apple M4 Max, macOS, release build, `--memory=arc`; `BACKEND=gpu` median of three, `BACKEND=lists` one run | `BACKEND=lists`, `OSPREY_GPU=invalid` | `BACKEND=gpu`, `GPU=host` | `BACKEND=gpu`, `GPU=metal` |
+| --- | --- | --- | --- |
+| 20 tokens from the 5-token prompt, Default flavor | 2 min 23 s, 1.8 GB peak | 8.2 s, 1.6 GB peak | 6.1 s, 2.8 GB peak |
+| The same 20 tokens, Python flavor | 2 min 19 s, 1.8 GB peak | | 7.3 s, 2.8 GB peak |
+| One training step over the 5-token prompt | 3 min 19 s, 3.9 GB peak | | 6.7 s, 3.9 GB peak |
+
+The list handler ran under an `OSPREY_GPU` no backend accepts, so any GPU call would have aborted the run; it printed the same text as Metal in both flavors. Most of its gap is the representation rather than the device: the GPU-surface handler on the CPU (`GPU=host`) is 17 times faster than the list handler, and Metal is 1.3 times faster again for generation.
+
 Training is about three times faster on the device: half its 1 499 dispatches run over 3 072 threads or more. Generation is not: after the prompt each token is a one-row pass through the KV cache, 4 338 of its 5 919 dispatches run over 768 threads or fewer, and without kernel fusion each is its own launch.
 
 On the CPU the GPU-surface handler beats the list handler because its buffers
@@ -173,7 +201,7 @@ lowerings and wasm32 on every `make test`.
 
 ## How it is written
 
-- **Weights** come through the `load` operation: `tensor("h.3.ln_2.bias")` is a `B`. A failed load aborts with its error instead of substituting an empty tensor. Under `onGpu`, `load` uses `gpuLoadTensor`; under `onLists`, the same loader reads back into a list. Shapes are stated at each `matMul`, because tensors are rank-1.
+- **Weights** come through the `load` operation: `tensor("h.3.ln_2.bias")` is a `B`. A failed load aborts with its error instead of substituting an empty tensor. Under `onGpu`, `load` uses `gpuLoadTensor`; under `onLists`, it uses `loadTensor`, which reads the same file with the same reader straight into a list, so the list handler never touches the GPU surface. Shapes are stated at each `matMul`, because tensors are rank-1.
 - **Tokenizer** — GPT-2 encodes bytes, and merge *i* of `merges.txt` is token
   `256 + i`, so the merge list alone is the vocabulary; `vocab.json` is never
   read. Pre-tokenization approximates GPT-2's regular expression for ASCII
@@ -198,7 +226,7 @@ lowerings and wasm32 on every `make test`.
 ## Known limits
 
 - Three stdin lines for `generate` (prompt, token count, backend) and two for
-  `train` (prompt, backend); an unknown backend name selects the GPU surface.
+  `train` (prompt, backend); an unknown backend name prints an error and runs nothing.
 - The handler is chosen where it is written: `match input()` selects between
   two regions the compiler has already specialised. A handler computed at run
   time would need a dynamic effect and a runtime handler.

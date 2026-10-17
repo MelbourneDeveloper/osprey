@@ -78,9 +78,12 @@ _language-test: build
 ## bank-e2e: Browser end-to-end tests for the Talon Bank modules showcase
 ##           (examples/projects/modules) — real Chromium via Playwright drives
 ##           the compiled osprey binary serving its HTTP API and web UI.
+##           The server's hold marker must not outlive the run: a leaked one
+##           makes every later bank-*-test refuse to start.
 bank-e2e: bank-web $(BANK_E2E_NODE_DEPS)
 	@echo "==> Bank e2e (Playwright)..."
 	cd examples/projects/modules/e2e && npx playwright install chromium && npx playwright test
+	@test ! -e /tmp/talon_bank.hold || { echo "FAIL: bank e2e left /tmp/talon_bank.hold behind; its webServer was stopped without running its trap"; exit 1; }
 
 ## docs-html-test: Browser acceptance for the HTML documentation export. Real
 ##                 Chromium over file:// — the strictest case, and the one a

@@ -8,14 +8,15 @@
 //! ([`crate::mlrender`], [LSP-FLAVOR-RENDER]) and falls back to the project's
 //! sibling files when the open buffer cannot answer ([LSP-WORKSPACE]).
 //! Implements [LSP-HOVER], [LSP-HOVER-VARIABLES], [LSP-HOVER-DOCS],
-//! [LSP-HOVER-WRITTEN].
+//! [LSP-HOVER-WRITTEN], [LSP-HOVER-PARAM-DOCS].
 
 use lspkit_vfs::PositionEncoding;
 
-use osprey_ast::Program;
+use osprey_ast::{walk_program, AstVisitor, DocComment, Position, Program, Stmt};
 use osprey_syntax::Flavor;
 
 use crate::analysis::{builtin_hover, collect_all_symbols, SymbolInfo, SymbolKind};
+use crate::features::scope::enclosing_function;
 use crate::features::{best_match, nth_line, symbol_matches, word_under};
 use crate::mlrender;
 use crate::reference_docs::{keyword_hover, type_hover};
@@ -213,7 +214,8 @@ fn written_hover(
 ///
 /// The parameter's type is its annotation when it has one, and otherwise the
 /// type the checker resolved for that argument position, so an unannotated
-/// parameter of `fn twice(n) = n * 2` still hovers as `n: int`.
+/// parameter of `fn twice(n) = n * 2` still hovers as `n: int`. Its
+/// description from the function's `# Parameters` section follows.
 fn parameter_hover(
     symbols: &[SymbolInfo],
     word: &str,
@@ -229,19 +231,47 @@ fn parameter_hover(
     } else {
         written.clone()
     };
-    Some(mlrender::fenced(flavor, &format!("{name}: {ty}")))
+    let code = mlrender::fenced(flavor, &format!("{name}: {ty}"));
+    Some(match parameter_doc(program, owner.position, name) {
+        Some(text) => format!("{code}\n\n{text}"),
+        None => code,
+    })
 }
 
-/// The declared function whose body contains `line` — the nearest declaration
-/// at or above the cursor. A parameter is only in scope inside its own body, so
-/// resolving without this would let one function's `x` answer for another's.
-fn enclosing_function(symbols: &[SymbolInfo], line: u32) -> Option<&SymbolInfo> {
-    let cursor = line.saturating_add(1); // AST positions are 1-based lines.
-    symbols
-        .iter()
-        .filter(|s| s.kind == SymbolKind::Function)
-        .filter(|s| s.position.is_some_and(|p| p.line <= cursor))
-        .max_by_key(|s| s.position.map_or(0, |p| p.line))
+/// The `# Parameters` description of `name` in the doc of the function
+/// declared at `position`. Implements [LSP-HOVER-PARAM-DOCS].
+fn parameter_doc(program: &Program, position: Option<Position>, name: &str) -> Option<String> {
+    let mut function = FunctionDoc {
+        position: position?,
+        doc: None,
+    };
+    walk_program(program, &mut function);
+    function
+        .doc?
+        .params
+        .into_iter()
+        .find_map(|(param, text)| (param == name).then_some(text))
+}
+
+/// The doc comment of the function declared at `position`.
+struct FunctionDoc {
+    position: Position,
+    doc: Option<DocComment>,
+}
+
+impl AstVisitor for FunctionDoc {
+    fn statement(&mut self, statement: &Stmt) {
+        if let Stmt::Function {
+            doc: Some(doc),
+            position: Some(position),
+            ..
+        } = statement
+        {
+            if *position == self.position {
+                self.doc = Some(doc.clone());
+            }
+        }
+    }
 }
 
 /// The checker's type for one parameter, rendered the way a declaration hover

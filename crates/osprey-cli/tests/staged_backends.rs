@@ -275,3 +275,68 @@ fn a_handler_selected_through_a_helper_answers_the_forwarded_work() {
     ) + "fn under(name, work) = match name {\n    \"lists\" => onLists(work)\n    _ => onGpu(work)\n}\n";
     assert_flavored_output("selected_backend", "osp", &source, BOTH_ANSWERS);
 }
+
+/// Each arm hands a helper the callback it calls: a named function and an
+/// inline lambda, neither performing anything.
+const KNOWN_CALLBACKS: &str = r#"
+static effect Measure {
+    named: fn(string) -> int
+    inline: fn(string) -> int
+}
+fn apply(f, x) = f(x)
+fn letters(s) = length(s)
+fn main() = {
+    handle static Measure {
+        named s => apply(letters, s)
+        inline s => apply(fn(t) => letters(t), s)
+    }
+    print("${perform Measure.named("abc")} ${perform Measure.inline("de")}")
+}
+"#;
+
+/// The same helper handed a callback that reaches a dynamic effect.
+const DYNAMIC_CALLBACK: &str = r#"
+effect Log {
+    write: fn(string) -> Unit
+}
+static effect Measure {
+    named: fn(string) -> int
+}
+fn apply(f, x) = f(x)
+fn loud(s) = {
+    perform Log.write(s)
+    length(s)
+}
+fn main() = {
+    handle Log {
+        write m => print(m)
+    }
+    handle static Measure {
+        named s => apply(loud, s)
+    }
+    print("${perform Measure.named("abc")}")
+}
+"#;
+
+/// [STAGE-STATIC-MONOTONE] A static arm may reach operations through helpers
+/// and callbacks. Handing a helper a named function or an inline lambda tells
+/// the checker exactly what the helper calls, as it does for a GPU kernel
+/// ([GPU-KERNEL-PURE]), so these arms introduce nothing and must discharge.
+/// Static lowering marked every helper that calls a parameter `<unknown>`
+/// without looking at the call site, so GPT-2's two handlers could not share
+/// one `orAbort` that takes each handler's own abort.
+#[test]
+fn a_static_arm_may_hand_a_helper_a_known_callback() {
+    assert_flavored_output("known_callbacks", "osp", KNOWN_CALLBACKS, "3 2\n");
+}
+
+/// The precision must not cost soundness: the callback's dynamic operation is
+/// named, not hidden behind `<unknown>` and not admitted.
+#[test]
+fn a_static_arm_handing_a_helper_a_dynamic_callback_names_its_effect() {
+    let report = diagnostics(DYNAMIC_CALLBACK, Flavor::Default);
+    assert!(
+        report.contains("static handler arm `Measure.named` requires runtime effects: Log.write;"),
+        "expected the arm to name Log.write, got: {report}"
+    );
+}

@@ -420,6 +420,8 @@ symbol output and project diagnostics can restore source-level names.
 
 The selected entry function links as `main`. Native LLVM symbols retain that ABI while debug metadata emits the qualified source identity as the subprogram `name`, so debugger stack frames show names such as `billing::Tax::add`. The optional DWARF linkage name is omitted: LLDB otherwise prefers the encoded name even though it cannot demangle it. Generated handler names also restore embedded module identities. `module_debug_frames_keep_source_names_in_both_flavors` pins the distinction for both source flavors; the editor’s `module stack frames retain their source names` tests stop in real LLDB sessions and assert the frame name, source line and parameter value.
 
+An executable exports only its entry point `[CODEGEN-LINKAGE]`. Native executables and wasm command modules emit every other function with `internal` linkage, so LLVM can drop a helper once it is inlined everywhere and can specialise the rest. Internal functions keep their local symbols and DWARF subprograms, so profiler and debugger frames still name them. A library keeps every function external, because its host calls into it by name: the iOS, Android and Python C ABI and the wasm web exports. `an_executable_drops_a_helper_once_it_is_inlined` pins the executable side.
+
 ## Diagnostics `[MODULES-DIAG]`
 
 Project diagnostics include the source path and local position when available.

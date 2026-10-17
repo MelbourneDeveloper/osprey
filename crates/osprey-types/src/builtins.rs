@@ -100,6 +100,7 @@ fn build_base_env() -> TypeEnv {
     functional(&mut e);
     lists(&mut e);
     runtime_group(&mut e, files);
+    tensors(&mut e);
     runtime_group(&mut e, http);
     json(&mut e);
     runtime_group(&mut e, concurrency);
@@ -291,6 +292,19 @@ fn files(e: &mut TypeEnv) {
     // File surface [BUILTIN-FILE].
     mono(e, "readFile", vec![s()], res(s()));
     mono(e, "writeFile", vec![s(), s()], res(i()));
+}
+
+/// One safetensors tensor as host floats, never a `GpuBuffer`
+/// [BUILTIN-FILE-TENSOR]. Like `gpuLoadTensor` it is a weight loader a static
+/// `Tensor` handler arm answers `load` with, so it carries no runtime-builtin
+/// obligation [STAGE-STATIC-MONOTONE]; `--no-fs` still refuses it.
+fn tensors(e: &mut TypeEnv) {
+    mono(
+        e,
+        "loadTensor",
+        vec![s(), s()],
+        res(Type::list(Type::float())),
+    );
 }
 
 fn http(e: &mut TypeEnv) {

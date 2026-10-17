@@ -36,7 +36,7 @@ fn result_parameters_preserve_the_wrapper_for_named_functions_and_closures() {
              print(\"${failed}:${wrapped}\")\n",
     );
     assert!(
-        named.contains("define i64 @choose(i8* %$p0)"),
+        named.contains("define internal i64 @choose(i8* %$p0)"),
         "unexpected named-function IR:\n{named}"
     );
     assert!(named.contains("bitcast i8* %$p0 to { i64, i8, i8* }*"));
@@ -53,7 +53,7 @@ fn result_parameters_preserve_the_wrapper_for_named_functions_and_closures() {
     shows(
         &closure,
         &[
-            "define i64 @__closure_fn_",
+            "define internal i64 @__closure_fn_",
             "i8* %__env, i8* %$p0",
             "bitcast i8* %$p0 to { i64, i8, i8* }*",
         ],

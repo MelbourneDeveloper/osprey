@@ -354,7 +354,7 @@ fn module_debug_frames_keep_source_names_in_both_flavors() -> Result<(), String>
             .map_err(|error| format!("{flavor}: {error}"))?;
         let linkage = osprey_ast::symbol::mangle(["billing/api", "Tax", "add"]);
         assert!(ir.contains("!DISubprogram(name: \"billing/api::Tax::add\", scope:"), "{flavor}: {ir}");
-        assert!(ir.contains(&format!("define i64 @{linkage}(")), "preserve native ABI");
+        assert!(ir.contains(&format!("define internal i64 @{linkage}(")), "preserve native ABI");
     }
     Ok(())
 }

@@ -32,11 +32,11 @@ Indentation opens suites; tabs in indentation and inconsistent dedents are error
 def scale(value, factor):
     return value * factor
 
-answer = scale(6, factor=7)
+answer = scale(value=6, factor=7)
 twice = lambda value: scale(value, 2)
 ```
 
-`def` becomes a flat `Stmt::Function`; `lambda` becomes `Expr::Lambda`. Parameters/results are inferred unless a written constraint is necessary. Keyword arguments retain names and lower to canonical named arguments. There is no implicit receiver, currying, default argument, variadic argument, argument unpacking, or decorator execution. Explicit type application uses `f[int](value)` and lowers to the existing type-application node.
+`def` becomes a flat `Stmt::Function`; `lambda` becomes `Expr::Lambda`. Parameters/results are inferred unless a written constraint is necessary. Keyword arguments retain names and lower to canonical named arguments; as in every flavor, one argument list is fully positional or fully named ([function calls](0005-FunctionCalls.md)). There is no implicit receiver, currying, default argument, variadic argument, argument unpacking, or decorator execution. Explicit type application uses `f[int](value)` and lowers to the existing type-application node.
 
 `@extern` marks a signature-only `def` with an exact `...` body and complete parameter/result types. It lowers to the existing `Stmt::Extern`, with the same C ABI and safety boundary; it does not import a Python extension module. Legal combinations such as `@export` with one declaration-kind decorator are order-independent metadata. Duplicate or conflicting declaration-kind decorators are errors.
 
@@ -52,7 +52,7 @@ The surface follows typed Python annotation syntax: [PEP 484](https://peps.pytho
 
 Annotations may be omitted in exactly the situations accepted by Osprey's shared Hindley–Milner checker, including parameters, return values, local bindings, lambdas and inferred polymorphic functions. Omission never introduces implicit `Any`, an unchecked function body or a Python-specific inference fallback. When the shared checker cannot infer a type required by the program, compilation fails; an explicit annotation must supply the missing information. A valid inferred polymorphic type is not itself an inference failure. Explicit annotations constrain that same inference and contradictory uses fail normally.
 
-This is a specified subset of typed Python syntax over Osprey semantics, not blanket conformance to every typing PEP. Class inheritance, protocols/interfaces, dynamic type construction, Python nullability, unchecked gradual casts, and variadic/unconstrained callable types are not added by accepting annotations. Unsupported typing forms must name the missing representation in a diagnostic. Implementation evidence for each supported form belongs in plan 0031.
+This is a specified subset of typed Python annotation notation over Osprey semantics, not blanket conformance to every typing PEP. Class inheritance, protocols/interfaces, dynamic type construction, Python nullability, unchecked gradual casts, and variadic/unconstrained callable types are not added by accepting annotations. Unsupported typing forms must name the missing representation in a diagnostic. Implementation evidence for each supported form belongs in plan 0031.
 
 ## Expressions and iteration — [FLAVOR-PYTHON-EXPRESSIONS]
 

@@ -149,14 +149,35 @@ fn prune(program: &mut Program, consumed: &BTreeSet<String>, retained: &BTreeSet
 
 impl super::Lowering {
     pub(super) fn remaining_requirements(&self, body: &Expr) -> Vec<String> {
-        let mut required =
-            body_requirements(&self.effects, body, Stage::Static, &self.requirements);
+        let mut required = body_requirements(
+            &self.effects,
+            &self.callables,
+            body,
+            Stage::Static,
+            &self.requirements,
+        );
         required.extend(body_requirements(
             &self.effects,
+            &self.callables,
             body,
             Stage::Dynamic,
             &self.requirements,
         ));
+        required.sort();
+        required.dedup();
+        required
+    }
+
+    /// The runtime dispatches `body` performs, a handler answering them or not.
+    pub(super) fn dispatches_of(&self, body: &Expr) -> Vec<String> {
+        crate::stage_rows::body_dispatches(&self.effects, &self.callables, body, &self.dispatches)
+    }
+
+    /// Everything a static arm still needs at run time: unanswered
+    /// requirements and runtime dispatches alike ([STAGE-STATIC-MONOTONE]).
+    pub(super) fn arm_requirements(&self, body: &Expr) -> Vec<String> {
+        let mut required = self.remaining_requirements(body);
+        required.extend(self.dispatches_of(body));
         required.sort();
         required.dedup();
         required

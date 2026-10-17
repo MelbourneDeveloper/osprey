@@ -188,19 +188,19 @@ const SCALAR_ABIS: [(&str, &str, &str, &[&str]); 3] = [
     (
         "gpuZipWith(toGpu([1]), toGpu([2.0]), fn(x, y) => toFloat(wrapAdd(x, alpha)) * y * zebra)",
         "gpuZipWith (toGpu [1], toGpu [2.0], \\(x, y) => toFloat (wrapAdd x alpha) * y * zebra)",
-        "define double @__gpu_kernel_0(i64 %$p0, double %$p1, i64 %$p2, double %$p3)",
+        "define internal double @__gpu_kernel_0(i64 %$p0, double %$p1, i64 %$p2, double %$p3)",
         &["alpha", "zebra", "x", "y"],
     ),
     (
         "gpuScan(toGpu([1.0]), 0.0, fn(x, y) => x * zebra + y * toFloat(alpha))",
         "gpuScan (toGpu [1.0], 0.0, \\(x, y) => x * zebra + y * toFloat alpha)",
-        "define double @__gpu_kernel_0(i64 %$p0, double %$p1, double %$p2, double %$p3)",
+        "define internal double @__gpu_kernel_0(i64 %$p0, double %$p1, double %$p2, double %$p3)",
         &["alpha", "zebra", "x", "y"],
     ),
     (
         "gpuFilter(toGpu([1.0]), fn(x) => x * zebra > 0.0 && alpha > 0)",
         "gpuFilter (toGpu [1.0]) (\\x => x * zebra > 0.0 && alpha > 0)",
-        "define i1 @__gpu_kernel_0(i64 %$p0, double %$p1, double %$p2)",
+        "define internal i1 @__gpu_kernel_0(i64 %$p0, double %$p1, double %$p2)",
         &["alpha", "zebra", "x"],
     ),
 ];
@@ -307,25 +307,25 @@ const BUILTIN_KERNELS: [(&str, &str, &str, &str); 4] = [
     (
         "gpuMap(toGpu([1]), toFloat)",
         "gpuMap (toGpu [1]) toFloat",
-        "define double @__gpu_kernel_0(i64 %$p0)",
+        "define internal double @__gpu_kernel_0(i64 %$p0)",
         "sitofp i64",
     ),
     (
         "gpuMap(toGpu([-1.5]), abs)",
         "gpuMap (toGpu [-1.5]) abs",
-        "define double @__gpu_kernel_0(double %$p0)",
+        "define internal double @__gpu_kernel_0(double %$p0)",
         "@llvm.fabs.f64(",
     ),
     (
         "gpuZipWith(toGpu([1]), toGpu([2]), wrapAdd)",
         "gpuZipWith (toGpu [1], toGpu [2], wrapAdd)",
-        "define i64 @__gpu_kernel_0(i64 %$p0, i64 %$p1)",
+        "define internal i64 @__gpu_kernel_0(i64 %$p0, i64 %$p1)",
         "add i64",
     ),
     (
         "gpuScan(toGpu([1]), 0, satMul)",
         "gpuScan (toGpu [1], 0, satMul)",
-        "define i64 @__gpu_kernel_0(i64 %$p0, i64 %$p1)",
+        "define internal i64 @__gpu_kernel_0(i64 %$p0, i64 %$p1)",
         "mul i128",
     ),
 ];

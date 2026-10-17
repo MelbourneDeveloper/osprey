@@ -8,60 +8,19 @@ use crate::stage::{effect_declarations, EffectDecl};
 use crate::{effect_name, walk_program, AstNode, AstVisitor, Expr, Program, Stage, Stmt};
 use std::collections::{BTreeMap, BTreeSet};
 
+mod callables;
+
+pub(crate) use callables::Callables;
+use callables::UNKNOWN;
+
 // Structural lowering must also fail closed on unresolved callback dispatch.
 // Reactive dependency reporting instead uses the resolved checker proof.
 fn attach_unknown(program: &Program, required: &mut BTreeMap<String, Vec<String>>) {
-    #[derive(Default)]
-    struct Parameters(BTreeMap<String, BTreeSet<String>>);
-    impl AstVisitor for Parameters {
-        fn statement(&mut self, statement: &Stmt) {
-            match statement {
-                Stmt::Function {
-                    name, parameters, ..
-                }
-                | Stmt::Let {
-                    name,
-                    value: Expr::Lambda { parameters, .. },
-                    ..
-                } => {
-                    let _ = self.0.insert(
-                        name.clone(),
-                        parameters
-                            .iter()
-                            .map(|parameter| parameter.name.clone())
-                            .collect(),
-                    );
-                }
-                _ => {}
-            }
-        }
-    }
-    let mut parameters = Parameters::default();
-    walk_program(program, &mut parameters);
-    let bodies = function_bodies(program);
-    let mut unknown: BTreeSet<_> = bodies
-        .iter()
-        .filter(|(name, body)| {
-            parameters
-                .0
-                .get(*name)
-                .is_some_and(|params| invokes_parameter(body, params))
-        })
-        .map(|(name, _)| name.clone())
-        .collect();
-    loop {
-        let previous = unknown.len();
-        let inherited: Vec<_> = bodies.iter().filter(|(_, body)| any_expression(body, |expression| matches!(expression, Expr::Identifier(name) if unknown.contains(name)))).map(|(name, _)| name.clone()).collect();
-        unknown.extend(inherited);
-        if unknown.len() == previous {
-            break;
-        }
-    }
-    for name in unknown {
+    for name in Callables::of(program).unknown() {
         required
-            .entry(name)
+            .entry(name.clone())
             .or_default()
-            .push("<unknown>".to_owned());
+            .push(UNKNOWN.to_owned());
     }
 }
 
@@ -146,10 +105,16 @@ fn collect_requirements(
     stage: Stage,
     dispatch: bool,
 ) -> BTreeMap<String, Vec<String>> {
-    let effects = effect_declarations(program);
+    let (effects, callables) = (effect_declarations(program), Callables::of(program));
+    let scan = Scan {
+        effects: &effects,
+        callables: &callables,
+        stage,
+        dispatch,
+    };
     let facts: BTreeMap<String, BodyFacts> = function_bodies(program)
         .iter()
-        .map(|(name, body)| (name.clone(), body_facts(body, &effects, stage, dispatch)))
+        .map(|(name, body)| (name.clone(), body_facts(body, &scan)))
         .collect();
     let mut required: BTreeMap<String, Vec<String>> = facts
         .iter()
@@ -170,7 +135,9 @@ fn collect_requirements(
 /// it references together with the operations already answered at that point.
 struct BodyFacts {
     direct: Vec<String>,
-    references: Vec<(String, Vec<String>)>,
+    /// Each referenced name, the operations answered there, and whether it is
+    /// the callee of a call that settles its unknown ([`Callables::resolves`]).
+    references: Vec<(String, Vec<String>, bool)>,
 }
 
 /// What ONE body still requires at `stage`, given the program-wide fixed point
@@ -179,19 +146,33 @@ struct BodyFacts {
 /// every named function.
 pub(crate) fn body_requirements(
     effects: &BTreeMap<String, EffectDecl>,
+    callables: &Callables,
     body: &Expr,
     stage: Stage,
     required: &BTreeMap<String, Vec<String>>,
 ) -> Vec<String> {
-    resolve(&body_facts(body, effects, stage, false), required)
+    let scan = Scan {
+        effects,
+        callables,
+        stage,
+        dispatch: false,
+    };
+    resolve(&body_facts(body, &scan), required)
 }
 
 pub(crate) fn body_dispatches(
     effects: &BTreeMap<String, EffectDecl>,
+    callables: &Callables,
     body: &Expr,
     required: &BTreeMap<String, Vec<String>>,
 ) -> Vec<String> {
-    resolve(&body_facts(body, effects, Stage::Dynamic, true), required)
+    let scan = Scan {
+        effects,
+        callables,
+        stage: Stage::Dynamic,
+        dispatch: true,
+    };
+    resolve(&body_facts(body, &scan), required)
 }
 
 /// Every function's residual RUNTIME row: what a `kernel` boundary must find
@@ -218,11 +199,12 @@ fn propagate(
 /// from the fixed point that asks it of every function.
 fn resolve(fact: &BodyFacts, required: &BTreeMap<String, Vec<String>>) -> Vec<String> {
     let mut operations = fact.direct.clone();
-    for (callee, handled) in &fact.references {
+    for (callee, handled, settled) in &fact.references {
         let inherited = required.get(callee).into_iter().flatten();
         operations.extend(
             inherited
                 .filter(|operation| !answered(handled, operation))
+                .filter(|operation| !(*settled && operation.as_str() == UNKNOWN))
                 .cloned(),
         );
     }
@@ -248,35 +230,31 @@ fn sorted(mut operations: Vec<String>) -> Vec<String> {
     operations
 }
 
-/// Walk one body, tracking which operations an enclosing region already
-/// answers so a self-handled operation never counts as a dependency.
-fn body_facts(
-    body: &Expr,
-    effects: &BTreeMap<String, EffectDecl>,
+/// One walk's fixed inputs: the declared effects, what call sites settle, the
+/// stage whose requests count, and whether runtime requests a handler answers
+/// still count as dispatches.
+struct Scan<'a> {
+    effects: &'a BTreeMap<String, EffectDecl>,
+    callables: &'a Callables,
     stage: Stage,
     dispatch: bool,
-) -> BodyFacts {
+}
+
+/// Walk one body, tracking which operations an enclosing region already
+/// answers so a self-handled operation never counts as a dependency.
+fn body_facts(body: &Expr, scan: &Scan<'_>) -> BodyFacts {
     let mut facts = BodyFacts {
         direct: Vec::new(),
         references: Vec::new(),
     };
-    scan_body(
-        &mut body.clone(),
-        effects,
-        stage,
-        dispatch,
-        &mut Vec::new(),
-        &mut facts,
-    );
+    scan_body(&mut body.clone(), scan, &mut Vec::new(), &mut facts);
     facts.direct = sorted(std::mem::take(&mut facts.direct));
     facts
 }
 
 fn scan_body(
     expression: &mut Expr,
-    effects: &BTreeMap<String, EffectDecl>,
-    stage: Stage,
-    dispatch: bool,
+    scan: &Scan<'_>,
     handled: &mut Vec<String>,
     facts: &mut BodyFacts,
 ) {
@@ -295,35 +273,54 @@ fn scan_body(
         } => {
             let effect = effect.clone();
             for arm in arms.iter_mut() {
-                scan_body(&mut arm.body, effects, stage, dispatch, handled, facts);
+                scan_body(&mut arm.body, scan, handled, facts);
             }
             let depth = handled.len();
-            if !dispatch || selected.is_compile_time() {
+            if !scan.dispatch || selected.is_compile_time() {
                 handled.extend(
                     arms.iter()
                         .map(|arm| operation_name(&effect, &arm.operation)),
                 );
             }
-            scan_body(body, effects, stage, dispatch, handled, facts);
+            scan_body(body, scan, handled, facts);
             handled.truncate(depth);
             if let Some(clause) = return_clause {
-                scan_body(clause, effects, stage, dispatch, handled, facts);
+                scan_body(clause, scan, handled, facts);
             }
         }
         Expr::Perform {
             effect, operation, ..
         } => {
             let requested = operation_name(effect, operation);
-            if declared_at(effects, effect, stage) && !answered(handled, &requested) {
+            if declared_at(scan.effects, effect, scan.stage) && !answered(handled, &requested) {
                 facts.direct.push(requested);
             }
             children_mut(expression, &mut |child| {
-                scan_body(child, effects, stage, dispatch, handled, facts);
+                scan_body(child, scan, handled, facts);
             });
         }
-        Expr::Identifier(name) => facts.references.push((name.clone(), handled.clone())),
+        Expr::Call {
+            function,
+            arguments,
+            named_arguments,
+        } if scan
+            .callables
+            .resolves(function, arguments, named_arguments) =>
+        {
+            if let Expr::Identifier(callee) = &**function {
+                facts
+                    .references
+                    .push((callee.clone(), handled.clone(), true));
+            }
+            for argument in arguments.iter_mut() {
+                scan_body(argument, scan, handled, facts);
+            }
+        }
+        Expr::Identifier(name) => facts
+            .references
+            .push((name.clone(), handled.clone(), false)),
         _ => children_mut(expression, &mut |child| {
-            scan_body(child, effects, stage, dispatch, handled, facts);
+            scan_body(child, scan, handled, facts);
         }),
     }
 }

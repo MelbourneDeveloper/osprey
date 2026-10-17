@@ -206,6 +206,85 @@ fn compile_ir_and_debug_helpers_switch_on_the_build_kind() {
     );
 }
 
+/// The optimisation oracle (plan 0033): the emitted module after the same
+/// clang driver and `-O2` the compiler uses, so a test can assert what LLVM
+/// did with Osprey's IR without timing anything.
+fn optimised_ir(src: &str) -> String {
+    use std::io::Write;
+    let program = osprey_syntax::parse_program(src).program;
+    let ir = compile_ir("oracle.osp", &program, osprey_debug::BuildKind::Release).expect("codegen");
+    let mut child = std::process::Command::new(c_compiler())
+        .args([
+            "-x",
+            "ir",
+            "-",
+            "-O2",
+            "-S",
+            "-emit-llvm",
+            "-o",
+            "-",
+            "-Wno-override-module",
+        ])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn clang");
+    child
+        .stdin
+        .take()
+        .expect("stdin")
+        .write_all(ir.as_bytes())
+        .expect("feed IR");
+    let out = child.wait_with_output().expect("clang");
+    assert!(
+        out.status.success(),
+        "clang -O2 rejected the emitted module"
+    );
+    String::from_utf8(out.stdout).expect("utf8 IR")
+}
+
+const HELPER_PROGRAM: &str = "fn add(a, b) = a + b\n\
+    fn main() = {\n\
+        handle Arith { overflow _ _ _ wrapped => wrapped }\n\
+        print(\"${add(2, 3)}\")\n\
+    }\n";
+
+/// The optimised definition of `@name`, `define` line to closing brace. The
+/// optimiser decorates the line (`define noundef i32 @main() local_unnamed_addr`),
+/// so match the name, not the spelling.
+fn definition<'a>(module: &'a str, name: &str) -> Option<&'a str> {
+    let marker = format!("@{name}(");
+    module
+        .match_indices("define ")
+        .filter(|(at, _)| *at == 0 || module[..*at].ends_with('\n'))
+        .map(|(at, _)| &module[at..])
+        .find(|def| {
+            def.lines()
+                .next()
+                .is_some_and(|head| head.contains(&marker))
+        })
+        .map(|def| &def[..def.find("\n}").map_or(def.len(), |end| end + 2)])
+}
+
+#[test]
+fn a_small_helper_is_inlined_into_its_caller() {
+    let module = optimised_ir(HELPER_PROGRAM);
+    let body = definition(&module, "main").expect("main");
+    assert!(!body.contains("@add("), "add was not inlined:\n{body}");
+}
+
+// [CODEGEN-LINKAGE] An executable exports nothing but `main`, so every other
+// function is internal and LLVM drops `@add`'s definition once it is inlined
+// everywhere.
+#[test]
+fn an_executable_drops_a_helper_once_it_is_inlined() {
+    let module = optimised_ir(HELPER_PROGRAM);
+    assert!(
+        definition(&module, "add").is_none(),
+        "inlined helper still defined because it is exported:\n{module}"
+    );
+}
+
 // [PROF-CLI-RUN] end-to-end: `--profile` compiles with the profile
 // pipeline (two-step + dsymutil), runs under the in-runtime sampler, and
 // writes all four exports where `-o` points. POSIX-only by design.

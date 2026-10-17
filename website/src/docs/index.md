@@ -10,6 +10,7 @@ Osprey uses typed algebraic effects to separate application requests from their 
 
 - **[Algebraic effects](/docs/effects/)** — declare an operation, call a reusable handler, replace it in a test, and choose an arithmetic policy.
 - **[One model, two backends](/docs/one-model-two-backends/)** — write GPT-2 once against a static `Tensor` effect, then run it over host lists or on the GPU surface by choosing a handler.
+- **[Write Osprey in the Python flavor](/docs/python-flavor/)** — Osprey source that looks like typed Python and lowers into the same AST, with effects as decorated classes. It is not Python: CPython never runs it. GPT-2 is ported to it byte for byte.
 - **[Install Osprey](/docs/installation/)** — set up the compiler and LLVM/clang toolchain on macOS, Linux, or Windows.
 - **[Build My First App](/docs/my-first-app/)** — create a native CLI that models JSON as a recursive algebraic data type, reads a JSON file, and safely writes the next state.
 - **[Try the Playground](/playground/)** — run small programs in the browser before setting up a local toolchain.
@@ -29,7 +30,7 @@ Osprey uses typed algebraic effects to separate application requests from their 
 - **[Check feature status](/status/)** — see what is stable, partial, experimental, or planned.
 - **[Browse keywords](/docs/keywords/)** — declarations, bindings, matching, imports, and literals.
 
-Osprey currently has two source flavors. Default files use `.osp`, braces, `fn`, and parenthesized calls. ML files use `.ospml`, indentation, currying by default, and whitespace application. Both lower to the same checked program representation.
+A flavor is a surface syntax: its concrete syntax tree lowers into one canonical AST, and everything after that is shared. Default files use `.osp`, braces, `fn`, and parenthesized calls. ML files use `.ospml`, indentation, currying by default, and whitespace application. Python-flavor files use `.py` with the `# osprey: flavor=python` marker, Python-style indentation and annotations, and decorators for effects; they are Osprey, not Python. See the [Python flavor guide](/docs/python-flavor/).
 
 ## Reference
 

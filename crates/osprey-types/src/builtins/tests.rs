@@ -41,6 +41,16 @@ fn process_builtins_match_the_result_returning_runtime() {
 }
 
 #[test]
+fn file_builtins_include_the_host_tensor_loader() {
+    // [BUILTIN-FILE-TENSOR] A safetensors tensor loads as a plain host list,
+    // never as a GpuBuffer, so a host interpretation needs no GPU surface.
+    assert_eq!(
+        builtin_signature("loadTensor").as_deref(),
+        Some("loadTensor : (string, string) -> Result<List<float>, Error>")
+    );
+}
+
+#[test]
 fn network_builtins_match_the_runtime_status_abi() {
     let expected = [
         (

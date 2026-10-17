@@ -8,7 +8,7 @@ use super::*;
 fn erased_values_render_through_their_descriptor() {
     let ir = module("fn dynamic() -> any = \"a\" + \"b\"\nprint(\"${dynamic()}\")\n");
     assert!(ir.contains("call i8* @osp.any.to_string(i8* "));
-    let renderer = function_body(&ir, "define i8* @osp.any.to_string(i8* %box)");
+    let renderer = function_body(&ir, "define internal i8* @osp.any.to_string(i8* %box)");
     assert!(
         renderer.contains("call i8* %r"),
         "the shared entry must dispatch through the descriptor's render slot:\n{renderer}"
@@ -31,7 +31,7 @@ fn structural_narrowing_compares_descriptors() {
              }\n\
              print(\"${describe(erased())}\")\n",
     );
-    let body = function_body(&ir, "define i64 @describe(i8* %$p0)");
+    let body = function_body(&ir, "define internal i64 @describe(i8* %$p0)");
     assert!(
         body.contains("icmp eq i8* ") && body.contains("@osp.any.desc.row.x.y"),
         "narrowing must be a descriptor pointer compare:\n{body}"
@@ -60,7 +60,7 @@ fn structural_match_on_a_concrete_record_is_static() {
              }\n\
              print(\"${fst(Pair(7, \\\"a\\\"))}\")\n",
     );
-    let body = function_body(&ir, "define i64 @fst(i8* %$p0)");
+    let body = function_body(&ir, "define internal i64 @fst(i8* %$p0)");
     assert!(
         body.contains("load i64, i64*") && !body.contains("@osp.any.desc"),
         "a concrete-record structural match binds statically:\n{body}"
@@ -84,7 +84,7 @@ fn named_arguments_are_ordered_by_declaration() {
              fn namedWitness() -> int = takeFirst(second: 22, first: 11)\n",
     );
     assert!(
-        function_body(&external, "define i64 @namedWitness()")
+        function_body(&external, "define internal i64 @namedWitness()")
             .contains("@takeFirst(i64 11, i64 22)"),
         "extern calls must preserve declaration order and the C ABI:\n{external}"
     );
@@ -313,7 +313,7 @@ fn positional_sub_patterns_bind_by_slot_over_a_named_payload() {
     // Slot 0 (`first`, a string) and slot 1 (`second`, an int) are payload
     // fields 1 and 2 — field 0 is the tag. Both must be loaded, at their
     // declared LLVM types, for the two binders to have resolved by column.
-    let body = function_body(&ir, "define i8* @render");
+    let body = function_body(&ir, "define internal i8* @render");
     assert!(
         body.contains("load i8*, i8**") && body.contains("load i64, i64*"),
         "both payload slots must be loaded at their declared types:\n{body}"
@@ -339,7 +339,7 @@ fn positional_binders_ignore_field_names_even_when_they_collide() {
     // Binding by name instead reached slot 0 and returned that string
     // pointer `ptrtoint`-cast to i64 out of an `-> int` function, so the
     // program printed a raw heap address that changed between runs.
-    let body = function_body(&ir, "define i64 @secondSlot");
+    let body = function_body(&ir, "define internal i64 @secondSlot");
     assert!(
         !body.contains("ptrtoint"),
         "an `-> int` arm must not return a payload pointer as an int:\n{body}"
@@ -369,7 +369,7 @@ fn a_positional_declaration_binds_by_column_through_the_named_form() {
     );
     // Slot 0 is payload field 1; loading it as an i8* is the only way the
     // binder could have resolved to a column rather than to a name.
-    let body = function_body(&ir, "define i8* @why");
+    let body = function_body(&ir, "define internal i8* @why");
     assert!(
         body.contains("load i8*, i8**"),
         "the column-0 binder must load the positional payload slot:\n{body}"

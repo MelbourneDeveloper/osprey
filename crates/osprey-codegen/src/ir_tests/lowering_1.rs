@@ -31,7 +31,7 @@ fn emits_arithmetic_function() {
     // Parameters are named positionally, not after their source
     // identifier, so an ML/Default twin pair stays byte-identical
     // ([FLAVOR-IR-EQUIV]).
-    assert!(ir.contains("define i64 @add(i64 %$p0, i64 %$p1)"));
+    assert!(ir.contains("define internal i64 @add(i64 %$p0, i64 %$p1)"));
     assert!(
         ir.contains("call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %$p0, i64 %$p1)"),
         "integer addition must lower through LLVM's checked intrinsic:\n{ir}"
@@ -326,7 +326,7 @@ fn spawn_lowers_to_a_per_instance_closure_cell() {
             .any(|line| line.contains("@fiber_spawn_env_owned") && line.ends_with(", i64 0)")),
         "an erased scalar fiber result must not be probed as a managed pointer:\n{ir}"
     );
-    assert!(ir.contains("define i64 @__fiber_thunk_0(i8* %__env)"));
+    assert!(ir.contains("define internal i64 @__fiber_thunk_0(i8* %__env)"));
     assert!(!ir.contains("@__fiber_cap_"));
     assert!(ir.contains("call i64 @fiber_await(i64"));
 }
@@ -345,7 +345,7 @@ fn inline_lambda_argument_becomes_a_closure_cell() {
     shows(
         &ir,
         &[
-            "define i64 @__closure_fn_0(i8* %__env, i64 %$p0)",
+            "define internal i64 @__closure_fn_0(i8* %__env, i64 %$p0)",
             "@__closure_cell_0 = private unnamed_addr constant { i8* }",
             "call i64 %",
         ],
@@ -368,7 +368,7 @@ fn escaping_closure_captures_its_makers_state() {
     shows(
         &ir,
         &[
-            "define i8* @makeAdder(i64 %$p0)",
+            "define internal i8* @makeAdder(i64 %$p0)",
             "bitcast i8* %__env to { i8*, i64 }*",
             "call i8* @osp_alloc",
         ],
@@ -401,7 +401,7 @@ fn erasure_boxes_with_one_way_ownership() {
     // and its payload slot is masked managed so every backend's drop walk
     // releases the referent through the box: `{ i8* desc, i64 payload }`
     // with word 1 marked is meta 513.
-    let producer = function_body(&ir, "define i8* @dynamic()");
+    let producer = function_body(&ir, "define internal i8* @dynamic()");
     assert!(
         producer.contains("@osp_alloc_tagged_noinit(") && producer.contains(", i64 513)"),
         "an erasing return must box its referent with a managed payload:\n{producer}"
@@ -417,7 +417,7 @@ fn erasure_boxes_with_one_way_ownership() {
     // The pass-through function receives and returns the box UNTOUCHED:
     // no new box, no descriptor reference — and the borrowed return is
     // retained (+1) rather than entered in the ledger as a fresh owner.
-    let pass = function_body(&ir, "define i8* @identity(i8* %$p0)");
+    let pass = function_body(&ir, "define internal i8* @identity(i8* %$p0)");
     assert!(
         !pass.contains("@osp.any.desc"),
         "an `any` -> `any` pass-through must not re-box:\n{pass}"

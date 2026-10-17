@@ -1,6 +1,33 @@
 //! Emitter function state.
 use super::{Codegen, CodegenError, LType, Position, Result, SavedFn, MAX_OPERATION_IDS};
 
+/// The entry point the platform's loader calls, the one symbol an executable
+/// must export.
+const ENTRY: &str = "main";
+
+/// Which functions a module exposes to the linker [CODEGEN-LINKAGE].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum Linkage {
+    /// Every function is external, because the host calls into the module by
+    /// name: the iOS, Android and Python C ABI, and the wasm web exports.
+    #[default]
+    Library,
+    /// Only the entry point is external. Nothing outside an executable calls
+    /// its other functions, so LLVM may drop a helper once it is inlined
+    /// everywhere and specialise the rest.
+    Executable,
+}
+
+impl Linkage {
+    /// The linkage keyword `define` takes for `name`, with its trailing space.
+    fn keyword(self, name: &str) -> &'static str {
+        match self {
+            Linkage::Executable if name != ENTRY => "internal ",
+            _ => "",
+        }
+    }
+}
+
 impl Codegen {
     /// A fresh, module-unique handler-function id.
     pub(crate) fn next_handler_id(&mut self) -> usize {
@@ -220,7 +247,8 @@ impl Codegen {
             .and_then(|d| d.current_function)
             .map_or_else(String::new, |id| format!(" !dbg !{id}"));
         self.funcs.push(format!(
-            "define {ret} @{name}({param_list}) #0{dbg} {{\n{body}\n}}"
+            "define {}{ret} @{name}({param_list}) #0{dbg} {{\n{body}\n}}",
+            self.linkage.keyword(name)
         ));
         self.pop_scope();
         if let Some(debug) = self.debug.as_mut() {

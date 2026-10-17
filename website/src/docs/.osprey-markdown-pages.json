@@ -78,6 +78,7 @@
   "functions/listprepend.md",
   "functions/listreverse.md",
   "functions/ln.md",
+  "functions/loadtensor.md",
   "functions/map-type.md",
   "functions/map.md",
   "functions/mapcontains.md",

@@ -2,6 +2,8 @@
 
 **Osprey is in stabilization mode.** Finish and polish existing features and make the tests prove they are complete. Nothing new until what exists is hardened.
 
+THE LLM IMPLEMENTATION MUST HAVE A GPU EFFECT HANDLER WHERE ALL CALCS ARE DONE ON GPU, AND CPU EFFECT HANDLER WHERE IT DOES NOT TOUCH THE GPU. THIS IS THE CASE FOR DEFAULT FLAVOR AND PYTHON FLAVOR
+
 ## ⚠️ Non-negotiables
 
 - **Subagents are illegal.**
