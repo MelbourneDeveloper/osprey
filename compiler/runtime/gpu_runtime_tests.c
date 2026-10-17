@@ -154,6 +154,8 @@ static void t_take_shrinks_only(void) {
 
 // --- float words and the io_error channel --------------------------------------
 
+#include "tensor_file_tests.h"
+
 // The double a buffer word holds [GPU-BUFFER-ELEM].
 static double at(void *b, int64_t i) {
   int64_t word = osprey_gpu_get(b, i);
@@ -172,23 +174,6 @@ static void *floats(const double *xs, int64_t n) {
     osprey_gpu_set(b, i, word);
   }
   return b;
-}
-
-// Every failure records exactly one sentence, "op: subject: reason".
-static void expect_text(const char *message) {
-  const char *actual = osp_io_error();
-  if (!actual || strcmp(actual, message) != 0) {
-    fprintf(stderr, "expected: %s\n  actual: %s\n", message, actual ? actual : "(none)");
-  }
-  CHECK(actual != NULL && strcmp(actual, message) == 0);
-}
-
-// An errno failure records "op: subject: " followed by the OS's own wording.
-static void expect_errno(const char *prefix, int err) {
-  const char *message = osp_io_error();
-  CHECK(message != NULL);
-  CHECK(strncmp(message, prefix, strlen(prefix)) == 0);
-  CHECK(strstr(message, strerror(err)) != NULL);
 }
 
 // --- the dense product ---------------------------------------------------------
@@ -265,46 +250,6 @@ static void t_matmul_shape_errors(void) {
 
 // --- files on disk ---------------------------------------------------------------
 
-static void put_u16(unsigned char *at, uint16_t v) {
-  at[0] = (unsigned char)(v & 0xff);
-  at[1] = (unsigned char)(v >> 8);
-}
-
-static void put_u32(unsigned char *at, uint32_t v) {
-  put_u16(at, (uint16_t)(v & 0xffff));
-  put_u16(at + 2, (uint16_t)(v >> 16));
-}
-
-static void put_u64(unsigned char *at, uint64_t v) {
-  put_u32(at, (uint32_t)(v & 0xffffffffu));
-  put_u32(at + 4, (uint32_t)(v >> 32));
-}
-
-static void put_f32(unsigned char *at, float f) {
-  uint32_t bits;
-  memcpy(&bits, &f, sizeof bits);
-  put_u32(at, bits);
-}
-
-static void put_f64(unsigned char *at, double d) {
-  uint64_t bits;
-  memcpy(&bits, &d, sizeof bits);
-  put_u64(at, bits);
-}
-
-// `bytes` written to a fresh temporary file whose path is returned (static).
-static const char *temp_file(const unsigned char *bytes, size_t n) {
-  static char path[64];
-  (void)snprintf(path, sizeof path, "/tmp/osprey_gpu_host_XXXXXX");
-  int fd = mkstemp(path);
-  CHECK(fd >= 0);
-  FILE *f = fdopen(fd, "wb");
-  CHECK(f != NULL);
-  CHECK(fwrite(bytes, 1, n, f) == n);
-  CHECK(fclose(f) == 0);
-  return path;
-}
-
 // Raw binary32 words widen exactly — sign of zero, infinities, NaN and a
 // subnormal included — from a byte offset, a short read is an error and count
 // zero is the empty buffer.
@@ -343,111 +288,6 @@ static void t_load_f32(void) {
   CHECK(osprey_gpu_load_f32(NULL, 0, 1) == NULL);
   expect_errno("gpuLoad: ", EINVAL);
   (void)unlink(path);
-}
-
-// The safetensors header this suite reads: `__metadata__` LAST, a name that
-// is a prefix of another (`h.1.w` inside `h.11.w`), every admitted dtype, a
-// refused one, and three malformed entries. Data offsets are relative to the
-// data section. Returns the complete file image's length.
-static size_t safetensors_image(unsigned char *out, size_t cap) {
-  const char *header =
-      "{\"a\":{\"dtype\":\"F32\",\"shape\":[2,3],\"data_offsets\":[0,24]},"
-      "\"h.1.w\":{\"dtype\":\"F16\",\"shape\":[5],\"data_offsets\":[24,34]},"
-      "\"h.11.w\":{\"dtype\":\"BF16\",\"shape\":[2],\"data_offsets\":[34,38]},"
-      "\"d\":{\"dtype\":\"F64\",\"shape\":[2],\"data_offsets\":[38,54]},"
-      "\"i\":{\"dtype\":\"I64\",\"shape\":[1],\"data_offsets\":[54,62]},"
-      "\"inv\":{\"dtype\":\"F32\",\"shape\":[1],\"data_offsets\":[8,4]},"
-      "\"odd\":{\"dtype\":\"F32\",\"shape\":[1],\"data_offsets\":[0,6]},"
-      "\"beyond\":{\"dtype\":\"F32\",\"shape\":[250],\"data_offsets\":[0,1000]},"
-      "\"__metadata__\":{\"format\":\"pt\"}}";
-  size_t n = strlen(header);
-  CHECK(8 + n + 62 <= cap);
-  put_u64(out, (uint64_t)n);
-  memcpy(out + 8, header, n);
-  unsigned char *data = out + 8 + n;
-  float a[] = {0.5f, -1.0f, 2.0f, 3.0f, -4.5f, 6.0f};
-  for (size_t i = 0; i < 6; i++) {
-    put_f32(data + i * 4, a[i]);
-  }
-  uint16_t f16[] = {0x3C00, 0xC100, 0x0001, 0x7C00, 0x7E00}; // 1, -2.5, 2^-24, inf, nan
-  for (size_t i = 0; i < 5; i++) {
-    put_u16(data + 24 + i * 2, f16[i]);
-  }
-  put_u16(data + 34, 0x3F80); // bf16 1.0
-  put_u16(data + 36, 0xC040); // bf16 -3.0
-  put_f64(data + 38, 3.25);
-  put_f64(data + 46, -1e300);
-  put_u64(data + 54, 7);
-  return 8 + n + 62;
-}
-
-// Each admitted dtype widens exactly, the scanner matches whole quoted names
-// regardless of entry order, and every malformed entry is a named error.
-static void t_load_tensor(void) {
-  unsigned char image[1024];
-  const char *path = temp_file(image, safetensors_image(image, sizeof image));
-  osp_io_error_clear();
-  void *a = osprey_gpu_load_tensor(path, "a");
-  CHECK(a != NULL && osprey_gpu_len(a) == 6 && osp_io_error() == NULL);
-  CHECK(at(a, 0) == 0.5 && at(a, 1) == -1.0 && at(a, 4) == -4.5 && at(a, 5) == 6.0);
-  void *h1 = osprey_gpu_load_tensor(path, "h.1.w");
-  CHECK(h1 != NULL && osprey_gpu_len(h1) == 5);
-  CHECK(at(h1, 0) == 1.0 && at(h1, 1) == -2.5 && at(h1, 2) == ldexp(1.0, -24));
-  CHECK(isinf(at(h1, 3)) && at(h1, 3) > 0 && isnan(at(h1, 4)));
-  void *h11 = osprey_gpu_load_tensor(path, "h.11.w");
-  CHECK(h11 != NULL && osprey_gpu_len(h11) == 2);
-  CHECK(at(h11, 0) == 1.0 && at(h11, 1) == -3.0);
-  void *d = osprey_gpu_load_tensor(path, "d");
-  CHECK(d != NULL && osprey_gpu_len(d) == 2 && at(d, 0) == 3.25 && at(d, 1) == -1e300);
-  osp_io_error_clear();
-  CHECK(osprey_gpu_load_tensor(path, "i") == NULL);
-  expect_text("gpuLoadTensor: i: dtype is not F64, F32, F16 or BF16");
-  osp_io_error_clear();
-  CHECK(osprey_gpu_load_tensor(path, "__metadata__") == NULL);
-  expect_text("gpuLoadTensor: __metadata__: dtype is not F64, F32, F16 or BF16");
-  osp_io_error_clear();
-  CHECK(osprey_gpu_load_tensor(path, "h.1") == NULL);
-  expect_text("gpuLoadTensor: h.1: no tensor of that name in the header");
-  osp_io_error_clear();
-  CHECK(osprey_gpu_load_tensor(path, "inv") == NULL);
-  expect_text("gpuLoadTensor: inv: data_offsets are missing or inverted");
-  osp_io_error_clear();
-  CHECK(osprey_gpu_load_tensor(path, "odd") == NULL);
-  expect_text("gpuLoadTensor: odd: byte span is not a whole number of elements");
-  osp_io_error_clear();
-  CHECK(osprey_gpu_load_tensor(path, "beyond") == NULL);
-  CHECK(strstr(osp_io_error(), "file ends before the tensor does") != NULL);
-  osp_io_error_clear();
-  CHECK(osprey_gpu_load_tensor(path, NULL) == NULL);
-  expect_text("gpuLoadTensor: <null path>: no tensor of that name in the header");
-  (void)unlink(path);
-}
-
-// A file that is not a safetensors file is refused at the first byte that
-// proves it: too short for the prefix, an implausible header length, or a
-// header the file ends inside of.
-static void t_load_tensor_malformed_files(void) {
-  unsigned char stub[16] = {0};
-  const char *tiny = temp_file(stub, 4);
-  osp_io_error_clear();
-  CHECK(osprey_gpu_load_tensor(tiny, "a") == NULL);
-  CHECK(strstr(osp_io_error(), "shorter than a safetensors header prefix") != NULL);
-  (void)unlink(tiny);
-  put_u64(stub, (uint64_t)200 * 1024 * 1024);
-  const char *huge = temp_file(stub, 16);
-  osp_io_error_clear();
-  CHECK(osprey_gpu_load_tensor(huge, "a") == NULL);
-  CHECK(strstr(osp_io_error(), "header length is not plausible for safetensors") != NULL);
-  (void)unlink(huge);
-  put_u64(stub, 100);
-  const char *cut = temp_file(stub, 16);
-  osp_io_error_clear();
-  CHECK(osprey_gpu_load_tensor(cut, "a") == NULL);
-  CHECK(strstr(osp_io_error(), "file ends inside the header") != NULL);
-  (void)unlink(cut);
-  osp_io_error_clear();
-  CHECK(osprey_gpu_load_tensor("/nonexistent/osprey/model.safetensors", "a") == NULL);
-  expect_errno("gpuLoadTensor: /nonexistent/osprey/model.safetensors: ", ENOENT);
 }
 
 #if defined(__APPLE__)
@@ -491,8 +331,7 @@ int main(int argc, char **argv) {
   t_matmul_zero_dimensions();
   t_matmul_shape_errors();
   t_load_f32();
-  t_load_tensor();
-  t_load_tensor_malformed_files();
+  t_tensor_loader(&(TensorLoader){"gpuLoadTensor", osprey_gpu_load_tensor, osprey_gpu_len, at});
   printf("[ok] gpu_runtime: %ld assertions\n", g_checks);
   return 0;
 }

@@ -82,6 +82,8 @@ $(NATIVE_RUNTIME_STAMP): $(NATIVE_RUNTIME_INPUTS) $(NATIVE_RUNTIME_CONFIG) Makef
 	  $(CC) $(B) runtime/random_runtime.c       -o bin/random_runtime.o && \
 	  $(CC) $(B) $(GPU_DEVICE_FLAGS) runtime/gpu_runtime.c -o bin/gpu_runtime.o && \
 	  $(CC) $(B) runtime/gpu_host.c             -o bin/gpu_host.o && \
+	  $(CC) $(B) runtime/tensor_file.c          -o bin/tensor_file.o && \
+	  $(CC) $(B) runtime/tensor_list.c          -o bin/tensor_list.o && \
 	  $(CC) $(B) runtime/test_runtime.c         -o bin/test_runtime.o && \
 	  $(CC) $(B) runtime/coverage_runtime.c     -o bin/coverage_runtime.o && \
 	  $(CC) $(B) runtime/profiler_runtime.c     -o bin/profiler_runtime.o && \

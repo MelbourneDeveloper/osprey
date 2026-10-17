@@ -62,6 +62,14 @@
       "threshold": 90,
       "language": "c"
     },
+    "tensor_file": {
+      "threshold": 90,
+      "language": "c"
+    },
+    "tensor_list": {
+      "threshold": 90,
+      "language": "c"
+    },
     "gpu_opencl": {
       "threshold": 90,
       "language": "c"

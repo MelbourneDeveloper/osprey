@@ -70,7 +70,7 @@ pub(crate) const WEBSOCKET_FNS: &[&str] = &[
     "websocketServerListen",
     "websocketServerBroadcast",
 ];
-const FS_FNS: &[&str] = &["readFile", "writeFile"];
+const FS_FNS: &[&str] = &["readFile", "writeFile", "loadTensor"];
 pub(crate) const PROCESS_FNS: &[&str] = &["spawnProcess", "awaitProcess", "cleanupProcess"];
 
 /// Every policy violation in `program`, as ready-to-print messages. Empty means

@@ -291,6 +291,8 @@ fn files(e: &mut TypeEnv) {
     // File surface [BUILTIN-FILE].
     mono(e, "readFile", vec![s()], res(s()));
     mono(e, "writeFile", vec![s(), s()], res(i()));
+    // One safetensors tensor as host floats, never a GpuBuffer [BUILTIN-FILE-TENSOR].
+    mono(e, "loadTensor", vec![s(), s()], res(Type::list(Type::float())));
 }
 
 fn http(e: &mut TypeEnv) {

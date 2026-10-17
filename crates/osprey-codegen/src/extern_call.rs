@@ -33,6 +33,9 @@ enum Ret {
     /// `Some(msg)` is the FALLBACK reason, used only when the call recorded
     /// none of its own on the failure channel [BUILTIN-FILE-ERRMSG].
     ResultStr(Option<&'static str>),
+    /// `Result<List<float>, _>`: the C `i8*` is a fresh float list; `null` ⇒
+    /// Error, with the same fallback rule as `ResultStr`.
+    ResultFloats(Option<&'static str>),
 }
 
 /// One builtin's lowering: its C symbol, parameter LLVM types, and return
@@ -62,6 +65,8 @@ fn lookup(name: &str) -> Option<Sig> {
         // --- file I/O [BUILTIN-FILE] (system_runtime.c) ---
         "readFile" => sig("read_file", &[Str], Ret::ResultStr(Some("File read error"))),
         "writeFile" => sig("write_file", &[Str, Str], Ret::ResultInt),
+        // [BUILTIN-FILE-TENSOR] (tensor_file.c): host floats, no GpuBuffer.
+        "loadTensor" => sig("osprey_load_tensor", &[Str, Str], Ret::ResultFloats(Some("loadTensor: could not read the tensor"))),
         // --- processes [BUILTIN-PROCESS] (system_runtime.c); arg 2 is callback ---
         "spawnProcess" => sig("spawn_process_with_handler", &[Str, Ptr], Ret::ResultInt),
         "awaitProcess" => sig("fiber_await_process", &[I64], Ret::Int),
@@ -228,7 +233,34 @@ fn emit(cg: &mut Codegen, sig: &Sig, ops: &[String]) -> Result<Value> {
             crate::arc::own(cg, &Value::new(&r, LType::Str));
             result_from_nullable(cg, &r, err, Some(&reason))
         }
+        Ret::ResultFloats(err) => {
+            let owner = crate::collections::list_owner(Some("double"));
+            fallible_handle(cg, sig.cname, &params, &op_refs, &owner, err)
+        }
     }
+}
+
+/// Call a runtime producer of a fresh handle tagged `owner` and wrap it:
+/// `Success(handle)`, or `Error(reason)` with the message the producer
+/// recorded, falling back to `fallback` when it recorded none
+/// [BUILTIN-FILE-ERRMSG].
+pub(crate) fn fallible_handle(
+    cg: &mut Codegen,
+    callee: &str,
+    params: &str,
+    operands: &[&str],
+    owner: &str,
+    fallback: Option<&str>,
+) -> Result<Value> {
+    clear_io_error(cg);
+    let raw = cg.call("i8*", callee, params, operands);
+    let reason = take_io_error(cg);
+    let handle = Value::handle(&raw, owner.to_string());
+    // Own the fresh handle; the Result payload store dups its own +1, so this
+    // one drops at region end (null on the error path — a no-op).
+    crate::arc::own(cg, &handle);
+    let is_null = cg.emit_reg(format!("icmp eq i8* {raw}, null"));
+    crate::result::make_result_if_err_because(cg, handle, LType::Ptr, &is_null, fallback, Some(&reason))
 }
 
 /// Retire any reason the calling thread is holding, so a failure recorded by an

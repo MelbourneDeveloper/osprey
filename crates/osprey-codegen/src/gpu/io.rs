@@ -22,9 +22,8 @@ fn arg_as(cg: &mut Codegen, args: &[Expr], i: usize, ty: LType) -> Result<String
     Ok(crate::cast::coerce_to(cg, v, ty)?.operand)
 }
 
-/// Call a runtime producer of a float buffer and wrap its nullable handle:
-/// `Success(buffer)` tagged `Gpu#double`, or `Error(reason)` with the message
-/// the producer recorded, falling back to `fallback` when it recorded none.
+/// Call a runtime producer of a float buffer and wrap its nullable handle,
+/// tagged `Gpu#double`.
 fn fallible_buffer(
     cg: &mut Codegen,
     callee: &str,
@@ -32,22 +31,8 @@ fn fallible_buffer(
     operands: &[&str],
     fallback: &str,
 ) -> Result<Value> {
-    crate::extern_call::clear_io_error(cg);
-    let raw = cg.call("i8*", callee, params, operands);
-    let reason = crate::extern_call::take_io_error(cg);
-    let buffer = Value::handle(&raw, elem_owner(Some(LType::Double)));
-    // Own the fresh handle; the Result payload store dups its own +1, so this
-    // one drops at region end (null on the error path — a no-op).
-    crate::arc::own(cg, &buffer);
-    let is_null = cg.emit_reg(format!("icmp eq i8* {raw}, null"));
-    crate::result::make_result_if_err_because(
-        cg,
-        buffer,
-        LType::Ptr,
-        &is_null,
-        Some(fallback),
-        Some(&reason),
-    )
+    let owner = elem_owner(Some(LType::Double));
+    crate::extern_call::fallible_handle(cg, callee, params, operands, &owner, Some(fallback))
 }
 
 /// `gpuMatMul(left, right, rows, inner, cols)` [GPU-MATMUL].
