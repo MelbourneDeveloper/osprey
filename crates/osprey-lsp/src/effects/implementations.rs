@@ -1,14 +1,17 @@
-//! `textDocument/implementation` over the effect index: an operation lists
-//! the handler arms that answer it, and an effect lists the handlers that
-//! discharge it, in the open buffer and then its project siblings. Implements
-//! [LSP-IMPLEMENTATIONS-EFFECT-HANDLERS].
+//! Navigation over the effect index, in the open buffer and then its project
+//! siblings. `textDocument/implementation` lists the handler arms that answer
+//! an operation and the handlers that discharge an effect
+//! ([LSP-IMPLEMENTATIONS-EFFECT-HANDLERS]); `textDocument/definition` lands on
+//! the operation's declaration ([LSP-DEFINITION-EFFECT-OPERATIONS]).
 
 use lspkit_vfs::PositionEncoding;
 use osprey_syntax::Flavor;
 
+use osprey_ast::Position;
+
 use super::{
     byte_column, effect_index, encoded_column, same_effect, same_operation, target_at,
-    trailing_path, Discharge, EffectIndex, OperationId, Site,
+    trailing_path, Discharge, EffectIndex, OperationId,
 };
 use crate::features::nth_line;
 use crate::model::Location;
@@ -48,26 +51,63 @@ pub(crate) fn implementations(
     })
 }
 
+/// The declaration of the operation under the cursor, from its declaration, a
+/// handler arm or a `perform`. Siblings are indexed only once the cursor is on
+/// an operation, and the first declaring file wins, so a file two manifests
+/// share answers once. Implements [LSP-DEFINITION-EFFECT-OPERATIONS].
+pub(crate) fn operation_definition(
+    source: &str,
+    uri: &str,
+    line: u32,
+    character: u32,
+    encoding: PositionEncoding,
+    project: &workspace::View,
+) -> Vec<Location> {
+    let current = current_file(source, uri, project);
+    target_at(
+        &current.index,
+        source,
+        line,
+        character,
+        encoding,
+        current.flavor,
+    )
+    .and_then(|id| {
+        std::iter::once(current)
+            .chain(sibling_files(project))
+            .find_map(|file| file.declaration(&id, encoding))
+    })
+    .into_iter()
+    .collect()
+}
+
 /// The open buffer, then every project sibling ([LSP-WORKSPACE]).
 fn indexed_files<'a>(
     source: &'a str,
     uri: &'a str,
     project: &'a workspace::View,
 ) -> Vec<IndexedFile<'a>> {
-    let current = IndexedFile {
+    std::iter::once(current_file(source, uri, project))
+        .chain(sibling_files(project))
+        .collect()
+}
+
+fn current_file<'a>(source: &'a str, uri: &'a str, project: &workspace::View) -> IndexedFile<'a> {
+    IndexedFile {
         index: effect_index(&project.program(uri, source)),
         source,
         uri,
         flavor: project.flavor(uri, source),
-    };
-    std::iter::once(current)
-        .chain(project.siblings.iter().map(|sibling| IndexedFile {
-            index: effect_index(&sibling.program),
-            source: &sibling.source,
-            uri: &sibling.uri,
-            flavor: sibling.flavor,
-        }))
-        .collect()
+    }
+}
+
+fn sibling_files(project: &workspace::View) -> impl Iterator<Item = IndexedFile<'_>> {
+    project.siblings.iter().map(|sibling| IndexedFile {
+        index: effect_index(&sibling.program),
+        source: &sibling.source,
+        uri: &sibling.uri,
+        flavor: sibling.flavor,
+    })
 }
 
 fn implementation_target(
@@ -119,9 +159,7 @@ impl IndexedFile<'_> {
                 .handlers
                 .iter()
                 .filter(|site| same_operation(&site.id, id))
-                .filter_map(|site| {
-                    site_location(site, self.source, self.uri, encoding, self.flavor)
-                })
+                .filter_map(|site| self.named_at(site.position, &site.id.operation, encoding))
                 .collect(),
             Target::Effect(effect) => self
                 .index
@@ -131,6 +169,36 @@ impl IndexedFile<'_> {
                 .filter_map(|discharge| self.discharge_location(discharge, encoding))
                 .collect(),
         }
+    }
+
+    fn declaration(&self, id: &OperationId, encoding: PositionEncoding) -> Option<Location> {
+        self.index
+            .declarations
+            .iter()
+            .find(|declaration| same_operation(&declaration.id, id))
+            .and_then(|declaration| self.named_at(declaration.position, &id.operation, encoding))
+    }
+
+    /// The range of `name` starting at an AST `position`.
+    fn named_at(
+        &self,
+        position: Option<Position>,
+        name: &str,
+        encoding: PositionEncoding,
+    ) -> Option<Location> {
+        let position = position?;
+        let line = position.line.checked_sub(1)?;
+        let text = nth_line(self.source, line)?;
+        let start = encoded_column(text, position.column, encoding, self.flavor)?;
+        Some(Location {
+            uri: self.uri.to_owned(),
+            span: (
+                line,
+                start,
+                line,
+                start.saturating_add(measure(name, encoding)),
+            ),
+        })
     }
 
     /// The effect's name in the handler head, searched from the `handle`
@@ -159,22 +227,4 @@ impl IndexedFile<'_> {
             ),
         })
     }
-}
-
-fn site_location(
-    site: &Site,
-    source: &str,
-    uri: &str,
-    encoding: PositionEncoding,
-    flavor: Flavor,
-) -> Option<Location> {
-    let position = site.position?;
-    let line = position.line.checked_sub(1)?;
-    let text = nth_line(source, line)?;
-    let start = encoded_column(text, position.column, encoding, flavor)?;
-    let end = start.saturating_add(measure(&site.id.operation, encoding));
-    Some(Location {
-        uri: uri.to_owned(),
-        span: (line, start, line, end),
-    })
 }

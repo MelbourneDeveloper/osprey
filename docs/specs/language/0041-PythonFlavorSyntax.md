@@ -52,7 +52,7 @@ The surface follows typed Python annotation syntax: [PEP 484](https://peps.pytho
 
 Annotations may be omitted in exactly the situations accepted by Osprey's shared Hindley–Milner checker, including parameters, return values, local bindings, lambdas and inferred polymorphic functions. Omission never introduces implicit `Any`, an unchecked function body or a Python-specific inference fallback. When the shared checker cannot infer a type required by the program, compilation fails; an explicit annotation must supply the missing information. A valid inferred polymorphic type is not itself an inference failure. Explicit annotations constrain that same inference and contradictory uses fail normally.
 
-This is a specified subset of typed Python syntax over Osprey semantics, not blanket conformance to every typing PEP. Class inheritance, protocols/interfaces, dynamic type construction, Python nullability, unchecked gradual casts, and variadic/unconstrained callable types are not added by accepting annotations. Unsupported typing forms must name the missing representation in a diagnostic. Implementation evidence for each supported form belongs in plan 0031.
+This is a specified subset of typed Python annotation notation over Osprey semantics, not blanket conformance to every typing PEP. Class inheritance, protocols/interfaces, dynamic type construction, Python nullability, unchecked gradual casts, and variadic/unconstrained callable types are not added by accepting annotations. Unsupported typing forms must name the missing representation in a diagnostic. Implementation evidence for each supported form belongs in plan 0031.
 
 ## Expressions and iteration — [FLAVOR-PYTHON-EXPRESSIONS]
 

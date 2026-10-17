@@ -5,7 +5,7 @@ This is GPT-2: OpenAI's 124M-parameter language model, running the trained weigh
 The model is written in both the Default flavor and the Python flavor:
 
 - **Default flavor**: [`model/`](model) and [`generate/`](generate), plus a [training step](train).
-- **Python flavor**: [`python/`](python/README.md), typed Python syntax with no `.osp` file anywhere in the project. The [Python flavor guide](https://www.ospreylang.dev/docs/python-flavor/) explains the syntax.
+- **Python flavor**: [`python/`](python/README.md), Osprey source that looks like typed Python, with no `.osp` file anywhere in the project. Each file starts with `# osprey: flavor=python` and is compiled by `osprey`; CPython never runs it. The [Python flavor guide](https://www.ospreylang.dev/docs/python-flavor/) explains how it differs from Python.
 
 Given the same prompt, the Default and Python versions print exactly the same bytes on the CPU, on Metal and on OpenCL. The test `python_gpt2_generator_output_is_byte_identical_to_the_default_generator` compares them on each of those devices.
 
@@ -81,8 +81,8 @@ loss after one step 3.8539085307403895
 | `model/model.osp` | `gpt2::Model` — the configuration, the weights, LayerNorm, attention, the blocks, the forward pass keeping every block's activations, and the KV-cached step; every tensor is `B` |
 | `generate/` | A one-file project: greedy sampling over the forward pass and the cached steps; `main` picks the handler |
 | `train/` | A one-file project: the loss, the backward pass and one SGD step over the same forward pass; `main` picks the handler |
-| [`python/`](python/README.md) | The same program in typed Python syntax, self-contained: the `Tensor` effect and both handlers, the tokenizer, the loader, the model and the sampler as `.py` modules, printing the Default generator's output byte for byte |
-| `reference.py` | The independent pure-Python oracle for both programs |
+| [`python/`](python/README.md) | The same program in the Python flavor (Osprey, not Python), self-contained: the `Tensor` effect and both handlers, the tokenizer, the loader, the model and the sampler as `.py` modules, printing the Default generator's output byte for byte |
+| `reference.py` | Real Python, run by CPython: the independent oracle both Osprey programs are checked against |
 
 A standalone script cannot import across files, so each program is its own
 project naming `model/` as a second source root
@@ -152,6 +152,14 @@ The device's `exp`, `ln` and `tanh` are correctly rounded; a host libm is not on
 | One training step over the 5-token prompt | 25.2 s, 4.0 GB peak | 7.6 s, 5.9 GB peak | 7.8 s, 3.1 GB peak |
 | `reference.py --train`, the same step in pure Python (2026-10-15) | 5 min 49 s, 16.2 GB peak | | |
 
+| Measured 2026-10-17, Apple M4 Max, macOS, release build, `--memory=arc`; `BACKEND=gpu` median of three, `BACKEND=lists` one run | `BACKEND=lists`, `OSPREY_GPU=invalid` | `BACKEND=gpu`, `GPU=host` | `BACKEND=gpu`, `GPU=metal` |
+| --- | --- | --- | --- |
+| 20 tokens from the 5-token prompt, Default flavor | 2 min 23 s, 1.8 GB peak | 8.2 s, 1.6 GB peak | 6.1 s, 2.8 GB peak |
+| The same 20 tokens, Python flavor | 2 min 19 s, 1.8 GB peak | | 7.3 s, 2.8 GB peak |
+| One training step over the 5-token prompt | 3 min 19 s, 3.9 GB peak | | 6.7 s, 3.9 GB peak |
+
+The list handler ran under an `OSPREY_GPU` no backend accepts, so any GPU call would have aborted the run; it printed the same text as Metal in both flavors. Most of its gap is the representation rather than the device: the GPU-surface handler on the CPU (`GPU=host`) is 17 times faster than the list handler, and Metal is 1.3 times faster again for generation.
+
 Training is about three times faster on the device: half its 1 499 dispatches run over 3 072 threads or more. Generation is not: after the prompt each token is a one-row pass through the KV cache, 4 338 of its 5 919 dispatches run over 768 threads or fewer, and without kernel fusion each is its own launch.
 
 On the CPU the GPU-surface handler beats the list handler because its buffers
@@ -193,7 +201,7 @@ lowerings and wasm32 on every `make test`.
 
 ## How it is written
 
-- **Weights** come through the `load` operation: `tensor("h.3.ln_2.bias")` is a `B`. A failed load aborts with its error instead of substituting an empty tensor. Under `onGpu`, `load` uses `gpuLoadTensor`; under `onLists`, the same loader reads back into a list. Shapes are stated at each `matMul`, because tensors are rank-1.
+- **Weights** come through the `load` operation: `tensor("h.3.ln_2.bias")` is a `B`. A failed load aborts with its error instead of substituting an empty tensor. Under `onGpu`, `load` uses `gpuLoadTensor`; under `onLists`, it uses `loadTensor`, which reads the same file with the same reader straight into a list, so the list handler never touches the GPU surface. Shapes are stated at each `matMul`, because tensors are rank-1.
 - **Tokenizer** — GPT-2 encodes bytes, and merge *i* of `merges.txt` is token
   `256 + i`, so the merge list alone is the vocabulary; `vocab.json` is never
   read. Pre-tokenization approximates GPT-2's regular expression for ASCII
@@ -218,7 +226,7 @@ lowerings and wasm32 on every `make test`.
 ## Known limits
 
 - Three stdin lines for `generate` (prompt, token count, backend) and two for
-  `train` (prompt, backend); an unknown backend name selects the GPU surface.
+  `train` (prompt, backend); an unknown backend name prints an error and runs nothing.
 - The handler is chosen where it is written: `match input()` selects between
   two regions the compiler has already specialised. A handler computed at run
   time would need a dynamic effect and a runtime handler.

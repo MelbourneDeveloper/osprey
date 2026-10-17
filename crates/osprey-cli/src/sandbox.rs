@@ -162,7 +162,11 @@ mod tests {
             &prog("let c = readFile(\"a.txt\")\nlet w = writeFile(\"b\", c)\nlet t = loadTensor(\"m\", \"w\")\n"),
             policy,
         );
-        assert_eq!(v.len(), 3, "readFile, writeFile and loadTensor are gated: {v:?}");
+        assert_eq!(
+            v.len(),
+            3,
+            "readFile, writeFile and loadTensor are gated: {v:?}"
+        );
         assert!(v.iter().all(|m| m.contains("--no-fs")));
         for f in ["readFile", "writeFile", "loadTensor"] {
             assert!(v.iter().any(|m| m.contains(f)), "{f} is not gated: {v:?}");

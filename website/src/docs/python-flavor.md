@@ -2,16 +2,32 @@
 mlTwins: manual
 layout: page
 title: Python flavor
-description: Write Osprey in typed Python syntax. The Python syntax tree lowers into the same AST as every other flavor, so inference, algebraic effects, modules, GPU code and native compilation are shared. GPT-2 is the worked example.
+description: The Python flavor is Osprey source that looks like typed Python. The Osprey compiler lowers it into the same AST as every other flavor and compiles it to a native binary; CPython never runs it. GPT-2 is the worked example.
 permalink: /docs/python-flavor/
 tags: [flavors, python, algebraic-effects, gpu]
 ---
 
 Osprey reads source code through flavors. Each flavor parses its own concrete syntax tree (CST), the exact text with its indentation, comments and punctuation, and lowers it into Osprey's single canonical AST. Type inference, effect checking, modules, memory management and native code generation all work on that AST and never see how the code was spelled. Every flavor therefore gets the whole compiler: a new syntax is a new parser, not a new language.
 
-The Python flavor is typed Python syntax with Osprey semantics. You write `def`, `lambda`, `match`, f-strings and PEP 484/695 annotations, and declare effects and handlers with decorated classes. The compiler parses the source itself and produces a native binary. CPython never runs: there is no interpreter, Python object model or Python standard library at compile time or at run time.
+The Python flavor is Osprey that looks like typed Python. You write `def`, `lambda`, `match`, f-strings and PEP 484/695 annotations, and declare effects and handlers with decorated classes. But the program is Osprey: the `osprey` compiler parses it, checks it with Osprey's types and effects, and produces a native binary.
 
-The largest program written in it is [GPT-2 in Python syntax](https://github.com/Nimblesite/osprey/tree/main/examples/gpt2/python). It loads the published Hugging Face weights, runs on the CPU or the GPU depending on which effect handler is installed, and prints exactly the same bytes as the Default-flavor GPT-2.
+The largest program written in it is [GPT-2 in the Python flavor](https://github.com/Nimblesite/osprey/tree/main/examples/gpt2/python). It loads the published Hugging Face weights, runs on the CPU or the GPU depending on which effect handler is installed, and prints exactly the same bytes as the Default-flavor GPT-2.
+
+## Python flavor is not Python
+
+Python-flavor files and Python files both end in `.py`, but they are different languages run by different programs:
+
+| | Python flavor | Python |
+| --- | --- | --- |
+| Language | Osprey | Python |
+| First line | `# osprey: flavor=python` | anything |
+| Run by | `osprey`, which compiles a native binary | CPython, which interprets it |
+| Types | Inferred and checked before the program runs | Checked at run time |
+| Values | Immutable records, `Result` for failure | Mutable objects, exceptions |
+| Imports | Osprey modules, in any flavor | Python packages |
+| GPT-2 in this repository | [`examples/gpt2/python/`](https://github.com/Nimblesite/osprey/tree/main/examples/gpt2/python), the model | [`examples/gpt2/reference.py`](https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/reference.py), the reference it is checked against |
+
+A Python-flavor file is never handed to CPython, and CPython cannot run one: `perform`, `@handler` and `update` mean nothing to it. Every Python-flavor sample on this page starts with the `# osprey: flavor=python` marker. To call real Python from Osprey, use [Python interop](/spec/0042-pythoninterop/).
 
 ## Select the flavor
 
@@ -151,6 +167,8 @@ An operation marked `@control` can resume the code that performed it, using `res
 GPT-2 is written against a static effect called `Tensor`. Static effects are resolved at compile time, so the program does no handler lookup at run time. `B` is the buffer type, and the handler picks it:
 
 ```python
+# osprey: flavor=python
+# examples/gpt2/python/backends.py, abridged
 @static_effect
 class Tensor[B]:
     def build(size: int, kernel: Kernel) -> B: ...
@@ -163,6 +181,8 @@ class Tensor[B]:
 The model performs the operations and never names a buffer type:
 
 ```python
+# osprey: flavor=python
+# examples/gpt2/python/model.py, abridged
 def product(a, b, rows, inner, cols):
     return perform(Tensor.mat_mul(a, b, rows, inner, cols))
 ```
@@ -170,6 +190,8 @@ def product(a, b, rows, inner, cols):
 Two handlers, each in its own file, answer every operation. [`cpu.py`](https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/python/cpu.py) uses host lists:
 
 ```python
+# osprey: flavor=python
+# examples/gpt2/python/cpu.py, abridged
 @static_handler(Tensor[list[float]])
 class on_lists:
     def mat_mul(a, b, rows, inner, cols):
@@ -182,6 +204,8 @@ class on_lists:
 [`gpu.py`](https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/python/gpu.py) uses GPU buffers, run on Metal or OpenCL:
 
 ```python
+# osprey: flavor=python
+# examples/gpt2/python/gpu.py, abridged
 @static_handler(Tensor[GpuBuffer[float]])
 class on_gpu:
     def mat_mul(a, b, rows, inner, cols):
@@ -195,7 +219,7 @@ The model source is the same for both. The handler the program installs decides 
 
 ## Modules and mixed-flavor projects
 
-Every flavor lowers into the same AST, so one project can mix them. Here a Default-flavor entry point imports a module written in Python syntax:
+Every flavor lowers into the same AST, so one project can mix them. Here a Default-flavor entry point imports a module written in the Python flavor:
 
 ```toml
 # osprey.toml
@@ -211,7 +235,7 @@ entry = "src/main.osp"
 # osprey: flavor=python
 # osprey: namespace=shop
 # osprey: module=Pricing
-"""Prices written in Python syntax."""
+"""Prices, written in the Python flavor."""
 
 __all__ = ["discounted"]
 
@@ -234,18 +258,18 @@ Discounted: 60.0
 
 The `# osprey: namespace=` and `# osprey: module=` comments place the file in a module. `__all__` lists the names it exports; anything not listed stays private to the module. `from gpt2.Backends import Tensor` and `from gpt2 import Cpu, Gpu` import Osprey modules, whatever flavor they are written in. They cannot import Python packages.
 
-## What Python syntax does not bring with it
+## What the Python flavor leaves out
 
-Python flavor is Python spelling for an Osprey program. Code that depends on Python's runtime behavior is rejected; it is never passed to an interpreter.
+The Python flavor borrows Python's look, not its runtime. Code that depends on Python's runtime behavior is rejected; it is never passed to an interpreter.
 
-- `import numpy` and other Python packages are unavailable, because imports name Osprey modules. To call CPython code from Osprey, use [Python interop](/spec/0042-pythoninterop/).
+- `import numpy` and other Python packages are unavailable, because imports name Osprey modules.
 - Integers are 64-bit with an `Arith` policy, and floats are binary64. There is no arbitrary precision. Only booleans can be used as conditions, and `and`/`or` return booleans.
 - `while`, `break`, `continue`, `try`/`except`, `raise`, `async`/`await` and `yield` are rejected. Use `fold`, recursion, `Result` and fibers instead.
 - Classes are records, effects or handlers. There is no inheritance, `__init__`, `self` or method dispatch.
 
 The specification describes more of the surface than the compiler currently accepts. `for` loops, list comprehensions, `@union` sum types and keyword patterns that bind a different name (`case Circle(radius=r)`) are specified but not implemented yet, and the compiler rejects them at their source position with ``Python `…` has no supported Osprey lowering``. Editor support is also still to come: VS Code opens `.py` files as ordinary Python. [Plan 0031](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0031-python-flavor.md) tracks what remains.
 
-## Run GPT-2 in Python syntax
+## Run the Python-flavor GPT-2
 
 From the repository root, after building Osprey:
 
@@ -256,6 +280,6 @@ make gpt2 FLAVOR=python BACKEND=lists PROMPT="The capital of France is" TOKENS=1
 
 The first command installs `on_gpu` and the second `on_lists`; the model is unchanged. The test `python_gpt2_generator_output_is_byte_identical_to_the_default_generator` checks that the Python generator prints exactly what the Default generator prints on host lists, Metal and OpenCL. Only generation has been ported so far; the training step is still Default-only.
 
-- [GPT-2 in Python syntax](https://github.com/Nimblesite/osprey/tree/main/examples/gpt2/python): the complete source.
+- [GPT-2 in the Python flavor](https://github.com/Nimblesite/osprey/tree/main/examples/gpt2/python): the complete source.
 - [Python flavor specification](/spec/0041-pythonflavorsyntax/): the full contract.
 - [Language flavors](/spec/0023-languageflavors/): how every flavor lowers into the shared AST.

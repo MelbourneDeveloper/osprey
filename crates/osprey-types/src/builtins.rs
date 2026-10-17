@@ -294,12 +294,17 @@ fn files(e: &mut TypeEnv) {
     mono(e, "writeFile", vec![s(), s()], res(i()));
 }
 
-/// One safetensors tensor as host floats, never a GpuBuffer
+/// One safetensors tensor as host floats, never a `GpuBuffer`
 /// [BUILTIN-FILE-TENSOR]. Like `gpuLoadTensor` it is a weight loader a static
 /// `Tensor` handler arm answers `load` with, so it carries no runtime-builtin
 /// obligation [STAGE-STATIC-MONOTONE]; `--no-fs` still refuses it.
 fn tensors(e: &mut TypeEnv) {
-    mono(e, "loadTensor", vec![s(), s()], res(Type::list(Type::float())));
+    mono(
+        e,
+        "loadTensor",
+        vec![s(), s()],
+        res(Type::list(Type::float())),
+    );
 }
 
 fn http(e: &mut TypeEnv) {

@@ -54,12 +54,15 @@ WASM_STACK_BYTES=4194304
 # and `osprey-arc` are the SAME .osp compiled with the tracing-GC (--memory=gc)
 # and Perceus ARC (--memory=arc) backends, so the allocation cases
 # (binarytrees) show both reclamation strategies next to the default backend.
-LANGS=(osprey osprey-arc osprey-gc rust c csharp dart ocaml haskell osprey-wasm rust-wasm c-wasm)
+# `rust-checked` is the SAME .rs built with `-C overflow-checks=on`: Osprey
+# checks every integer operation (spec 0037), so this is the like-for-like
+# baseline; plain `rust` and `c` run unchecked arithmetic.
+LANGS=(osprey osprey-arc osprey-gc rust rust-checked c csharp dart ocaml haskell osprey-wasm rust-wasm c-wasm)
 if [[ "$PARTIAL" == 1 ]]; then
   LANGS=(osprey osprey-arc osprey-gc osprey-wasm)
 fi
 typeset -A EXT
-EXT=(osprey osp  osprey-arc osp  osprey-gc osp  rust rs  c c  csharp cs  dart dart
+EXT=(osprey osp  osprey-arc osp  osprey-gc osp  rust rs  rust-checked rs  c c  csharp cs  dart dart
      ocaml ml  haskell hs  osprey-wasm osp  rust-wasm rs  c-wasm c)
 
 have() { command -v "$1" >/dev/null 2>&1 }
@@ -87,7 +90,7 @@ wasm_wrap() { printf '#!/bin/sh\nexec wasmtime run -W max-wasm-stack=%s "%s.wasm
 toolchain_ok() {
   case "$1" in
     osprey|osprey-gc|osprey-arc) [[ -x "$OSP" ]] ;;
-    rust)    have rustc ;;
+    rust|rust-checked) have rustc ;;
     c)       have cc ;;
     csharp)  have dotnet ;;
     dart)    have dart ;;
@@ -107,6 +110,7 @@ build() {
     osprey-gc)  ( cd "$dir" && "$OSP" "$name.osp" --memory=gc --compile >/dev/null 2>&1 ) && mv -f "$dir/$name" "$out" ;;
     osprey-arc) ( cd "$dir" && "$OSP" "$name.osp" --memory=arc --compile >/dev/null 2>&1 ) && mv -f "$dir/$name" "$out" ;;
     rust)    rustc -C opt-level=3 -C overflow-checks=off -o "$out" "$dir/$name.rs" 2>/dev/null ;;
+    rust-checked) rustc -C opt-level=3 -C overflow-checks=on -o "$out" "$dir/$name.rs" 2>/dev/null ;;
     c)       cc -O2 -o "$out" "$dir/$name.c" 2>/dev/null ;;
     # C# via NativeAOT (dotnet publish): a real native binary, the fair
     # comparison against the other AOT columns. One throwaway SDK project per

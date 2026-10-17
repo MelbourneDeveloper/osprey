@@ -57,12 +57,30 @@ mod unix {
         (line, start, line, start.saturating_add(width(word)))
     }
 
+    type Feature = fn(&str, &str, u32, u32, PositionEncoding) -> Vec<crate::model::Location>;
+
     /// Implementations of `word` where it appears inside `context`, as the
     /// file name and span of each location.
     fn implementations_at(relative: &str, context: &str, word: &str) -> Vec<(String, Span)> {
+        located_at(
+            crate::test_support::implementations,
+            relative,
+            context,
+            word,
+        )
+    }
+
+    /// The locations `feature` answers for `word` inside `context`, as the
+    /// file name and span of each.
+    fn located_at(
+        feature: Feature,
+        relative: &str,
+        context: &str,
+        word: &str,
+    ) -> Vec<(String, Span)> {
         let (source, uri) = example_source(relative);
         let (line, column, ..) = span_in(&source, context, word);
-        crate::test_support::implementations(&source, &uri, line, column, PositionEncoding::Utf16)
+        feature(&source, &uri, line, column, PositionEncoding::Utf16)
             .into_iter()
             .map(|location| {
                 let file = location.uri.rsplit('/').next().unwrap_or_default();
@@ -178,5 +196,104 @@ mod unix {
         let expected = spans_in(metrics, &["hit _path =>"], "hit");
         let found = implementations_at(metrics, "hit : string => int", "hit");
         assert_eq!(found, expected);
+    }
+
+    /// Where `zipWith` is declared, answered and performed, in each flavor's
+    /// GPT-2. The Python flavor spells the operation `zip_with`.
+    const ZIP_DEFAULT: Operation = Operation {
+        word: "zipWith",
+        declaration: (BACKENDS, "zipWith: fn(B, B, Combine) -> B"),
+        arms: [
+            (CPU, "zipWith a b f => range"),
+            (GPU, "zipWith a b f => gpuZipWith"),
+        ],
+        performs: &[
+            (MODEL, "perform Backends::Tensor.zipWith(a, b, addF)"),
+            (
+                "gpt2/train/train.osp",
+                "perform Backends::Tensor.zipWith(out.dx",
+            ),
+            (
+                "gpt2/train/train.osp",
+                "perform Backends::Tensor.zipWith(p, g",
+            ),
+        ],
+    };
+    const ZIP_PYTHON: Operation = Operation {
+        word: "zip_with",
+        declaration: ("gpt2/python/backends.py", "zip_with(a: B, b: B"),
+        arms: [
+            ("gpt2/python/cpu.py", "def zip_with(a, b, f)"),
+            ("gpt2/python/gpu.py", "def zip_with(a, b, f)"),
+        ],
+        performs: &[(
+            "gpt2/python/model.py",
+            "perform(Tensor.zip_with(a, b, add_f))",
+        )],
+    };
+
+    /// One effect operation's declaration, handler arms and `perform` sites,
+    /// each a file and the text that holds the operation's name.
+    struct Operation {
+        word: &'static str,
+        declaration: (&'static str, &'static str),
+        arms: [(&'static str, &'static str); 2],
+        performs: &'static [(&'static str, &'static str)],
+    }
+
+    impl Operation {
+        fn span(&self, (relative, context): (&str, &str)) -> (String, Span) {
+            let (source, _) = example_source(relative);
+            let file = relative.rsplit('/').next().unwrap_or_default();
+            (file.to_owned(), span_in(&source, context, self.word))
+        }
+
+        fn sites(&self) -> Vec<(&'static str, &'static str)> {
+            [&self.arms[..], self.performs, &[self.declaration]].concat()
+        }
+    }
+
+    // [LSP-DEFINITION-EFFECT-OPERATIONS]: hover on the `zipWith` arm of
+    // gpu.osp's `handle static Tensor` showed `Tensor.zipWith`, but
+    // go-to-definition found nothing, because it looked only for top-level
+    // symbols. Every arm and `perform` lands on the operation's declaration,
+    // in both flavors.
+    #[test]
+    fn definition_on_an_operation_lands_on_its_declaration() {
+        for operation in [ZIP_DEFAULT, ZIP_PYTHON] {
+            let expected = vec![operation.span(operation.declaration)];
+            for (relative, context) in operation.sites() {
+                let found = located_at(
+                    crate::test_support::definition,
+                    relative,
+                    context,
+                    operation.word,
+                );
+                assert_eq!(found, expected, "from `{context}` in {relative}");
+            }
+        }
+    }
+
+    // [LSP-REFERENCES-EFFECT-OPERATIONS]: find-references on an operation lists
+    // its declaration, every handler arm and every `perform`, each once, in
+    // both flavors.
+    #[test]
+    fn references_on_an_operation_list_its_declaration_arms_and_performs() {
+        let with_declaration: Feature = |text, uri, line, character, encoding| {
+            crate::test_support::references(text, uri, line, character, encoding, true)
+        };
+        for operation in [ZIP_DEFAULT, ZIP_PYTHON] {
+            let mut expected: Vec<_> = operation
+                .sites()
+                .into_iter()
+                .map(|site| operation.span(site))
+                .collect();
+            expected.sort();
+            for (relative, context) in operation.sites() {
+                let mut found = located_at(with_declaration, relative, context, operation.word);
+                found.sort();
+                assert_eq!(found, expected, "from `{context}` in {relative}");
+            }
+        }
     }
 }

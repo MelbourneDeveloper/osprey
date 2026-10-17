@@ -142,6 +142,7 @@ Compile commands (source of truth: [`run.sh`](run.sh)):
 | Osprey (ARC) | `osprey <f>.osp --memory=arc --compile` (same IR; links the Perceus reference-counting runtime archive — [MEM-BACKENDS]) |
 | Osprey (GC) | `osprey <f>.osp --memory=gc --compile` (same IR; links the tracing-GC runtime archive — [MEM-BACKENDS]) |
 | Rust    | `rustc -C opt-level=3 -C overflow-checks=off -o <bin> <f>.rs` |
+| Rust (checked) | `rustc -C opt-level=3 -C overflow-checks=on -o <bin> <f>.rs` — the same source with Rust's integer overflow checks on. Osprey checks every integer operation ([spec 0037](../docs/specs/language/0037-ArithmeticEffects.md)), so this column is the like-for-like baseline; `Rust` and `C` run unchecked arithmetic |
 | C       | `cc -O2 -o <bin> <f>.c` |
 | OCaml   | `ocamlopt -O3 -unsafe -o <bin> <f>.ml` |
 | Haskell | `ghc -O2 -o <bin> <f>.hs` |

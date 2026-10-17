@@ -122,7 +122,7 @@ Nothing in the model mentions a list or a buffer. Hindley-Milner inference carri
 
 ## Answer with lists
 
-The first handler answers every operation with ordinary list code. The product accumulates in `k` order from `0.0`, and that order is the contract: the two handlers must produce the same doubles, not nearly the same. Both handlers answer `indexOf` in the same two steps: element `i` names itself when it holds the value and the length otherwise (`hit`), and the smallest name wins (`minI`). `orAbort` ends the run with the error when a load or a product fails, so the model never computes on a fabricated empty tensor.
+The first handler answers every operation with ordinary list code. The product accumulates in `k` order from `0.0`, and that order is the contract: the two handlers must produce the same doubles, not nearly the same. Both handlers answer `indexOf` in the same two steps: element `i` names itself when it holds the value and the length otherwise (`hit`), and the smallest name wins (`minI`). Weights load with `loadTensor`, which reads a safetensors tensor straight into a `List<float>`, so this handler never touches the GPU surface: a program that installs only it links no GPU code. Each handler has its own `orAbort`, which ends the run through that handler's runtime when a load or a product fails, so the model never computes on a fabricated empty tensor.
 
 ```osprey
 export fn onLists(work) = {
@@ -135,7 +135,7 @@ export fn onLists(work) = {
         indexOf b x => range(0, listLength(b)) |> map(fn(i) => hit(listGet(b, i) ?: 0.0, x, i, listLength(b))) |> fold(listLength(b), minI)
         matMul a b rows inner cols => range(0, rows * cols) |> map(fn(i) => range(0, inner) |> fold(0.0, fn(acc, k) => acc + (listGet(a, intDiv(i, cols) * inner + k) ?: 0.0) * (listGet(b, k * cols + i % cols) ?: 0.0))) |> toList()
         fromList xs => xs
-        load path name => fromGpu(orAbort(gpuLoadTensor(path, name)))
+        load path name => orAbort(loadTensor(path, name))
         device => "lists"
     }
     work()
@@ -153,7 +153,7 @@ export onLists work =
         indexOf b x => range 0 (listLength b) |> map (\i => hit (listGet b i ?: 0.0, x, i, listLength b)) |> fold (listLength b) minI
         matMul a b rows inner cols => range 0 (rows * cols) |> map (\i => range 0 inner |> fold 0.0 (\(acc, k) => acc + (listGet a (intDiv (i, cols) * inner + k) ?: 0.0) * (listGet b (k * cols + i % cols) ?: 0.0))) |> toList
         fromList xs => xs
-        load path name => fromGpu (orAbort (gpuLoadTensor path name))
+        load path name => orAbort (loadTensor path name)
         device => "lists"
     work ()
 ```

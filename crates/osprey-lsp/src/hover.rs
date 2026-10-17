@@ -16,6 +16,7 @@ use osprey_ast::Program;
 use osprey_syntax::Flavor;
 
 use crate::analysis::{builtin_hover, collect_all_symbols, SymbolInfo, SymbolKind};
+use crate::features::scope::enclosing_function;
 use crate::features::{best_match, nth_line, symbol_matches, word_under};
 use crate::mlrender;
 use crate::reference_docs::{keyword_hover, type_hover};
@@ -230,18 +231,6 @@ fn parameter_hover(
         written.clone()
     };
     Some(mlrender::fenced(flavor, &format!("{name}: {ty}")))
-}
-
-/// The declared function whose body contains `line` — the nearest declaration
-/// at or above the cursor. A parameter is only in scope inside its own body, so
-/// resolving without this would let one function's `x` answer for another's.
-fn enclosing_function(symbols: &[SymbolInfo], line: u32) -> Option<&SymbolInfo> {
-    let cursor = line.saturating_add(1); // AST positions are 1-based lines.
-    symbols
-        .iter()
-        .filter(|s| s.kind == SymbolKind::Function)
-        .filter(|s| s.position.is_some_and(|p| p.line <= cursor))
-        .max_by_key(|s| s.position.map_or(0, |p| p.line))
 }
 
 /// The checker's type for one parameter, rendered the way a declaration hover

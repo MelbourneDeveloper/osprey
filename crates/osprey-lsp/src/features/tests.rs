@@ -87,6 +87,104 @@ fn qualified_hover_definition_and_references_resolve_one_module_member() {
     assert!(!references.iter().any(|location| location.span.0 == 4));
 }
 
+/// A word by `(line, needle)`: the identifier that starts the needle's first
+/// occurrence on that 0-based line.
+type Word<'a> = (usize, &'a str);
+
+fn word_span(src: &str, (line, needle): Word<'_>) -> (u32, u32, u32, u32) {
+    let word = needle
+        .split(|c: char| !c.is_alphanumeric() && c != '_')
+        .next()
+        .unwrap_or(needle);
+    let start = col_of(src, line, needle) - 1;
+    let row = u32::try_from(line).expect("line fits");
+    (
+        row,
+        start,
+        row,
+        start + u32::try_from(word.len()).expect("word fits"),
+    )
+}
+
+fn definitions_at(src: &str, uri: &str, cursor: Word<'_>) -> Vec<(u32, u32, u32, u32)> {
+    let row = u32::try_from(cursor.0).expect("line fits");
+    definition(src, uri, row, col_of(src, cursor.0, cursor.1), U16)
+        .into_iter()
+        .map(|location| location.span)
+        .collect()
+}
+
+/// Every `(use, binding)` pair resolves the use to exactly that binding.
+fn assert_scoped_definitions(src: &str, uri: &str, cases: &[(Word<'_>, Word<'_>)]) {
+    for &(cursor, binding) in cases {
+        let found = definitions_at(src, uri, cursor);
+        assert_eq!(found, vec![word_span(src, binding)], "{cursor:?} in {uri}");
+    }
+}
+
+const SCOPED_DEFAULT: &str = "effect Log { write: fn(string) -> Unit }\n\
+fn twice(work) = {\n    let first = work()\n    handle Log {\n        write message => print(message)\n    }\n    first + work()\n}\n\
+fn other(work) = work()\n";
+
+const SCOPED_PYTHON: &str =
+    "# osprey: flavor=python\n@effect\nclass Log:\n    def write(message: str) -> None: ...\n\n\n\
+@handler(Log)\nclass console:\n    def write(message):\n        print(message)\n\n\n\
+def twice(work):\n    first = work()\n    return first + work()\n\n\n\
+def other(work):\n    return work()\n";
+
+// [LSP-DEFINITION-LOCAL]: `work()` in gpu.osp's `onGpu(work)` found no
+// definition, because definition read only top-level declarations. A
+// parameter, a local binding and a handler-arm parameter resolve to the
+// binding in scope, never to a same-named binding in another function.
+#[test]
+fn definition_resolves_parameters_locals_and_arm_parameters_in_scope() {
+    assert_scoped_definitions(
+        SCOPED_DEFAULT,
+        "file:///scoped.osp",
+        &[
+            ((2, "work()"), (1, "work)")),
+            ((6, "work()"), (1, "work)")),
+            ((1, "work)"), (1, "work)")),
+            ((6, "first"), (2, "first")),
+            ((4, "message)"), (4, "message =>")),
+            ((8, "work()"), (8, "work)")),
+        ],
+    );
+    assert_scoped_definitions(
+        SCOPED_PYTHON,
+        "file:///scoped.py",
+        &[
+            ((13, "work()"), (12, "work)")),
+            ((14, "work()"), (12, "work)")),
+            ((14, "first"), (13, "first")),
+            ((9, "message)"), (8, "message")),
+            ((18, "work()"), (17, "work)")),
+        ],
+    );
+}
+
+// [LSP-REFERENCES-LOCAL]: references to a parameter stay inside its function;
+// `other`'s `work` is a different binding.
+#[test]
+fn references_to_a_parameter_stay_inside_its_function() {
+    let uri = "file:///scoped.osp";
+    let cursor = col_of(SCOPED_DEFAULT, 2, "work()");
+    let mut with: Vec<_> = references(SCOPED_DEFAULT, uri, 2, cursor, U16, true)
+        .into_iter()
+        .map(|location| location.span)
+        .collect();
+    with.sort_unstable();
+    let expected: Vec<_> = [(1, "work)"), (2, "work()"), (6, "work()")]
+        .into_iter()
+        .map(|word| word_span(SCOPED_DEFAULT, word))
+        .collect();
+    assert_eq!(with, expected);
+    assert_eq!(
+        references(SCOPED_DEFAULT, uri, 2, cursor, U16, false).len(),
+        2
+    );
+}
+
 #[test]
 fn definition_and_references_return_empty_off_any_identifier() {
     // A two-space gap guarantees a column that is over neither word.

@@ -4,7 +4,7 @@ title: "Osprey Flavors: Any Syntax, One Language"
 excerpt: "Every Osprey flavor lowers its concrete syntax tree into one canonical AST."
 description: "How every Osprey source flavor shares one AST and one compiler pipeline."
 modified: 2026-10-17
-tags: ["blog", "language-design", "flavors", "functional-programming", "ml-syntax", "python-syntax"]
+tags: ["blog", "language-design", "flavors", "functional-programming", "ml-syntax", "python-flavor"]
 author: "Christian Findlay"
 readingTime: 3
 image: /assets/images/blog/osprey-flavors.png
@@ -19,8 +19,8 @@ these today:
 - **Default (`.osp`)** uses braces, `fn`, named arguments and familiar calls.
 - **ML (`.ospml`)** uses layout, curry-by-default functions and whitespace
   application.
-- **Python (`.py`)** uses typed Python syntax, with decorators and `with` for
-  effects.
+- **Python flavor (`.py`)** looks like typed Python, with decorators and `with`
+  for effects. It is Osprey compiled by `osprey`; CPython never runs it.
 
 ```osprey
 fn add(x) = fn(y) => x + y
@@ -46,7 +46,7 @@ classify n =
 
 Flavor selection works per file through `.osp` or `.ospml`, a leading source marker such as `# osprey: flavor=python`, or `--flavor` for a single-file build. A project can mix flavors and import across them.
 
-Default and ML support `effect`, `perform`, `handle` and `handler`, and Python spells the same effects with `@effect` classes, `perform(...)`, handler classes and `with`; see [Effect Handlers You Can Call](/blog/2026-10-05-effect-handlers-you-can-call/).
+Default and ML support `effect`, `perform`, `handle` and `handler`, and the Python flavor spells the same effects with `@effect` classes, `perform(...)`, handler classes and `with`; see [Effect Handlers You Can Call](/blog/2026-10-05-effect-handlers-you-can-call/).
 
 See the [tested examples](https://github.com/Nimblesite/osprey/tree/main/tests/regressions)
 and [language-flavor specification](/spec/0023-languageflavors/).

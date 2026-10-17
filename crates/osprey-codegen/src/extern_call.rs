@@ -66,7 +66,11 @@ fn lookup(name: &str) -> Option<Sig> {
         "readFile" => sig("read_file", &[Str], Ret::ResultStr(Some("File read error"))),
         "writeFile" => sig("write_file", &[Str, Str], Ret::ResultInt),
         // [BUILTIN-FILE-TENSOR] (tensor_file.c): host floats, no GpuBuffer.
-        "loadTensor" => sig("osprey_load_tensor", &[Str, Str], Ret::ResultFloats(Some("loadTensor: could not read the tensor"))),
+        "loadTensor" => sig(
+            "osprey_load_tensor",
+            &[Str, Str],
+            Ret::ResultFloats(Some("loadTensor: could not read the tensor")),
+        ),
         // --- processes [BUILTIN-PROCESS] (system_runtime.c); arg 2 is callback ---
         "spawnProcess" => sig("spawn_process_with_handler", &[Str, Ptr], Ret::ResultInt),
         "awaitProcess" => sig("fiber_await_process", &[I64], Ret::Int),
@@ -260,7 +264,14 @@ pub(crate) fn fallible_handle(
     // one drops at region end (null on the error path — a no-op).
     crate::arc::own(cg, &handle);
     let is_null = cg.emit_reg(format!("icmp eq i8* {raw}, null"));
-    crate::result::make_result_if_err_because(cg, handle, LType::Ptr, &is_null, fallback, Some(&reason))
+    crate::result::make_result_if_err_because(
+        cg,
+        handle,
+        LType::Ptr,
+        &is_null,
+        fallback,
+        Some(&reason),
+    )
 }
 
 /// Retire any reason the calling thread is holding, so a failure recorded by an
@@ -362,14 +373,24 @@ mod tests {
             "let w = loadTensor(\"m.safetensors\", \"w\")\n\
              let first = match w { Success { value } => listGet(value, 0) ?: 0.0  Error { message } => 0.0 }\n",
         );
-        assert!(parsed.errors.is_empty(), "syntax errors: {:?}", parsed.errors);
+        assert!(
+            parsed.errors.is_empty(),
+            "syntax errors: {:?}",
+            parsed.errors
+        );
         let ir = crate::compile_program(&parsed.program).expect("loadTensor codegen");
         let call = ir.find("call i8* @osprey_load_tensor(");
         assert!(call.is_some(), "{ir}");
         let (before, after) = ir.split_at(call.unwrap_or(0));
-        assert!(before.rfind("call void @osp_io_error_clear()").is_some(), "{ir}");
+        assert!(
+            before.rfind("call void @osp_io_error_clear()").is_some(),
+            "{ir}"
+        );
         assert!(after.contains("call i8* @osp_io_error_take()"), "{ir}");
-        assert!(!ir.contains("osprey_gpu_"), "loadTensor reached the GPU surface: {ir}");
+        assert!(
+            !ir.contains("osprey_gpu_"),
+            "loadTensor reached the GPU surface: {ir}"
+        );
     }
 
     #[test]

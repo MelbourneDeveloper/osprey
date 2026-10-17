@@ -1,5 +1,7 @@
-//! Native end-to-end pins for the file-backed GPU loaders, [GPU-BUFFER-TENSOR]
-//! and [GPU-BUFFER-LOAD], and for [GPU-MATMUL] over a loaded tensor.
+//! Native end-to-end pins for the file-backed tensor loaders — the GPU
+//! surface's [GPU-BUFFER-TENSOR] and [GPU-BUFFER-LOAD], the host's
+//! [BUILTIN-FILE-TENSOR] — for [GPU-MATMUL] over a loaded tensor, and for the
+//! separation of GPT-2's two `Tensor` handlers in both flavors.
 //!
 //! The corpus harness cannot read a committed file — wasm runs in a fresh
 //! preopened sandbox and the mobile hosts chdir into a scratch directory — so
@@ -52,7 +54,7 @@ fn run(path: &Path) -> (Option<i32>, String, String) {
 
 fn run_with_gpu(path: &Path, backend: &str) -> (Option<i32>, String, String) {
     let output = Command::new(env!("CARGO_BIN_EXE_osprey"))
-        .current_dir(manifest().join("..").join(".."))
+        .current_dir(repo())
         .arg(path)
         .args(["--run", "--quiet"])
         .env("OSPREY_GPU", backend)
@@ -78,16 +80,159 @@ fn both_flavors_read_the_safetensors_fixture_exactly() {
     }
 }
 
+fn repo() -> PathBuf {
+    manifest().join("..").join("..")
+}
+
+/// `directory` holding `config` and the entry `entry`, whose `@FIXTURE@` names
+/// the committed safetensors fixture.
+fn project_at(directory: PathBuf, entry: &str, source: &str, config: &str) -> Option<PathBuf> {
+    let fixture = manifest().join("tests/fixtures/transformer.safetensors");
+    std::fs::create_dir_all(&directory).ok()?;
+    std::fs::write(directory.join("osprey.toml"), config).ok()?;
+    let source = source.replace("@FIXTURE@", &fixture.display().to_string());
+    std::fs::write(directory.join(entry), source).ok()?;
+    Some(directory)
+}
+
 /// A project whose `main.osp` is `source`, importing the gpt2 model modules.
 fn gpt2_project(name: &str, source: &str) -> Option<PathBuf> {
     let directory = std::env::temp_dir().join(format!("osprey_gpt2_{name}_{}", std::process::id()));
-    std::fs::create_dir_all(&directory).ok()?;
-    let model = manifest().join("../../examples/gpt2/model");
+    let model = repo().join("examples/gpt2/model");
     let model = serde_json::to_string(&model.to_string_lossy()).ok()?;
     let config = format!("[project]\nname = \"failure\"\nsource_roots = [{model}, \".\"]\ndefault_namespace = \"failure\"\nentry = \"main.osp\"\n");
-    std::fs::write(directory.join("osprey.toml"), config).ok()?;
-    std::fs::write(directory.join("main.osp"), source).ok()?;
-    Some(directory)
+    project_at(directory, "main.osp", source, &config)
+}
+
+/// A Python-flavor project whose `main.py` is `source`, over the port's own
+/// modules. Python sources are manifest-relative, so it lives under target/.
+fn python_gpt2_project(name: &str, source: &str) -> Option<PathBuf> {
+    let directory = repo()
+        .join("target")
+        .join(format!("osprey_pygpt2_{name}_{}", std::process::id()));
+    let port = repo().join("examples/gpt2/python");
+    let port = serde_json::to_string(&port.to_string_lossy()).ok()?;
+    let modules = ["backends", "cpu", "gpu", "model"]
+        .map(|m| format!("\"../../examples/gpt2/python/{m}.py\""))
+        .join(", ");
+    let config = format!("[project]\nname = \"{name}\"\nsource_roots = [\".\", {port}]\npython_sources = [{modules}]\nentry = \"main.py\"\n");
+    project_at(directory, "main.py", source, &config)
+}
+
+/// The `--llvm` text of a project; empty when it does not compile.
+fn llvm(path: &Path) -> String {
+    Command::new(env!("CARGO_BIN_EXE_osprey"))
+        .current_dir(repo())
+        .arg(path)
+        .arg("--llvm")
+        .output()
+        .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
+        .unwrap_or_default()
+}
+
+/// One handler loads the fixture's `w`, squares it and names itself.
+const DEFAULT_SQUARE: &str = "import gpt2::Backends\nimport gpt2::@MODULE@\n\
+fn square() = {\n    let w = perform Backends::Tensor.load(\"@FIXTURE@\", \"w\")\n    let p = perform Backends::Tensor.matMul(w, w, 2, 2, 2)\n    \
+print(\"${perform Backends::Tensor.device()} ${perform Backends::Tensor.get(p, 0)} ${perform Backends::Tensor.get(p, 3)}\")\n}\n\
+fn main() = match Backends::strictly(fn() => @MODULE@::@HANDLER@(square)) {\n    Success { value } => value\n    Error { message } => print(message)\n}\n";
+
+const PYTHON_SQUARE: &str = "# osprey: flavor=python\nfrom gpt2 import Backends, @MODULE@\nfrom gpt2.Backends import Tensor\n\n\n\
+def square():\n    w = perform(Tensor.load(\"@FIXTURE@\", \"w\"))\n    p = perform(Tensor.mat_mul(w, w, 2, 2, 2))\n    device = perform(Tensor.device())\n    \
+first = perform(Tensor.get(p, 0))\n    last = perform(Tensor.get(p, 3))\n    return print(f\"{device} {first} {last}\")\n\n\n\
+def main():\n    match Backends.strictly(lambda: @MODULE@.@HANDLER@(square)):\n        case Success(value=value):\n            return value\n        \
+case Error(message=message):\n            return print(message)\n";
+
+/// `square` under `module`'s handler in each flavor, as `(flavor, project)`.
+fn square_projects(module: &str, handlers: [&str; 2]) -> Vec<(&'static str, Option<PathBuf>)> {
+    let source = |template: &str, handler: &str| {
+        template
+            .replace("@MODULE@", module)
+            .replace("@HANDLER@", handler)
+    };
+    vec![
+        (
+            "default",
+            gpt2_project(
+                &format!("{module}_osp"),
+                &source(DEFAULT_SQUARE, handlers[0]),
+            ),
+        ),
+        (
+            "python",
+            python_gpt2_project(&format!("{module}_py"), &source(PYTHON_SQUARE, handlers[1])),
+        ),
+    ]
+}
+
+/// [BUILTIN-FILE-TENSOR] The CPU handler loads and multiplies over host lists
+/// with no GPU surface in the program at all: its IR names no `osprey_gpu_`
+/// symbol, and it runs under an `OSPREY_GPU` that aborts any GPU call.
+#[test]
+fn the_cpu_handler_never_touches_the_gpu_in_either_flavor() {
+    for (flavor, path) in square_projects("Cpu", ["onLists", "on_lists"]) {
+        assert!(path.is_some(), "{flavor}: the program could not be written");
+        let path = path.unwrap_or_default();
+        let ir = llvm(&path);
+        assert!(
+            ir.contains("@osprey_load_tensor("),
+            "{flavor}: no host load: {ir}"
+        );
+        assert!(
+            !ir.contains("osprey_gpu_"),
+            "{flavor}: the CPU handler reached the GPU surface: {ir}"
+        );
+        let (code, stdout, stderr) = run_with_gpu(&path, "invalid");
+        assert_eq!(
+            (code, stdout.as_str()),
+            (Some(0), "lists -1.75 7.0\n"),
+            "{flavor}: {stderr}"
+        );
+        let _ = std::fs::remove_dir_all(path);
+    }
+}
+
+/// The GPU handler loads and multiplies through the GPU surface alone: its IR
+/// names neither the host loader nor the host abort.
+#[test]
+fn the_gpu_handler_never_touches_the_host_tensor_surface_in_either_flavor() {
+    for (flavor, path) in square_projects("Gpu", ["onGpu", "on_gpu"]) {
+        assert!(path.is_some(), "{flavor}: the program could not be written");
+        let path = path.unwrap_or_default();
+        let ir = llvm(&path);
+        assert!(
+            ir.contains("@osprey_gpu_load_tensor(") && ir.contains("@osprey_gpu_matmul("),
+            "{flavor}: {ir}"
+        );
+        assert!(
+            !ir.contains("osprey_load_tensor") && !ir.contains("osprey_tensor_panic"),
+            "{flavor}: {ir}"
+        );
+        let (code, stdout, stderr) = run_with_gpu(&path, "host");
+        assert_eq!(
+            (code, stdout.as_str()),
+            (Some(0), "host -1.75 7.0\n"),
+            "{flavor}: {stderr}"
+        );
+        let _ = std::fs::remove_dir_all(path);
+    }
+}
+
+/// [GPU-BACKEND-DEVICE] A launch site whose kernel has no device form runs on
+/// the CPU under the host and aborts under a device. No GPT-2 program has one,
+/// so under a selected device every kernel the GPU handler launches runs there.
+#[test]
+fn every_gpt2_kernel_has_a_device_form() {
+    for program in ["generate", "train", "python/generate"] {
+        let ir = llvm(&repo().join("examples/gpt2").join(program));
+        assert!(
+            ir.contains("call i32 @osprey_gpu_launch("),
+            "{program}: no device launch: {ir}"
+        );
+        assert!(
+            !ir.contains("@osprey_gpu_declined"),
+            "{program}: a kernel has no device form"
+        );
+    }
 }
 
 #[test]

@@ -224,6 +224,7 @@ suite("TextMate grammars", () => {
       const discharged = tokenize(grammar, discharge);
       assertScoped(discharged, "handle", "keyword.control");
       assertScoped(discharged, "Tensor", "entity.name.type.effect");
+      assertScoped(discharged, "GpuBuffer", "entity.name.type");
       const qualified = tokenize(grammar, "handle Backends::Tensor");
       assertScoped(qualified, "Backends::Tensor", "entity.name.type.effect");
     }

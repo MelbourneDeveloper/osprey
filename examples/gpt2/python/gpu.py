@@ -25,10 +25,6 @@ def or_abort(result):
             return osprey_gpu_panic(message)
 
 
-def fetched(b, i):
-    return unwrap_or(gpuGet(b, i), 0.0)
-
-
 @static_handler(Tensor[GpuBuffer[float]])
 class on_gpu:
     """GPU buffers, and `device` reports which backend executes them. Kernels and
@@ -37,7 +33,7 @@ class on_gpu:
         return gpuMap(gpuIota(n), f)
 
     def get(b, i):
-        return fetched(b, i)
+        return unwrap_or(gpuGet(b, i), 0.0)
 
     def length(b):
         return gpuLength(b)
@@ -49,7 +45,7 @@ class on_gpu:
         return gpuFold(b, seed, f)
 
     def index_of(b, x):
-        return gpuFold(gpuMap(gpuIota(gpuLength(b)), lambda i: hit(fetched(b, i), x, i, gpuLength(b))), gpuLength(b), min_i)
+        return gpuFold(gpuMap(gpuIota(gpuLength(b)), lambda i: hit(unwrap_or(gpuGet(b, i), 0.0), x, i, gpuLength(b))), gpuLength(b), min_i)
 
     def mat_mul(a, b, rows, inner, cols):
         return or_abort(gpuMatMul(a, b, rows, inner, cols))

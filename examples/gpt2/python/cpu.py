@@ -27,14 +27,6 @@ def or_abort(result):
             return osprey_tensor_panic(message)
 
 
-def element(b, i):
-    return unwrap_or(listGet(b, i), 0.0)
-
-
-def dot(a, b, i, inner, cols):
-    return fold(range(inner), 0.0, lambda acc, k: acc + element(a, i // cols * inner + k) * element(b, k * cols + i % cols))
-
-
 @static_handler(Tensor[list[float]])
 class on_lists:
     """Host lists, loaded straight into lists from the safetensors file."""
@@ -42,22 +34,22 @@ class on_lists:
         return toList(map(range(n), f))
 
     def get(b, i):
-        return element(b, i)
+        return unwrap_or(listGet(b, i), 0.0)
 
     def length(b):
         return len(b)
 
     def zip_with(a, b, f):
-        return toList(map(range(len(a)), lambda i: f(element(a, i), element(b, i))))
+        return toList(map(range(len(a)), lambda i: f(unwrap_or(listGet(a, i), 0.0), unwrap_or(listGet(b, i), 0.0))))
 
     def reduce(b, seed, f):
-        return fold(range(len(b)), seed, lambda a, i: f(a, element(b, i)))
+        return fold(range(len(b)), seed, lambda a, i: f(a, unwrap_or(listGet(b, i), 0.0)))
 
     def index_of(b, x):
-        return fold(map(range(len(b)), lambda i: hit(element(b, i), x, i, len(b))), len(b), min_i)
+        return fold(map(range(len(b)), lambda i: hit(unwrap_or(listGet(b, i), 0.0), x, i, len(b))), len(b), min_i)
 
     def mat_mul(a, b, rows, inner, cols):
-        return toList(map(range(rows * cols), lambda i: dot(a, b, i, inner, cols)))
+        return toList(map(range(rows * cols), lambda i: fold(range(inner), 0.0, lambda acc, k: acc + unwrap_or(listGet(a, i // cols * inner + k), 0.0) * unwrap_or(listGet(b, k * cols + i % cols), 0.0))))
 
     def from_list(xs):
         return xs
