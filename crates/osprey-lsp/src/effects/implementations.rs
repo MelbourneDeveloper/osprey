@@ -64,21 +64,15 @@ pub(crate) fn operation_definition(
     project: &workspace::View,
 ) -> Vec<Location> {
     let current = current_file(source, uri, project);
-    target_at(
-        &current.index,
-        source,
-        line,
-        character,
-        encoding,
-        current.flavor,
-    )
-    .and_then(|id| {
-        std::iter::once(current)
-            .chain(sibling_files(project))
-            .find_map(|file| file.declaration(&id, encoding))
-    })
-    .into_iter()
-    .collect()
+    current
+        .operation_at(line, character, encoding)
+        .and_then(|id| {
+            std::iter::once(current)
+                .chain(sibling_files(project))
+                .find_map(|file| file.declaration(&id, encoding))
+        })
+        .into_iter()
+        .collect()
 }
 
 /// The open buffer, then every project sibling ([LSP-WORKSPACE]).
@@ -116,17 +110,11 @@ fn implementation_target(
     character: u32,
     encoding: PositionEncoding,
 ) -> Option<Target> {
-    let current = files.first()?;
-    target_at(
-        &current.index,
-        current.source,
-        line,
-        character,
-        encoding,
-        current.flavor,
-    )
-    .map(Target::Operation)
-    .or_else(|| effect_at(files, line, character, encoding).map(Target::Effect))
+    files
+        .first()?
+        .operation_at(line, character, encoding)
+        .map(Target::Operation)
+        .or_else(|| effect_at(files, line, character, encoding).map(Target::Effect))
 }
 
 /// The effect named under the cursor — at its declaration, a discharge, a
@@ -152,6 +140,23 @@ fn effect_at(
 }
 
 impl IndexedFile<'_> {
+    /// The operation named at `(line, character)` of this file.
+    fn operation_at(
+        &self,
+        line: u32,
+        character: u32,
+        encoding: PositionEncoding,
+    ) -> Option<OperationId> {
+        target_at(
+            &self.index,
+            self.source,
+            line,
+            character,
+            encoding,
+            self.flavor,
+        )
+    }
+
     fn implementations(&self, target: &Target, encoding: PositionEncoding) -> Vec<Location> {
         match target {
             Target::Operation(id) => self

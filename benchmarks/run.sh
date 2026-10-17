@@ -262,6 +262,11 @@ done
 
 echo "\n==> rendering report"
 (( fail == 0 )) || { echo "benchmark failed — published results left untouched" >&2; exit 1; }
+# hf/ is untracked and outlives the results.json it was merged into, and
+# report.py lays every export in it over results.json. Clear the previous run's
+# exports so this run publishes only what it measured and a newer results.json
+# (another machine, a merged branch) survives an Osprey-only run.
+rm -rf "$OUT/hf"
 python3 "$BENCHDIR/merge_results.py" "$OUT" "$RUNOUT" $LANGS \
   || { echo "result merge failed — published results left untouched" >&2; exit 1; }
 mkdir -p "$OUT"

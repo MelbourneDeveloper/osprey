@@ -272,24 +272,53 @@ class HarnessPublicationTests(unittest.TestCase):
               self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
               self.assertEqual(MergeResultsTests().snapshot(bench / "results"), before)
 
+    def timing_tools(self, root: Path) -> dict[str, str]:
+        """A stand-in hyperfine that exports TIMING for every `-n` language."""
+        tools = root / "tools"
+        tools.mkdir()
+        self.executable(tools / "hyperfine", '#!/usr/bin/env python3\nimport json, sys\n'
+                        'args = sys.argv[1:]\npath = args[args.index("--export-json") + 1]\n'
+                        'langs = [args[i+1] for i, arg in enumerate(args) if arg == "-n"]\n'
+                        f'timing = {RecordedTimingTests.TIMING!r}\n'
+                        'with open(path, "w") as out:\n'
+                        ' json.dump({"results": [{"command": l, **timing} for l in langs]}, out)\n')
+        return {"PATH": f"{tools}:{os.environ['PATH']}"}
+
     def test_successful_full_run_preserves_absent_language_timings(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             bench = self.fixture(root)
             self.compiler(root)
-            tools = root / "tools"
-            tools.mkdir()
-            self.executable(tools / "hyperfine", '#!/usr/bin/env python3\nimport json, sys\n'
-                            'args = sys.argv[1:]\npath = args[args.index("--export-json") + 1]\n'
-                            'langs = [args[i+1] for i, arg in enumerate(args) if arg == "-n"]\n'
-                            f'timing = {RecordedTimingTests.TIMING!r}\n'
-                            'with open(path, "w") as out:\n'
-                            ' json.dump({"results": [{"command": l, **timing} for l in langs]}, out)\n')
-            result = self.run_harness(bench, {"PATH": f"{tools}:{os.environ['PATH']}"})
+            result = self.run_harness(bench, self.timing_tools(root))
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             cells = json.loads((bench / "results/results.json").read_text())["cases"]["fib"]
             self.assertEqual(cells["rust"], {"status": "ok", "rss": 10, **RecordedTimingTests.TIMING})
             self.assertEqual(cells["osprey"]["mean"], 1.0)
+
+    def test_osprey_only_run_never_republishes_an_older_runs_export(self) -> None:
+        # `results/hf/` is untracked, so it outlives the results.json it was
+        # merged into. A newer results.json (another machine, a merged branch)
+        # must survive `make bench-osprey`, whether or not the run re-measures
+        # the case whose stale export is lying around.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bench = self.fixture(root)
+            self.compiler(root)
+            results = bench / "results"
+            recorded = {"status": "ok", "rss": 10, **RecordedTimingTests.TIMING}
+            (results / "results.json").write_text(json.dumps({"cases": {
+                "fib": {"rust": recorded}, "sort": {"rust": recorded},
+            }}))
+            stale = {"command": "rust", "mean": 5.0, "stddev": 0.5, "min": 4.5, "max": 5.5}
+            (results / "hf").mkdir()
+            for case in ("fib", "sort"):
+                (results / "hf" / f"{case}.json").write_text(json.dumps({"results": [stale]}))
+            result = self.run_harness(bench, {**self.timing_tools(root), "BENCH_PARTIAL": "1"})
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            cases = json.loads((results / "results.json").read_text())["cases"]
+            self.assertEqual({case: cases[case]["rust"] for case in ("fib", "sort")},
+                             {"fib": recorded, "sort": recorded})
+            self.assertEqual(cases["fib"]["osprey"]["mean"], 1.0)
 
 
 class UpdateReadmeTests(unittest.TestCase):

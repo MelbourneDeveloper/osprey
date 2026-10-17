@@ -30,9 +30,7 @@ pub(super) fn binding(
     let all = collect_all_symbols(program);
     let top = collect_symbols(program);
     let owner = enclosing_function(&all, cursor.0);
-    let first_line = owner
-        .and_then(|function| function.position)
-        .map_or(0, |position| position.line.saturating_sub(1));
+    let first_line = first_line(owner);
     let lookup = Lookup { text, word, enc };
     let at = lookup
         .candidates(program, &all, &top, owner)
@@ -71,6 +69,14 @@ pub(crate) fn enclosing_function(symbols: &[SymbolInfo], line: u32) -> Option<&S
         .max_by_key(|s| s.position.map_or(0, |p| p.line))
 }
 
+/// The 0-based line a scope starts on: its function's declaration, or the top
+/// of the file outside any function.
+fn first_line(owner: Option<&SymbolInfo>) -> u32 {
+    owner
+        .and_then(|function| function.position)
+        .map_or(0, |position| position.line.saturating_sub(1))
+}
+
 fn next_declaration_line(top: &[SymbolInfo], line: u32) -> Option<u32> {
     top.iter()
         .filter_map(|symbol| symbol.position)
@@ -94,20 +100,27 @@ impl Lookup<'_> {
         top: &[SymbolInfo],
         owner: Option<&SymbolInfo>,
     ) -> Vec<Occurrence> {
-        let locals = all
-            .iter()
+        owner
+            .and_then(|function| self.parameter(function))
+            .into_iter()
+            .chain(self.locals(all, top))
+            .chain(self.arm_parameters(program))
+            .collect()
+    }
+
+    /// Bindings named `word` inside bodies: every symbol that is not top-level.
+    fn locals<'s>(
+        &'s self,
+        all: &'s [SymbolInfo],
+        top: &'s [SymbolInfo],
+    ) -> impl Iterator<Item = Occurrence> + 's {
+        all.iter()
             .filter(|symbol| symbol_matches(symbol, self.word))
             .filter(|symbol| {
                 !top.iter()
                     .any(|t| t.name == symbol.name && t.position == symbol.position)
             })
-            .filter_map(|symbol| declaration_occurrence(self.text, symbol, self.enc));
-        owner
-            .and_then(|function| self.parameter(function))
-            .into_iter()
-            .chain(locals)
-            .chain(self.arm_parameters(program))
-            .collect()
+            .filter_map(|symbol| declaration_occurrence(self.text, symbol, self.enc))
     }
 
     /// The parameter `word` of `function`, written after the function's name.
