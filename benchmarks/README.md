@@ -36,7 +36,7 @@ All WebAssembly columns run under Wasmtime with an explicit 4 MiB call-stack bud
 > column on a machine with a few GB free, or skip it with `BENCH_FILTER`.
 >
 > <!-- binarytrees-results:start -->
-> Current measured peaks: default **633 MB**, `--memory=arc` **3.01 MB**, and `--memory=gc` **19.7 MB**.
+> Current measured peaks: default **633 MB**, `--memory=arc` **3 MB**, and `--memory=gc` **18.6 MB**.
 > <!-- binarytrees-results:end -->
 
 Results are written to `benchmarks/results/`. The measured outputs below are
