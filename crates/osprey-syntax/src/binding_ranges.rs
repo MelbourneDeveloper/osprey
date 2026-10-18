@@ -31,6 +31,43 @@ pub struct BindingRange {
     pub range: Range<usize>,
 }
 
+/// The lexical region containing a binder, in original source bytes.
+#[must_use]
+pub fn binding_scope(source: &str, flavor: Flavor, binding: &BindingRange) -> Range<usize> {
+    if flavor == Flavor::Ml {
+        return crate::ml::binding_scope(source, binding);
+    }
+    let tree = match flavor {
+        Flavor::Python => crate::parse_python_tree(source).ok(),
+        _ => crate::parse_tree(source),
+    };
+    tree.and_then(|tree| tree_binding_scope(tree.root_node(), binding))
+        .unwrap_or(0..source.len())
+}
+
+fn tree_binding_scope(root: tree_sitter::Node<'_>, binding: &BindingRange) -> Option<Range<usize>> {
+    let mut node = root.descendant_for_byte_range(binding.range.start, binding.range.end);
+    while let Some(current) = node {
+        if owns_binding(current.kind(), binding.kind) {
+            return Some(current.byte_range());
+        }
+        node = current.parent();
+    }
+    None
+}
+
+fn owns_binding(node: &str, kind: BindingKind) -> bool {
+    match kind {
+        BindingKind::Variable => node == "block",
+        BindingKind::Parameter => matches!(
+            node,
+            "function_declaration" | "function_definition" | "lambda_expression" | "lambda"
+        ),
+        BindingKind::HandlerParameter => node == "handler_arm" || node == "function_definition",
+        BindingKind::PatternBinding => matches!(node, "match_arm" | "select_arm" | "case_clause"),
+    }
+}
+
 /// Locate actual source binders; references and type names are never candidates.
 #[must_use]
 pub fn binding_ranges(source: &str, flavor: Flavor) -> Vec<BindingRange> {

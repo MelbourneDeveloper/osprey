@@ -1,4 +1,11 @@
 use super::*;
+
+#[test]
+fn named_device_callbacks_keep_their_defining_scope() {
+    let ir = module("let factor = 2.0\nfn scale(x) = x * factor\nfn apply(f, x) = f(x)\nfn caller(factor, x) = apply(scale, x)\nfn main() = {\n    let out = toGpu([3.0]) |> gpuMap(fn(x) => caller(100.0, x))\n    print(gpuLength(out))\n}\n");
+    assert!(!ir.contains("call i32 @osprey_gpu_declined("), "{ir}");
+    assert!(ir.contains("0x4000000000000000ul"), "the device callback must multiply by its defining factor 2.0, not caller's factor 100.0:\n{ir}");
+}
 // ---- GPU kernel extraction [GPU-KERNEL-EXTRACT] ----
 
 /// The lifted-kernel symbol prefix, spelled once so a rename of the naming

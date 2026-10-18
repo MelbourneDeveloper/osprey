@@ -45,7 +45,7 @@ mod strings;
 mod test_support;
 
 pub use annotation_edits::{annotation_edits, AnnotationEdit, AnnotationTarget, SourceEdit};
-pub use binding_ranges::{binding_ranges, BindingKind, BindingRange};
+pub use binding_ranges::{binding_ranges, binding_scope, BindingKind, BindingRange};
 pub use default::parse_tree;
 pub use docparse::doc_links;
 pub use python::parse_python_tree;

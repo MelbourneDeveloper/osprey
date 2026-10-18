@@ -60,7 +60,14 @@ pub(crate) fn definition(
         return operation;
     }
     let program = project.program(uri, text);
-    if let Some(binding) = scope::binding(text, &program, &word, (line, character), enc) {
+    if let Some(binding) = scope::binding(
+        text,
+        &program,
+        project.flavor(uri, text),
+        &word,
+        (line, character),
+        enc,
+    ) {
         let at = binding.at;
         return vec![located(uri, (at.line, at.start, at.line, at.end))];
     }
@@ -187,7 +194,14 @@ pub(crate) fn references(
         return Vec::new();
     };
     let program = project.program(uri, text);
-    if let Some(binding) = scope::binding(text, &program, &word, (line, character), enc) {
+    if let Some(binding) = scope::binding(
+        text,
+        &program,
+        project.flavor(uri, text),
+        &word,
+        (line, character),
+        enc,
+    ) {
         return scope::uses(text, &word, &binding, include_declaration, enc)
             .into_iter()
             .map(|o| located(uri, (o.line, o.start, o.line, o.end)))
