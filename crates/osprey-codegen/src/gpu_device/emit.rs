@@ -340,25 +340,27 @@ impl Emitter<'_> {
         Ok(Local::Scalar(ty, self.declare(ty, &value)))
     }
 
-    /// An argument that passes unevaluated: a buffer by alias, a lambda or
-    /// helper as a closure over the current scopes.
+    /// An unevaluated argument: a buffer by alias, a lambda over its lexical
+    /// scopes, or a named helper over module scope.
     pub(super) fn passed(&self, argument: &Expr) -> Option<Local> {
-        let closure = |parameters: &[Parameter], body: &Expr| {
+        let closure = |parameters: &[Parameter], body: &Expr, scopes| {
             Local::Function(Rc::new(Closure {
                 parameters: parameters.to_vec(),
                 body: body.clone(),
-                scopes: self.scopes.clone(),
+                scopes,
             }))
         };
         match callee(argument) {
             Expr::Lambda {
                 parameters, body, ..
-            } => Some(closure(parameters, body)),
+            } => Some(closure(parameters, body, self.scopes.clone())),
             Expr::Identifier(name) => match self.lookup(name) {
                 Some(Local::Scalar(..)) => None,
                 Some(local) => Some(local),
                 None => (self.cg.device.defs.get(name))
-                    .map(|(parameters, body)| closure(parameters, body)),
+                    // Named helpers are defined at module scope; only a
+                    // lambda closes over the caller's lexical bindings.
+                    .map(|(parameters, body)| closure(parameters, body, Vec::new())),
             },
             _ => None,
         }

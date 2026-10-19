@@ -61,6 +61,8 @@ pub(crate) fn binding_ranges(source: &str) -> Vec<crate::BindingRange> {
     binding_ranges::collect(source)
 }
 
+pub(crate) use binding_ranges::binding_scope;
+
 pub(crate) fn string_literals(source: &str) -> Vec<crate::fragment_ranges::Literal> {
     binding_ranges::literals(source)
 }

@@ -11,6 +11,7 @@ Osprey uses typed algebraic effects to separate application requests from their 
 - **[Algebraic effects](/docs/effects/)** — declare an operation, call a reusable handler, replace it in a test, and choose an arithmetic policy.
 - **[One model, two backends](/docs/one-model-two-backends/)** — write GPT-2 once against a static `Tensor` effect, then run it over host lists or on the GPU surface by choosing a handler.
 - **[Write Osprey in the Python flavor](/docs/python-flavor/)** — Osprey source that looks like typed Python and lowers into the same AST, with effects as decorated classes. It is not Python: CPython never runs it. GPT-2 is ported to it byte for byte.
+- **[Python flavor for AI agents](/docs/python-flavor-for-ai/)** — the operating manual for coding agents: every loose `.py` script is Osprey, how to run it, the effect decorators, the rejected Python constructs, and filing a Bug issue when a script fails.
 - **[Install Osprey](/docs/installation/)** — set up the compiler and LLVM/clang toolchain on macOS, Linux, or Windows.
 - **[Build My First App](/docs/my-first-app/)** — create a native CLI that models JSON as a recursive algebraic data type, reads a JSON file, and safely writes the next state.
 - **[Try the Playground](/playground/)** — run small programs in the browser before setting up a local toolchain.

@@ -4,6 +4,123 @@ use crate::{BindingKind, BindingRange};
 use osprey_ast::Position;
 use std::cell::RefCell;
 
+pub(crate) fn binding_scope(source: &str, binding: &BindingRange) -> std::ops::Range<usize> {
+    let (tokens, _) = super::lexer::lex(source);
+    if let Some(scope) = lambda_scope(&tokens, binding, source.len()) {
+        return scope;
+    }
+    let mut stack = Vec::new();
+    let mut scopes = Vec::new();
+    let mut header = 0;
+    for (index, token) in tokens.iter().enumerate() {
+        layout_scope(source, &tokens, index, &mut header, &mut stack, &mut scopes);
+        if !token.range.is_empty() {
+            header = line_start(source, token.range.start);
+        }
+    }
+    scopes
+        .into_iter()
+        .filter(|(scope, body)| {
+            scope.contains(&binding.range.start)
+                && (binding.kind != BindingKind::Variable || binding.range.start >= *body)
+                && (binding.kind == BindingKind::Variable
+                    || scope.start == line_start(source, binding.range.start))
+        })
+        .map(|(scope, _)| scope)
+        .min_by_key(std::ops::Range::len)
+        .unwrap_or_else(|| inline_scope(source, binding))
+}
+
+fn lambda_scope(
+    tokens: &[Token],
+    binding: &BindingRange,
+    end: usize,
+) -> Option<std::ops::Range<usize>> {
+    use super::token::TokKind;
+    if binding.kind != BindingKind::Parameter {
+        return None;
+    }
+    let owner = binding.owner_position?;
+    let index = tokens.iter().rposition(|t| {
+        t.pos.line == owner.line && t.pos.column <= owner.column && t.kind == TokKind::Backslash
+    })?;
+    let start = tokens.get(index)?.range.start;
+    Some(start..lambda_end(tokens, index + 1, end))
+}
+
+fn lambda_end(tokens: &[Token], start: usize, end: usize) -> usize {
+    use super::token::TokKind;
+    let mut depth = 0_i32;
+    for (offset, token) in tokens.iter().enumerate().skip(start) {
+        let delta = delimiter_depth(&token.kind);
+        if depth == 0 && (delta < 0 || token.kind == TokKind::Newline) {
+            return next_byte(tokens, offset, end);
+        }
+        depth += delta;
+    }
+    end
+}
+
+fn delimiter_depth(kind: &super::token::TokKind) -> i32 {
+    use super::token::TokKind;
+    match kind {
+        TokKind::LParen | TokKind::LBracket | TokKind::LBrace | TokKind::Indent => 1,
+        TokKind::RParen | TokKind::RBracket | TokKind::RBrace | TokKind::Dedent => -1,
+        _ => 0,
+    }
+}
+
+fn next_byte(tokens: &[Token], start: usize, end: usize) -> usize {
+    tokens
+        .iter()
+        .skip(start)
+        .find(|t| !t.range.is_empty())
+        .map_or(end, |t| t.range.start)
+}
+
+fn layout_scope(
+    source: &str,
+    tokens: &[Token],
+    index: usize,
+    header: &mut usize,
+    stack: &mut Vec<(usize, usize)>,
+    scopes: &mut Vec<(std::ops::Range<usize>, usize)>,
+) {
+    use super::token::TokKind;
+    let Some(token) = tokens.get(index) else {
+        return;
+    };
+    let next = || next_byte(tokens, index + 1, source.len());
+    match token.kind {
+        TokKind::Newline => *header = line_start(source, next()),
+        TokKind::Indent => stack.push((*header, next())),
+        TokKind::Dedent => {
+            if let Some((start, body)) = stack.pop() {
+                scopes.push((start..next(), body));
+            }
+        }
+        _ => {}
+    }
+}
+
+fn line_start(source: &str, offset: usize) -> usize {
+    source
+        .get(..offset)
+        .and_then(|prefix| prefix.rfind('\n'))
+        .map_or(0, |at| at + 1)
+}
+
+fn inline_scope(source: &str, binding: &BindingRange) -> std::ops::Range<usize> {
+    if binding.kind == BindingKind::Variable {
+        return 0..source.len();
+    }
+    let end = source
+        .get(binding.range.end..)
+        .and_then(|tail| tail.find('\n'))
+        .map_or(source.len(), |offset| binding.range.end + offset);
+    line_start(source, binding.range.start)..end
+}
+
 #[derive(Default)]
 struct Recorder {
     tokens: Vec<Token>,

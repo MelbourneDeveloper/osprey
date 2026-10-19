@@ -5,6 +5,98 @@ use crate::test_support::hover;
 use crate::test_support::references;
 use crate::test_support::signature_help;
 const U16: PositionEncoding = PositionEncoding::Utf16;
+
+#[test]
+fn nested_bindings_end_at_their_lexical_scope() {
+    let src = "fn outer(x) = {\n    let inner = {\n        let x = 2\n        x\n    }\n    x\n}\n";
+    let uri = "file:///nested.osp";
+    assert_scoped_definitions(src, uri, &[((3, "x"), (2, "x =")), ((5, "x"), (0, "x)"))]);
+    let found: Vec<_> = references(src, uri, 0, col_of(src, 0, "x)"), U16, true)
+        .into_iter()
+        .map(|location| location.span)
+        .collect();
+    assert_eq!(
+        found,
+        vec![word_span(src, (0, "x)")), word_span(src, (5, "x"))]
+    );
+    let inner: Vec<_> = references(src, uri, 3, col_of(src, 3, "x"), U16, true)
+        .into_iter()
+        .map(|location| location.span)
+        .collect();
+    assert_eq!(
+        inner,
+        vec![word_span(src, (2, "x =")), word_span(src, (3, "x"))]
+    );
+}
+
+#[test]
+fn layout_bindings_end_at_their_lexical_scope() {
+    for (src, uri, last) in [
+        (
+            "outer x =\n    inner =\n        x = 2\n        x\n    x\n",
+            "file:///nested.ospml",
+            4,
+        ),
+        (
+            "def outer(x):\n    if True:\n        x = 2\n        print(x)\n    return x\n",
+            "file:///nested.py",
+            4,
+        ),
+    ] {
+        assert_scoped_definitions(src, uri, &[((3, "x"), (2, "x =")), ((last, "x"), (0, "x"))]);
+        let found = references(src, uri, 0, col_of(src, 0, "x"), U16, true);
+        assert_eq!(
+            found
+                .into_iter()
+                .map(|location| location.span)
+                .collect::<Vec<_>>(),
+            vec![word_span(src, (0, "x")), word_span(src, (last, "x"))]
+        );
+    }
+}
+
+#[test]
+fn lambda_and_handler_parameters_do_not_capture_later_outer_references() {
+    for src in [
+        "fn outer(x) = {\n    let inner = fn(x) => x\n    x\n}\n",
+        "effect Ask { value: fn(int) -> int }\nfn outer(x) = {\n    handle Ask { value x => x }\n    x\n}\n",
+    ] {
+        let outer = usize::from(src.starts_with("effect"));
+        assert_scoped_definitions(src, "file:///nested.osp", &[((outer + 2, "x"), (outer, "x)"))]);
+        assert_eq!(references(src, "file:///nested.osp", u32::try_from(outer).expect("line fits"),
+            col_of(src, outer, "x)"), U16, true).len(), 2);
+    }
+}
+
+#[test]
+fn local_function_definitions_remain_navigable() {
+    let src = "fn outer() = {\n    fn inner(x) = x\n    inner(1)\n}\n";
+    assert_scoped_definitions(src, "file:///nested.osp", &[((2, "inner"), (1, "inner"))]);
+}
+
+#[test]
+fn ml_lambda_parameters_end_at_the_closing_parenthesis() {
+    let src = "outer x =\n    inner = (\\x => x)\n    x\n";
+    assert_scoped_definitions(src, "file:///nested.ospml", &[((2, "x"), (0, "x"))]);
+    assert_eq!(
+        references(
+            src,
+            "file:///nested.ospml",
+            0,
+            col_of(src, 0, "x"),
+            U16,
+            true
+        )
+        .len(),
+        2
+    );
+}
+
+#[test]
+fn ml_handler_parameters_do_not_leak_into_sibling_arms() {
+    let src = "effect Ask\n    first : int => int\n    second : Unit => int\nouter x =\n    handle Ask\n        first x => x\n        second => x\n    x\n";
+    assert_scoped_definitions(src, "file:///nested.ospml", &[((6, "x"), (3, "x"))]);
+}
 const SRC: &str = "fn add(a: int, b: int) -> int = wrapAdd(a, b)\nlet total = add(1, 2)\n";
 
 #[test]
