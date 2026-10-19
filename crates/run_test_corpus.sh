@@ -43,7 +43,8 @@ SMOKE=$ROOT/scripts/wasm-smoke.mjs
 # The mobile targets earn their place the same way wasm did: before this, iOS
 # was gated by seven hand-picked programs, which cannot notice a boundary that
 # truncates a string, drops a bool's high bits or miscompiles arithmetic in an
-# archive. Set with OSPREY_TARGET=ios-sim.
+# archive. Set with OSPREY_TARGET=ios-sim, or OSPREY_TARGET=macos to run the
+# same Apple archives directly on an Apple silicon Mac.
 TARGET=${OSPREY_TARGET:-native}
 
 # The Node version rule is NOT restated here: `scripts/wasm-smoke.mjs`
@@ -58,7 +59,7 @@ NODE=node
 # reject anything at all.
 case $TARGET in
   wasm32)          MANIFEST=$TESTDIR/WASM_UNPORTABLE.txt ;;
-  ios-sim|android*) MANIFEST=$TESTDIR/MOBILE_UNPORTABLE.txt ;;
+  ios-sim|macos|android*) MANIFEST=$TESTDIR/MOBILE_UNPORTABLE.txt ;;
   *)               MANIFEST= ;;
 esac
 
@@ -78,7 +79,7 @@ esac
 # Ratchet UP as goldens are added; never lower it to turn a red build green.
 case $TARGET in
   wasm32)            GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-157} ;;
-  ios-sim|android*) GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-172} ;;
+  ios-sim|macos|android*) GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-172} ;;
   *)                 GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-223} ;;
 esac
 
@@ -118,13 +119,13 @@ run_worker() {
   local errfile=$resultdir/$index.stderr out=$resultdir/$index.stdout run_code
   case $TARGET in
     wasm32) run_wasm "$file" "$out" "$errfile" "$resultdir/$index.wasm" ;;
-    ios-sim) run_ios "$file" "$out" "$errfile" "$resultdir/$index.work" ;;
+    ios-sim|macos) run_apple "$file" "$out" "$errfile" "$resultdir/$index.work" ;;
     android-*) run_android "$file" "$out" "$errfile" "$resultdir/$index.work" "$index" ;;
     *) run_native "$file" "$out" "$errfile" "$resultdir/$index.work" "$memory" ;;
   esac
   run_code=$?
   case $TARGET in
-    wasm32|ios-sim|android-*) [[ $run_code -eq $SKIP_CODE ]] && run_code=$SKIP_STATUS ;;
+    wasm32|ios-sim|macos|android-*) [[ $run_code -eq $SKIP_CODE ]] && run_code=$SKIP_STATUS ;;
   esac
   print -r -- "$run_code" >"$resultdir/$index.status"
 }

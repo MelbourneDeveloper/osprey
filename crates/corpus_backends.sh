@@ -61,21 +61,27 @@ int main(int argc, char **argv) {
     return osprey_main();
 }'
 
-# Build the mobile C ABI archive, link it against that host and run the result
-# in the simulator. A capability or boundary rejection skips; anything else --
-# a failed clang, a failed link, a non-zero exit -- is a failure.
-run_ios() {
+# Build the Apple C ABI archive, link it against that host and run the result:
+# in the simulator for `ios-sim`, directly on this Mac for `macos`. Both slices
+# share one boundary, so they are held to one manifest. A capability or boundary
+# rejection skips; anything else -- a failed clang, a failed link, a non-zero
+# exit -- is a failure. [IOS-TARGET-MACOS]
+run_apple() {
   local file=$1 out=$2 err=$3 work=$4
   mkdir -p "$work" || return 1
-  if ! $BIN "$file" --target=ios-sim --entry-only --compile -o "$work/golden.a" >"$err" 2>&1; then
+  if ! $BIN "$file" --target=$TARGET --entry-only --compile -o "$work/golden.a" >"$err" 2>&1; then
     [[ -n $(target_rejection "$err") ]] && return $SKIP_CODE
     return 1
   fi
   print -r -- "$MOBILE_HOST_C" >"$work/host.c"
-  xcrun --sdk iphonesimulator clang -target arm64-apple-ios15.0-simulator \
-    -isysroot "$IOS_SDK" -O2 -std=c11 -I"$work" \
+  xcrun --sdk "$APPLE_SDK_NAME" clang -target "$APPLE_TRIPLE" \
+    -isysroot "$APPLE_SDK" -O2 -std=c11 -I"$work" \
     "$work/host.c" "$work/golden.a" -o "$work/host" >>"$err" 2>&1 || return 1
-  xcrun simctl spawn "$IOS_DEVICE" "$work/host" "$work" >"$out" 2>>"$err" </dev/null
+  if [[ $TARGET == macos ]]; then
+    "$work/host" "$work" >"$out" 2>>"$err" </dev/null
+  else
+    xcrun simctl spawn "$IOS_DEVICE" "$work/host" "$work" >"$out" 2>>"$err" </dev/null
+  fi
 }
 
 # The same archive/link/run cycle against a real Android device or emulator.
@@ -111,9 +117,16 @@ backend_setup() {
   # and waits; a failure here is fatal rather than a corpus of red programs.
   if [[ $TARGET == ios-sim ]]; then
     IOS_DEVICE=${OSPREY_IOS_DEVICE:-$(bash "$ROOT/scripts/ios-simulator.sh")} || exit 1
-    IOS_SDK=${OSPREY_IOS_SDK:-$(xcrun --sdk iphonesimulator --show-sdk-path)} || exit 1
-    [[ -n $IOS_DEVICE && -d $IOS_SDK ]] || { echo "no iPhone simulator or simulator SDK available" >&2; exit 1 }
-    export IOS_DEVICE IOS_SDK
+    APPLE_SDK_NAME=iphonesimulator APPLE_TRIPLE=arm64-apple-ios15.0-simulator
+    APPLE_SDK=${OSPREY_IOS_SDK:-$(xcrun --sdk iphonesimulator --show-sdk-path)} || exit 1
+    [[ -n $IOS_DEVICE && -d $APPLE_SDK ]] || { echo "no iPhone simulator or simulator SDK available" >&2; exit 1 }
+    export IOS_DEVICE APPLE_SDK_NAME APPLE_TRIPLE APPLE_SDK
+  fi
+  if [[ $TARGET == macos ]]; then
+    APPLE_SDK_NAME=macosx APPLE_TRIPLE=arm64-apple-macos12.0
+    APPLE_SDK=$(xcrun --sdk macosx --show-sdk-path) || exit 1
+    [[ -d $APPLE_SDK && $(uname -m) == arm64 ]] || { echo "the macos slice needs an Apple silicon Mac with the macOS SDK" >&2; exit 1 }
+    export APPLE_SDK_NAME APPLE_TRIPLE APPLE_SDK
   fi
 
   # One device, toolchain and remote directory resolved ONCE, then inherited by

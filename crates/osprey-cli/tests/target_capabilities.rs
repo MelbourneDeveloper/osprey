@@ -2,6 +2,18 @@
 use std::path::Path;
 use std::process::{Command, Output};
 
+/// Every target whose host or runtime cannot provide the full native surface.
+/// The Mac slice is held to the iPhone rules so one program serves both.
+/// [IOS-TARGET-MACOS]
+const RESTRICTED_TARGETS: [&str; 6] = [
+    "wasm32",
+    "ios",
+    "ios-sim",
+    "macos",
+    "android-arm64",
+    "android-x64",
+];
+
 fn compile(source: &str, target: &str) -> std::io::Result<Output> {
     let directory = std::env::temp_dir().join(format!(
         "osprey_target_caps_{}_{:?}",
@@ -39,7 +51,7 @@ fn declared_control_requires_support_without_a_resume_expression() -> std::io::R
                       perform Supply.stop()\n\
                   }\n\
                   print(answer)\n";
-    for target in ["wasm32", "ios", "ios-sim", "android-arm64", "android-x64"] {
+    for target in RESTRICTED_TARGETS {
         rejects(source, target, "a continuation for `Supply.stop`")?;
     }
     Ok(())
@@ -52,7 +64,7 @@ fn resumable_effects_reject_for_both_flavors_before_ir() -> std::io::Result<()> 
         let path = root.join(format!(
             "tests/effects/resume/resume_value_rewrite.test.{extension}"
         ));
-        for target in ["wasm32", "ios", "ios-sim", "android-arm64", "android-x64"] {
+        for target in RESTRICTED_TARGETS {
             let output = Command::new(env!("CARGO_BIN_EXE_osprey"))
                 .arg(&path)
                 .arg("--llvm")
@@ -91,6 +103,7 @@ fn a_continuation_rejection_explains_the_target_it_names() -> std::io::Result<()
         ("wasm32", "stack-switching", "synchronous host call"),
         ("ios", "synchronous host call", "stack-switching"),
         ("ios-sim", "synchronous host call", "stack-switching"),
+        ("macos", "synchronous host call", "stack-switching"),
         ("android-arm64", "synchronous host call", "stack-switching"),
     ] {
         let output = compile(source, target)?;
@@ -114,7 +127,7 @@ fn a_continuation_rejection_explains_the_target_it_names() -> std::io::Result<()
 
 #[test]
 fn unsupported_runtime_builtins_reject_through_aliases() -> std::io::Result<()> {
-    for target in ["wasm32", "ios", "ios-sim", "android-arm64", "android-x64"] {
+    for target in RESTRICTED_TARGETS {
         for name in ["httpGet", "websocketConnect", "spawnProcess"] {
             rejects(&format!("let aliased = {name}\n"), target, name)?;
         }

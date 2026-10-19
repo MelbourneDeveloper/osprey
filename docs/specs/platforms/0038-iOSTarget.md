@@ -1,6 +1,6 @@
 # iOS Application Target [IOS-TARGET]
 
-Osprey application logic compiles through LLVM into an ARM64 iOS static library with a generated C header. A Swift application links that library, owns the iOS lifecycle and platform APIs, and calls Osprey through the C ABI. This target covers iPhone devices and the Apple silicon iOS Simulator. [Android](0039-AndroidTarget.md) has a separate target contract and shares the [reactive mobile application](../applications/0040-ReactiveMobileApplications.md) boundary.
+Osprey application logic compiles through LLVM into an ARM64 iOS static library with a generated C header. A Swift application links that library, owns the iOS lifecycle and platform APIs, and calls Osprey through the C ABI. This target covers iPhone devices, the Apple silicon iOS Simulator and, through the [Mac slice](#mac-host-ios-macos-host), Apple silicon Macs. [Android](0039-AndroidTarget.md) has a separate target contract and shares the [reactive mobile application](../applications/0040-ReactiveMobileApplications.md) boundary.
 
 The test layers, what hosted CI executes, and the state of signed-device evidence are in [Verification](#verification-ios-verification).
 
@@ -11,6 +11,14 @@ Compiler and language rules are separate from integration tooling. See [iOS code
 [`examples/ios/`](../../../examples/ios) contains Osprey counter logic, a checked-in SwiftUI Xcode project, a bridging header that imports the generated header, and build/launch scripts. Swift owns UI state and calls Osprey for increments, decrements, resets, thresholds, and message formatting. Osprey invokes the Swift host callback when the count changes.
 
 The project links separate device/simulator archives through SDK-specific build settings. `build.sh ios` and `build.sh ios-sim` generate each archive before running `xcodebuild`; unsigned device output can be opened in Xcode for signing and installation.
+
+## Mac host [IOS-MACOS-HOST]
+
+`--target=macos` compiles the same boundary for a Swift macOS host ([IOS-TARGET-MACOS](../compiler/iOSCodegen.md#the-mac-slice-ios-target-macos)), so Osprey on a Mac calls Swift libraries the way an iPhone app does: Swift wraps an Apple API in a `@_cdecl` function over the scalar types, and Osprey declares it with `extern`.
+
+[`examples/macos/`](../../../examples/macos) reports which folders use the most disk space. Osprey ranks the entries under a folder, drills into the largest and formats the report behind a `Disk::Facts` effect. The Swift host answers that effect from Foundation's volume capacities and the Spotlight index, so no directory is walked. A fixed handler runs the same report logic natively in its domain suite.
+
+`make macos-test` runs the C ABI fixture above natively, then the whole corpus through the Mac slice against the native goldens and [`MOBILE_UNPORTABLE.txt`](../../../tests/MOBILE_UNPORTABLE.txt), the storage domain suite, and the storage host's smoke assertions against the real Mac. The smoke requires Spotlight answers when `mdutil` reports indexing enabled; otherwise it says that the index was not exercised. Hosted CI runs it beside `make ios-test` on the `macos-15` runner.
 
 ## Verification [IOS-VERIFICATION]
 

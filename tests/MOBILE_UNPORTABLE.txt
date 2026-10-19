@@ -1,7 +1,7 @@
 # Programs the mobile C ABI targets reject, with the exact reason they gave.
 #
-# One file covers ios-sim, android-arm64 and android-x64 because they share one
-# boundary implementation and therefore one set of holes. If a target ever
+# One file covers ios-sim, macos, android-arm64 and android-x64 because they
+# share one boundary implementation and therefore one set of holes. If a target ever
 # rejects a different set, this comparison fails and the file must be split
 # rather than widened — a shared manifest that quietly accepted either set
 # would hide the divergence it exists to catch.

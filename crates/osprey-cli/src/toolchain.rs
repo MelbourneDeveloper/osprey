@@ -26,6 +26,12 @@ pub(crate) fn fail(msg: &str) -> ExitCode {
     ExitCode::FAILURE
 }
 
+/// The app-library targets that publish a C ABI static archive: every Apple
+/// slice and Android ABI. [IOS-TARGET-TRIPLE] [ANDROID-TARGET-TRIPLE]
+pub(crate) fn host_archive_target(target: &str) -> bool {
+    crate::ios::Target::parse(target).is_some() || crate::android::Target::parse(target).is_some()
+}
+
 /// An app-library target publishes a static archive plus a matching C header,
 /// so `-o` must name the archive. `platform` opens the diagnostic.
 pub(crate) fn validate_archive_output(out: &Path, platform: &str) -> Result<(), String> {

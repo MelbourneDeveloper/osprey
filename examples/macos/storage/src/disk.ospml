@@ -1,0 +1,114 @@
+// Implements [IOS-TARGET-MACOS]: Osprey owns the storage report. The host
+// answers each question from the Mac's own storage records, so this module
+// never touches the file system.
+namespace storage
+
+type Folder =
+    path : string
+    bytes : int
+
+type Volume =
+    total : int
+    available : int
+    important : int
+
+type Survey =
+    root : string
+    volume : Volume
+    indexed : int
+    folders : List<Folder>
+    inside : List<Folder>
+
+module Disk
+    (** What the report asks the platform. The Mac handler answers from Foundation's volume keys and the Spotlight index; tests answer from fixed data. *)
+    export effect Facts
+        volume : string => Volume
+        largest : string => List<Folder>
+
+    top count folders = match folders
+        [] => []
+        [first, ...rest] => match count > 0
+            true => listPrepend (top (satSub count 1) rest) first
+            false => []
+
+    sumBytes folders = match folders
+        [] => 0
+        [first, ...rest] => satAdd first.bytes (sumBytes rest)
+
+    insideLargest limit folders = match folders
+        [] => []
+        [largest, ..._rest] => top limit (perform Facts.largest largest.path)
+
+    (** Ranks the entries under `root`, then asks for the entries inside the largest one: one index query per level. *)
+    export survey root limit =
+        ranked = perform Facts.largest root
+        folders = top limit ranked
+        Survey(root = root, volume = perform Facts.volume root, indexed = sumBytes ranked, folders = folders, inside = insideLargest limit folders)
+
+    scaled tenths unit larger = match larger
+        [] => shown tenths unit
+        [next, ...rest] => match tenths >= 10000
+            true => scaled (intDiv (satAdd tenths 500) 1000) next rest
+            false => shown tenths unit
+
+    shown tenths "B" = "${intDiv tenths 10} B"
+    shown tenths unit = "${intDiv tenths 10}.${tenths % 10} ${unit}"
+
+    (** Decimal units with one rounded decimal, as Finder and System Settings count them. *)
+    export formatBytes bytes = match bytes < 0
+        true => "unknown"
+        false => scaled (satMul bytes 10) "B" ["KB", "MB", "GB", "TB"]
+
+    (** The share of `whole`, rounded to a whole percent; an unknown or empty whole gives no share. *)
+    export percent (part, whole) = match whole > 0
+        false => 0
+        true =>
+            handle Arith
+                overflow _ _ _ _ => 0
+                remainderByZero _ => 0
+            intDiv (satAdd (satMul part 100) (intDiv whole 2)) whole
+
+    bar share = match share > 100
+        true => bar 100
+        false => (repeat "█" (intDiv share 5) ?: "") + (repeat "░" (satSub 20 (intDiv share 5)) ?: "")
+
+    relative base path =
+        prefix = match endsWith base "/"
+            true => base
+            false => base + "/"
+        match startsWith path prefix
+            true => drop path (length prefix)
+            false => path
+
+    line base whole folder =
+        share = percent (folder.bytes, whole)
+        size = padStart (formatBytes folder.bytes) 9 " " ?: ""
+        "${size}  ${bar share} ${padStart (toString share) 3 " " ?: ""}%  ${relative base folder.path}"
+
+    lines base whole folders = match folders
+        [] => []
+        [first, ...rest] => listPrepend (lines base whole rest) (line base whole first)
+
+    section title base whole folders empty = match folders
+        [] => "${title}\n  ${empty}"
+        _ => join (listPrepend (lines base whole folders) title) "\n"
+
+    volumeLine volume = match volume.total > 0
+        false => "Volume capacity is unavailable for this path."
+        true => "Volume: ${formatBytes volume.total} total, ${formatBytes (satSub volume.total volume.available)} used, ${formatBytes volume.available} free, ${formatBytes volume.important} available for important data."
+
+    insideSection survey = match survey.folders
+        [] => []
+        [largest, ..._rest] => ["", section "Inside ${relative survey.root largest.path}" largest.path largest.bytes survey.inside "Spotlight records it as one item: a file, an app or another package."]
+
+    (** The report text. Each share is of its section's indexed total; the bar is twenty cells wide. *)
+    export render survey =
+        used = satSub survey.volume.total survey.volume.available
+        header = [
+            "Storage report for ${survey.root}",
+            volumeLine survey.volume,
+            "Spotlight attributes ${formatBytes survey.indexed} here (${percent (survey.indexed, used)}% of used space).",
+            "",
+            section "Largest items" survey.root survey.indexed survey.folders "No Spotlight-indexed items here. Check indexing with `mdutil -s /`.",
+        ]
+        join (listConcat header (insideSection survey)) "\n"

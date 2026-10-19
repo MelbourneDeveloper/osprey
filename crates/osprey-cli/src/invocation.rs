@@ -6,10 +6,10 @@ use osprey_syntax::Flavor;
 pub(crate) const USAGE: &str =
     "usage: osprey <file-or-project> [--check | --ast | --llvm | --compile | --run | \
 --symbols | --list-tests | --doctests | --deps] [--quiet] [--debug] [--profile] [--flavor default|ml|python] \
-[--memory=default|gc|arc] [--target=native|wasm32|ios|ios-sim|android-arm64|android-x64|python] [--entry-only] [-o <out>] \
+[--memory=default|gc|arc] [--target=native|wasm32|ios|ios-sim|macos|android-arm64|android-x64|python] [--entry-only] [-o <out>] \
 [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
        osprey build [project] [--quiet] [--debug] [--memory=default|gc|arc] \
-[--target=native|wasm32|ios|ios-sim|android-arm64|android-x64|python] [-o <out>]\n\
+[--target=native|wasm32|ios|ios-sim|macos|android-arm64|android-x64|python] [-o <out>]\n\
        osprey test [path] [--filter <name>] [--quiet] [--coverage] \
 [--coverage-json <path>] [--memory=default|gc|arc]\n\
        osprey fmt [--check | --stdout] [--flavor default|ml|python] <path...>\n\
@@ -233,10 +233,10 @@ pub(super) fn mobile_exports(entry_only: bool, target: &str) -> Result<MobileExp
     if !entry_only {
         return Ok(MobileExports::All);
     }
-    match target {
-        "ios" | "ios-sim" | "android-arm64" | "android-x64" => Ok(MobileExports::EntryOnly),
-        _ => Err("--entry-only requires a mobile C ABI target".to_string()),
+    if crate::toolchain::host_archive_target(target) {
+        return Ok(MobileExports::EntryOnly);
     }
+    Err("--entry-only requires a mobile C ABI target".to_string())
 }
 
 /// Enforce the `--profile` interaction rules [PROF-CLI-RUN]: it conflicts with
@@ -264,13 +264,14 @@ optimized code; debugging needs -O0)\n{USAGE}"
     Ok(())
 }
 
-/// Validate the executable, WebAssembly and iPhone archive targets.
+/// Validate the executable, WebAssembly, Apple and Android archive targets.
 /// [WASM-TARGET] [IOS-TARGET-TRIPLE]
 pub(super) fn parse_target(value: &str) -> Result<String, String> {
     match value {
-        "native" | "wasm32" | "ios" | "ios-sim" | "android-arm64" | "android-x64" | "python" => Ok(value.to_string()),
+        "native" | "wasm32" | "python" => Ok(value.to_string()),
+        host if crate::toolchain::host_archive_target(host) => Ok(host.to_string()),
         other => Err(format!(
-            "unknown target '{other}' (available: native, wasm32, ios, ios-sim, android-arm64, android-x64, python)\n{USAGE}"
+            "unknown target '{other}' (available: native, wasm32, ios, ios-sim, macos, android-arm64, android-x64, python)\n{USAGE}"
         )),
     }
 }

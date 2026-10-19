@@ -374,7 +374,7 @@ fn artifact(base: &Path, target: &str, keep_parent: bool) -> PathBuf {
         "python" if cfg!(target_os = "macos") => ".dylib",
         "python" => ".so",
         "wasm32" => ".wasm",
-        "ios" | "ios-sim" | "android-arm64" | "android-x64" => ".a",
+        host if crate::toolchain::host_archive_target(host) => ".a",
         _ => "",
     };
     let mut artifact = output.into_os_string();

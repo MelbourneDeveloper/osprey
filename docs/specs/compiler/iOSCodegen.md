@@ -8,8 +8,13 @@ The corresponding iOSTarget contract is [here](../platforms/0038-iOSTarget.md).
 | --- | --- | --- | --- |
 | `--target=ios` | `arm64-apple-ios15.0` | `iphoneos` | iOS 15 |
 | `--target=ios-sim` | `arm64-apple-ios15.0-simulator` | `iphonesimulator` | iOS 15 |
+| `--target=macos` | `arm64-apple-macos12.0` | `macosx` | macOS 12 |
 
-Device and simulator archives are separate products even though both use ARM64. The host must link the archive for its platform. Intel simulators, universal archives, and XCFramework packaging are not implemented.
+Device, simulator and Mac archives are separate products even though all three use ARM64. The host must link the archive for its platform. Intel Macs and simulators, universal archives, and XCFramework packaging are not implemented.
+
+## The Mac slice [IOS-TARGET-MACOS]
+
+`--target=macos` is the iPhone target built for a Mac: the same options, header, thunks, entry, capability rules and runtime sources (`libosprey_runtime_macos.a` compiles the iOS runtime sources with the iOS flags against the macOS SDK). For one program, the Mac slice emits the same adapted LLVM IR as `--target=ios` and a header that differs only in the slice it names, so Swift `@_cdecl` imports and calls written against one compile unchanged against the other. A Swift macOS host, command-line or app, links the archive exactly as an iPhone app does and owns every platform API. `--run` is rejected for this slice too; the host runs the program.
 
 ## Compiler options [IOS-TARGET-OPTIONS]
 
@@ -52,7 +57,9 @@ The host serializes entry and exported function calls on one thread. Reentrant i
 
 ## Calling the host [IOS-HOST-IMPORTS]
 
-Osprey declares platform services using `extern fn` over the scalar types above. The generated header lists those imports with their declared C names, and the final Swift application supplies matching C symbols. Missing host definitions fail the final application link. These are deliberate host imports, distinct from an unsupported language or runtime capability, which must fail in the Osprey compiler.
+Osprey declares platform services using `extern fn` over the scalar types above. The generated header lists those imports with their declared C names, and the final Swift application supplies matching C symbols. Missing host definitions fail the final application link.
+
+A string an import returns is not copied: Osprey keeps the pointer and may retain it in its data for the rest of the process. The host must return memory that stays valid for the process lifetime, such as a heap copy it never frees, and must not reuse or release the buffer. These are deliberate host imports, distinct from an unsupported language or runtime capability, which must fail in the Osprey compiler.
 
 ## Target capability checking [IOS-TARGET-CAPABILITIES]
 

@@ -1,0 +1,22 @@
+// Implements [IOS-TARGET-MACOS] and [IOS-HOST-IMPORTS]: the Swift host defines
+// these C functions from Foundation and Spotlight, and Osprey calls them through
+// the boundary an iPhone app uses.
+namespace storage
+
+import storage::Disk
+
+extern storage_volume (path : string) (measure : string) -> int
+extern storage_scan (root : string) -> int
+extern storage_entry_path (index : int) -> string
+extern storage_entry_bytes (index : int) -> int
+
+entry index = Folder(path = storage_entry_path index, bytes = storage_entry_bytes index)
+
+entries root = range 0 (storage_scan root) |> map entry |> toList
+
+(** The report the Swift host prints: the largest items under `root`, then the largest inside the biggest of them. *)
+report (root, limit) =
+    handle Disk::Facts
+        volume path => Volume(total = storage_volume path "total", available = storage_volume path "available", important = storage_volume path "important")
+        largest folder => entries folder
+    Disk::render (Disk::survey root limit)

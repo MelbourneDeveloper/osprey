@@ -800,8 +800,8 @@ jobs:
       - name: VS Code extension thresholds
         run: make _coverage_check_vscode_extension
 
-      - name: iOS device and simulator builds, ABI, goldens and app persistence
-        run: make ios-test mobile-ios-test bank-ios-test
+      - name: iOS and macOS builds, ABI, goldens and app persistence
+        run: make ios-test macos-test mobile-ios-test bank-ios-test
 
       - name: Native bank simulator results
         if: always()
