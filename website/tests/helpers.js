@@ -23,6 +23,7 @@ const PAGES = [
     kind: "prose",
   },
   { name: "status", path: "/status/", kind: "prose" },
+  { name: "benchmarks", path: "/benchmarks/", kind: "prose" },
   // Full-screen studio: the 3-tab demo fills the viewport, so the footer is
   // intentionally hidden and the page never scrolls (kind stays "wasm" so the
   // interaction + overflow tests still target it).

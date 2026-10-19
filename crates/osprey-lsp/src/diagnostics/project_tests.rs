@@ -199,3 +199,19 @@ fn file_uri_decoding_is_strict_and_handles_spaces() {
     assert!(file_path("file:///tmp/bad%GG.osp").is_none());
     assert!(file_path("file:///tmp/truncated%.osp").is_none());
 }
+
+#[test]
+fn graphics_examples_discharge_arithmetic_effects() -> Result<(), Box<dyn std::error::Error>> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/graphics");
+    for scene in ["character", "kali", "opal"] {
+        let path = root.join(scene).join("scene.osp");
+        let source = std::fs::read_to_string(&path)?;
+        let uri = format!("file://{}", path.display());
+        let errors: Vec<_> = compute(&source, &uri, U16)
+            .into_iter()
+            .filter(|diagnostic| diagnostic.severity == Severity::Error)
+            .collect();
+        assert!(errors.is_empty(), "{scene}: {errors:?}");
+    }
+    Ok(())
+}

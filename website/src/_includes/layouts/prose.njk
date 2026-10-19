@@ -21,7 +21,7 @@ layout: layouts/base.njk
    The TOC is built client-side from the article's own headings (toc.js), so
    it adds no content — just navigation derived from what's already on the page. #}
 {% set isDocs = page.url.startsWith('/docs/') %}
-<div class="prose-layout{% if isDocs %} docs-prose-layout{% endif %}">
+<div class="prose-layout{% if isDocs %} docs-prose-layout{% endif %}{% if wide %} prose-wide-layout{% endif %}">
   <aside class="toc-aside">
 {% if isDocs %}
 {{ documentationNavigation('docs-nav-desktop') }}
@@ -62,6 +62,6 @@ layout: layouts/base.njk
 {{ content | safe }}
   </article>
 </div>
-{% if not isDocs %}
+{% if not isDocs and not wide %}
 <script src="/js/toc.js" defer></script>
 {% endif %}

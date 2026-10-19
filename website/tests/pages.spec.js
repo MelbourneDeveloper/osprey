@@ -142,3 +142,20 @@ for (const pg of PAGES) {
     }
   });
 }
+
+for (const width of [1280, 1440, 1920]) {
+  test(`benchmark columns fit desktop landscape at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/benchmarks/");
+    await page.evaluate(() => document.fonts.ready);
+    const tables = page.locator(".comparison-table table");
+    await expect(tables).toHaveCount(2);
+    const overflow = await tables.evaluateAll((elements) => elements.map((element) => element.scrollWidth - element.clientWidth));
+    expect(overflow, "every benchmark column must fit without horizontal scrolling").toEqual([0, 0]);
+    for (const table of await tables.all()) {
+      const bounds = await table.locator("th:last-child").boundingBox();
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    }
+  });
+}

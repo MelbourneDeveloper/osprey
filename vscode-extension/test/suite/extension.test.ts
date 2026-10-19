@@ -3631,6 +3631,14 @@ suite("Committed Dev Settings Sanity", () => {
     return settings["osprey.server.compilerPath"];
   }
 
+  test("workspace leaves compiler selection to the installed extension version", () => {
+    assert.strictEqual(
+      compilerPathSetting(),
+      undefined,
+      "a checkout compiler override makes release extensions reject 0.0.0-dev",
+    );
+  });
+
   test("compilerPath is never the dead compiler/bin/osprey runtime-archive path", () => {
     const compilerPath = compilerPathSetting();
     if (!compilerPath) {

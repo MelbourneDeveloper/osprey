@@ -14,17 +14,16 @@
 // — so each scene is its own one-file project that names this directory as a
 // second source root. That is the layout that makes sharing possible at all.
 //
-// This is deliberately NOT Osprey's `gpu*` builtin surface. [GPU-BACKEND-HOST]
-// is the only backend that exists, so `gpuMap` is a CPU loop — measured at
-// ~1.2us a pixel, which is 13fps at this resolution. The bridge below is where
-// [GPU-BACKEND-DEVICE] would attach when it lands.
-
 // @link: ospgfx
 // @linkdir: examples/graphics
 
 namespace graphics;
 
 module SceneBase {
+    effect ArithmeticFailure {
+        control halt: fn(string) -> int
+    }
+
     extern fn osp_gfx_open(width: int, height: int, scale: int, title: string,
         shader: string, fragment: string) -> Ptr
     extern fn osp_gfx_set(win: Ptr, slot: int, value: int) -> int
@@ -193,18 +192,14 @@ module SceneBase {
     /// Push one slot range and count how many the bridge accepted. A count that
     /// comes back short means the bridge rejected a slot, which is the only way
     /// a scene finds out that it and base.metal disagree about the layout.
-    ///
-    /// The three recursive functions below are the only annotated ones in this
-    /// file: codegen refuses a recursive function whose signature it has not
-    /// fully inferred, so these annotations are load-bearing rather than noise.
-    fn pushMotion(win: Ptr, motion, t: int, slot: int) -> int =
+    fn pushMotion(win, motion, t: int, slot) =
         match slot < motionCount() {
             true => ((osp_gfx_set(win, slot, motion(slot, t)) +
                 pushMotion(win, motion, t, (slot + 1) )) )
             false => 0
         }
 
-    fn pushLook(win: Ptr, look, slot: int) -> int =
+    fn pushLook(win, look, slot) =
         match slot <= lookLast() {
             true => ((osp_gfx_set_milli(win, slot, look(slot)) +
                 pushLook(win, look, (slot + 1) )) )
@@ -214,7 +209,7 @@ module SceneBase {
     /// animate advances on wall-clock time, so the motion plays at the same
     /// speed whatever frame rate the display sustains, and stops when the window
     /// closes.
-    fn animate(win: Ptr, motion, frame: int) = {
+    fn animate(win, motion, frame) = {
         let pushed = pushMotion(win, motion, osp_gfx_ticks(win), 0)
         match (pushed == motionCount()) && (osp_gfx_draw(win) == 1) {
             true => animate(win, motion, (frame + 1) )
@@ -227,17 +222,33 @@ module SceneBase {
         print("${title}: ${frames} frames in ${ms} ms — ${fps} fps at ${designWidth()}x${designHeight()}")
     }
 
-    /// Open a window on one fragment entry of the shared library, push the
-    /// scene's authored grade once, then hand the clock to `animate`.
+    /// Stop the scene and close its window on the first arithmetic fault.
+    fn withArithmeticPolicy(win, title, work) = {
+        handle ArithmeticFailure {
+            halt message => {
+                print("${title}: ${message}")
+                osp_gfx_close(win)
+            }
+        }
+        handle Arith {
+            overflow op lhs rhs _ => perform ArithmeticFailure.halt("integer overflow: ${lhs} ${op} ${rhs}")
+            remainderByZero lhs => perform ArithmeticFailure.halt("integer division or remainder by zero: ${lhs}")
+        }
+        work()
+    }
+
+    /// Open a window, push the authored grade, then animate under the fault policy.
     fn run(title, fragment, motion, look) = {
         let win = osp_gfx_open(designWidth(), designHeight(), windowScale(),
             title, shaderPath(), fragment)
-        let frames = match pushLook(win, look, lookFirst()) == lookCount() {
-            true => animate(win, motion, 0)
-            false => 0
-        }
-        report(title, frames, osp_gfx_ticks(win))
-        osp_gfx_close(win)
+        withArithmeticPolicy(win, title, || => {
+            let frames = match pushLook(win, look, lookFirst()) == lookCount() {
+                true => animate(win, motion, 0)
+                false => 0
+            }
+            report(title, frames, osp_gfx_ticks(win))
+            osp_gfx_close(win)
+        })
     }
 
     export fn original() = run("Osprey · Kali", "osp_fragment", originalMotion, originalLook)
