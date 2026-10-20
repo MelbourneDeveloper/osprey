@@ -18,6 +18,7 @@ Osprey uses typed algebraic effects to separate application requests from their 
 
 ## Build applications
 
+- **[Build a Mac and iPhone app](/docs/mac-and-iphone-apps/)** — follow Osprey Storage across the boundary: Osprey exports in a generated C header, Swift `@_cdecl` imports, and an effect handler at the edge. Includes a video tutorial.
 - **[Build an iOS and Android app](/docs/mobile-apps/)** — handle application requests as native commands for SQLite, GitHub and reactive controls.
 - **[Build a web app](/docs/web-apps/)** — follow Talon Bank from storage and audit handlers to shared web, Android and iOS clients.
 - **[Explore the WebAssembly studio](/wasm/)** — compare the Default and ML flavors in a browser-hosted example.

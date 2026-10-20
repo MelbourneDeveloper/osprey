@@ -26,6 +26,7 @@
       "items": [
         { "text": "Web apps", "url": "/docs/web-apps/" },
         { "text": "iOS and Android apps", "url": "/docs/mobile-apps/" },
+        { "text": "Mac and iPhone apps", "url": "/docs/mac-and-iphone-apps/" },
         { "text": "Playground", "url": "/playground/" },
         { "text": "WebAssembly studio", "url": "/wasm/" }
       ]
