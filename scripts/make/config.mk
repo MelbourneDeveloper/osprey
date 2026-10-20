@@ -11,7 +11,7 @@
 	vsix-rebuild-reinstall \
 	_language-test _deslop _gpu-demo _graphics-shader \
 	_test_gc_stack_root _test_c_runtime _test_gpu_device _coverage_check_c_runtime _bank_test _test_bench_tools \
-	_vsix_clean _vsix_bundle _vsix_package _vsix_install
+	_vsix_clean _vsix_bundle _vsix_package _vsix_install _graphics _graphics-smoke
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -53,6 +53,8 @@ CC  ?= cc
 AR  ?= ar
 BIN ?= target/release/osprey
 RTB ?= compiler/bin
+# cargo's parallel jobs, inherited by every recipe that builds Rust.
+export CARGO_BUILD_JOBS ?= 4
 
 # VSIX (VSCode extension) — macOS only. Bundles the Rust binary as `osprey`.
 # All VSIX targets touch ONLY this extension id, ONLY in the default profile;

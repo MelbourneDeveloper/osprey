@@ -1,8 +1,8 @@
-/// Default surface pinning a codegen defect: inside a module function, a field
+/// Default surface of a codegen regression: inside a module function, a field
 /// read on a record an effect operation returned took another record's layout
-/// when two records declare that field name, and read the wrong memory. The
-/// golden is the correct output. Codegen quarantines the access until the owner
-/// comes from the inferred type ([MODULES-EFFECTS] [TYPE-FIELD-ACCESS-NON-RECORD]).
+/// when two records declare that field name, and read the wrong memory. Codegen
+/// now takes the owner from the inferred type ([MODULES-EFFECTS]
+/// [TYPE-FIELD-ACCESS-NON-RECORD]).
 
 namespace inventory;
 

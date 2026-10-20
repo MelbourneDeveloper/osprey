@@ -4,8 +4,8 @@ Run commands from the repository root. The root Makefile is the build entry poin
 
 | Directory or files | Purpose |
 | --- | --- |
-| `make/` | Build, runtime, test, application and extension rules |
-| `ios.mk`, `android.mk`, `bank-mobile.mk` and platform scripts | Mobile runtime builds and acceptance tooling |
+| `make/` | Configuration and the private build, runtime, test, application and extension steps behind the root Makefile's targets |
+| `ios.mk`, `android.mk` and platform scripts | Mobile runtime builds and acceptance tooling |
 | `verify-*.mjs`, `test-*.py`, `ci-scope.*` | CI assertions, branch-protection checks and regression tooling |
 | `wasm-*.mjs` | WASI and browser execution with byte-exact golden checks |
 | `carbon/` | Source-image rendering with the editor's syntax grammars |

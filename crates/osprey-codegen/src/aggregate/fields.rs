@@ -39,6 +39,9 @@ pub(crate) fn gen_field_access(cg: &mut Codegen, target: &Expr, field: &str) -> 
     load_field_value(cg, target, &owner, field, inferred.as_ref())
 }
 
+/// The receiver's record: the owner codegen tracked, else the record inference
+/// named (a `perform` result carries only its inferred type), else a guess by
+/// field name. Implements [TYPE-FIELD-ACCESS-NON-RECORD].
 fn field_owner(cg: &mut Codegen, target: &Value, field: &str) -> Result<String> {
     if let Some(ty @ Type::Record { name, .. }) = target.inferred_type.as_ref() {
         if name.is_empty() {
@@ -48,23 +51,26 @@ fn field_owner(cg: &mut Codegen, target: &Value, field: &str) -> Result<String> 
             }
         }
     }
-    target
-        .osp_ty
-        .clone()
-        .filter(|owner| {
-            cg.record_layout(owner)
-                .is_some_and(|(_, fields)| fields.iter().any(|(name, _)| name == field))
-        })
+    let inferred = target
+        .inferred_type
+        .as_ref()
+        .and_then(|ty| crate::types::owner_name(&cg.prog, ty));
+    [target.osp_ty.clone(), inferred]
+        .into_iter()
+        .flatten()
+        .find(|owner| declares_field(cg, owner, field))
         .map_or_else(|| guessed_field_owner(cg, target, field), Ok)
 }
 
-/// Broken-code quarantine: a receiver whose owner was not tracked (a `perform`
-/// result inside a module function, for one) falls back to choosing a record
-/// by field name. Where several records declare that field the choice ignores
-/// the receiver's inferred record type, so the load used another record's slot
-/// and read the wrong memory without a diagnostic. Fail loudly until the owner
-/// comes from the inferred type; `tests/regressions/modules/
-/// module_perform_record_field` pins the miscompile.
+fn declares_field(cg: &Codegen, owner: &str, field: &str) -> bool {
+    cg.record_layout(owner)
+        .is_some_and(|(_, fields)| fields.iter().any(|(name, _)| name == field))
+}
+
+/// Broken-code quarantine: a receiver whose record neither codegen tracked nor
+/// inference named falls back to choosing a record by field name. Where several
+/// records declare that field the choice is arbitrary and the load would read
+/// another record's slot without a diagnostic, so the access fails loudly.
 fn guessed_field_owner(cg: &Codegen, target: &Value, field: &str) -> Result<String> {
     let owners = cg
         .prog

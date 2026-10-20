@@ -16,7 +16,7 @@ every claim below is asserted twice and the flavors are proved byte-identical
 | `module_data_types` | `[MODULES-MODULE]` `[MODULES-EXPORTS]` with records, unions and generics |
 | `module_composition` | `[MODULES-ABI]` `[MODULES-PROJECT]` with fibers, iterators and `Result` |
 | `file_scope_bindings`, `file_scope_generic_binding` | `[MODULES-FILE-SCOPE-BINDING]` `[MODULES-INIT]` |
-| `module_effect_records` | `[MODULES-EFFECTS]` — pins a codegen defect: a field read on an effect result inside a module function took another record's layout. Red until codegen takes the owner from the inferred type |
+| `module_effect_records` | `[MODULES-EFFECTS]` — regression: a field read on an effect result inside a module function took another record's layout when two records declare the field |
 | `ml_layout_depth` | `[FLAVOR-ML-LAYOUT]` `[MODULES-FLAVOR-PROJECTION]` — four nesting levels, an indented import selection, an effect declared four segments deep |
 
 Rejection paths are not here. A must-reject module program never reaches

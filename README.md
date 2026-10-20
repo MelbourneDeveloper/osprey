@@ -84,7 +84,7 @@ make test
 make ci
 ```
 
-Run these from the repository root. The compiler is written to `target/release/osprey`. Build rules live in `scripts/make/`; the root Makefile is their entry point.
+Run these from the repository root. The compiler is written to `target/release/osprey`. The root Makefile defines every public target; their configuration and private steps live in `scripts/make/`.
 
 ## Language and applications
 

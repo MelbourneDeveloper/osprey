@@ -1,19 +1,3 @@
-## vsix-rebuild-reinstall: Rebuild the compiler and reinstall the Osprey VSCode
-##      extension in place, bundling the freshly-built Rust binary as `osprey`.
-##      Touches ONLY the Osprey extension ($(EXT_ID)) in the DEFAULT profile —
-##      never another extension, never another VSCode profile. macOS only.
-##      ONE `code` invocation (install --force, no separate uninstall) so the
-##      running VSCode reconciles its extension host exactly once, not twice.
-##      Every step is verified: the VSIX must contain the bundled compiler and
-##      the installed extension must be byte-identical to this build, so
-##      "installed" is a fact rather than a claim `code` printed.
-vsix-rebuild-reinstall:
-	$(MAKE) _vsix_clean
-	$(MAKE) build
-	$(MAKE) _vsix_bundle
-	$(MAKE) _vsix_package
-	$(MAKE) _vsix_install
-
 # --- vsix sub-steps ---------------------------------------------------------
 # Extension artefacts only. This used to run `$(MAKE) clean`, i.e. `cargo
 # clean` plus the C runtime archives, which bought a from-scratch release

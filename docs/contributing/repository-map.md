@@ -24,18 +24,17 @@ Core language rules live under `docs/specs/language/`; target lowering, C ABI ge
 
 ## Build rules
 
-The root Makefile includes focused fragments without changing the public commands:
+The root Makefile defines every public target, so `make` and editor task panels, which read only files named `Makefile`, list them from one place. It includes focused fragments for the configuration and the private `_` steps those targets run:
 
 | Fragment | Owns |
 | --- | --- |
 | `scripts/make/config.mk` | Platform selection, paths, warning profiles and tool settings |
-| `scripts/make/targets.mk` | Public build, test, lint and CI targets |
 | `scripts/make/runtime.mk` | Native and WASI runtime archives and incremental inputs |
-| `scripts/make/tests.mk` | Test runners and coverage enforcement |
-| `scripts/make/apps.mk` | Graphics, GPT-2, benchmark and installation commands |
+| `scripts/make/tests.mk` | Test runners, lint gates and coverage enforcement |
+| `scripts/make/apps.mk` | Graphics hosts, GPT-2 weights, benchmark tooling and website steps |
 | `scripts/make/extension.mk` | Extension packaging and installation verification |
 
-`scripts/ios.mk`, `scripts/android.mk` and `scripts/bank-mobile.mk` own platform targets. Add a recipe to the fragment for its responsibility; preserve its prerequisite checks. The node dependency guard follows nested includes, so a moved recipe retains the same enforcement. Release detection classifies the shared fragments as binary inputs.
+`scripts/ios.mk` and `scripts/android.mk` own the mobile runtime archives and test steps. Add a public target to the root Makefile and its private steps to the fragment for their responsibility; preserve its prerequisite checks. Keep `NAME := value` assignments in the fragments, because task panels list them as targets. The node dependency guard follows nested includes, so a moved recipe retains the same enforcement. Release detection classifies the shared fragments as binary inputs.
 
 ## Applications and presentation
 

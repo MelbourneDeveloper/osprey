@@ -19,33 +19,6 @@ _runtime_macos:
 	@bash scripts/ios-runtime.sh macosx arm64-apple-macos12.0 \
 		$(RTB)/libosprey_runtime_macos.a $(B) -DOSPREY_IOS -- $(IOS_RT_SRC)
 
-## ios: Build the iPhone and simulator libraries and SwiftUI example apps.
-##      Requires macOS, Xcode and both iOS SDKs. Device output is unsigned.
-ios: _runtime_ios _runtime_ios_sim
-	cargo build --release -p osprey-cli
-	OSPREY_BIN="$(CURDIR)/$(BIN)" bash examples/ios/build.sh ios
-	OSPREY_BIN="$(CURDIR)/$(BIN)" bash examples/ios/build.sh ios-sim
-
-## ios-test: Validate C ABI calls, language goldens and the SwiftUI simulator app.
-ios-test: ios
-	$(MAKE) _test_ios
-
-## macos: Build the Mac runtime, the compiler and every macOS example: the
-##        storage report and the three graphics scenes, each a Swift host
-##        linked to the Mac slice. Requires an Apple silicon Mac with Xcode.
-##        [IOS-TARGET-MACOS]
-macos: _runtime_macos
-	cargo build --release -p osprey-cli
-	OSPREY_BIN="$(CURDIR)/$(BIN)" bash examples/macos/run.sh --build
-	for scene in kali opal character; do \
-		OSPREY_BIN="$(CURDIR)/$(BIN)" bash examples/graphics/macos/run.sh --build $$scene || exit 1; \
-	done
-
-## macos-test: The iPhone C ABI fixture, the whole corpus against the same
-##             goldens and skip manifest, and the storage example, on this Mac.
-macos-test: macos
-	$(MAKE) _test_macos
-
 _test_macos:
 	OSPREY_BIN="$(CURDIR)/$(BIN)" bash scripts/test-macos.sh
 	@echo "==> [macos] golden stdout comparison on this Mac..."
@@ -69,19 +42,3 @@ _test_ios: _test_ios_goldens
 _test_ios_goldens:
 	@echo "==> [ios-sim] golden stdout comparison in the simulator..."
 	@OSPREY_TARGET=ios-sim zsh crates/run_test_corpus.sh
-
-.PHONY: mobile-ios mobile-ios-test mobile-domain-test mobile-test
-mobile-ios: _runtime_ios _runtime_ios_sim
-	cargo build --release -p osprey-cli
-	bash examples/mobile/ios/run.sh --build ios
-	bash examples/mobile/ios/run.sh --build ios-sim
-
-mobile-ios-test: mobile-ios
-	OSPREY_IOS_SKIP_BUILD=1 bash examples/mobile/ios/run.sh --smoke
-
-mobile-domain-test: _runtime
-	python3 scripts/test-mobile-tools.py
-	cargo build --release -p osprey-cli
-	$(BIN) examples/mobile/inbox/test --run
-
-mobile-test: mobile-domain-test mobile-ios-test android-test
