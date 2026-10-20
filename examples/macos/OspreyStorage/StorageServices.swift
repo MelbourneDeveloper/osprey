@@ -30,7 +30,23 @@ func storageVolume(_ path: UnsafePointer<CChar>?, _ measure: UnsafePointer<CChar
 func storageVolumeName(_ path: UnsafePointer<CChar>?) -> UnsafePointer<CChar>? {
     let url = path.map { URL(fileURLWithPath: String(cString: $0)) }
     let name = (try? url?.resourceValues(forKeys: [.volumeLocalizedNameKey]))?.volumeLocalizedName
-    return UnsafePointer(strdup(name ?? "Disk"))
+    return UnsafePointer(strdup(deviceModel ?? name ?? "Disk"))
+}
+
+/// What an iPhone calls itself, set at launch: its data volume is named "User".
+nonisolated(unsafe) var deviceModel: String?
+
+/// Whether macOS granted this app Full Disk Access: only then can it open the
+/// privacy database, and trying never shows a prompt.
+func fullDiskAccess() -> Bool {
+    #if os(macOS)
+    let database = open(NSHomeDirectory() + "/Library/Application Support/com.apple.TCC/TCC.db", O_RDONLY)
+    guard database >= 0 else { return false }
+    close(database)
+    return true
+    #else
+    return false
+    #endif
 }
 
 /// The entries of the last listed folder.
@@ -92,7 +108,8 @@ func canonical(_ path: String) -> String {
 /// folder records what lies below it, and what lies below it outside hidden
 /// items. Hidden files and package contents count; a hard-linked file counts
 /// once; mounted volumes, evicted cloud folders and the folders Osprey guards
-/// are not entered, so the walk never triggers a privacy prompt.
+/// are not entered. macOS asks once before the walk enters Desktop, Documents,
+/// Downloads or iCloud Drive, and the walk waits for the answer.
 final class DiskTree: @unchecked Sendable {
     struct Entry {
         let path: UnsafePointer<CChar>?
@@ -103,14 +120,13 @@ final class DiskTree: @unchecked Sendable {
         let guarded: Bool
     }
 
-    /// Folders Osprey asks the walk not to enter: `protected` ones, and every
-    /// folder inside `apps`.
+    /// Folders Osprey asks the walk not to enter: every folder inside `apps`,
+    /// each of which holds another app's data.
     struct Guard {
-        let protected: Set<String>
         let apps: Set<String>
 
         func covers(_ path: String) -> Bool {
-            protected.contains(path) || apps.contains((path as NSString).deletingLastPathComponent)
+            apps.contains((path as NSString).deletingLastPathComponent)
         }
     }
 

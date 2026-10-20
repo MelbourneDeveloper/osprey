@@ -26,6 +26,7 @@ INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.utilities
 INFOPLIST_KEY_NSDesktopFolderUsageDescription = Osprey Storage measures your Desktop to show what uses your disk.
 INFOPLIST_KEY_NSDocumentsFolderUsageDescription = Osprey Storage measures your Documents folder to show what uses your disk.
 INFOPLIST_KEY_NSDownloadsFolderUsageDescription = Osprey Storage measures your Downloads folder to show what uses your disk.
+INFOPLIST_KEY_NSPhotoLibraryUsageDescription = Osprey Storage measures your photo library to show how much space your photos and videos use. It never shows or changes them.
 INFOPLIST_KEY_NSRemovableVolumesUsageDescription = Osprey Storage measures external drives you choose to show what uses them.
 INFOPLIST_KEY_NSNetworkVolumesUsageDescription = Osprey Storage measures network volumes you choose to show what uses them.
 INFOPLIST_KEY_LSRequiresIPhoneOS[sdk=iphone*] = YES

@@ -17,6 +17,23 @@ type Volume =
     available : int
     important : int
 
+// One kind of asset in the photo library: `videos`, `screenshots`, `live` or
+// `photos`, with the bytes of it stored on the device.
+type PhotoKind =
+    name : string
+    items : int
+    bytes : int
+
+// `status` is `unasked`, `measuring`, `denied`, `limited`, `ready` or
+// `unavailable` (a Mac, whose photo library is a folder the walk measures).
+// `bytes` is what the device stores; `cloud` is what only iCloud holds.
+type Photos =
+    status : string
+    items : int
+    bytes : int
+    cloud : int
+    kinds : List<PhotoKind>
+
 type Listing =
     entries : List<Entry>
     blocked : int
@@ -34,10 +51,11 @@ type Look =
     tint : string
 
 module Disk
-    (** What the browser asks the platform. The host answers from Foundation's volume keys and from one measured walk of the tree, where `bytes` counts everything below an entry and `visible` leaves out the hidden items below it; tests answer from fixed data. *)
+    (** What the browser asks the platform. The host answers from Foundation's volume keys and from one measured walk of the tree, where `bytes` counts everything below an entry and `visible` leaves out the hidden items below it; the photo library comes from Photos once the person allows it; tests answer from fixed data. *)
     export effect Facts
         volume : string => Volume
         listing : string => Listing
+        photos : Unit => Photos
 
     (** What an entry counts for: everything below it, or only what is in sight. *)
     export size hidden entry = match hidden
@@ -190,6 +208,17 @@ module Disk
                 overflow _ _ _ _ => 0
                 remainderByZero _ => 0
             intDiv (satAdd (satMul part scale) (intDiv whole 2)) whole
+
+    // Settings counts the space the system can purge on demand as available.
+    roomy volume = match volume.important > volume.available
+        true => volume.important
+        false => volume.available
+
+    (** The space used on a volume as Settings counts it: purgeable space is free. *)
+    export used volume = satSub volume.total (roomy volume)
+
+    (** The kinds of asset the photo library is broken into, in the order shown. *)
+    export photoKinds () = ["videos", "photos", "live", "screenshots"]
 
     (** The share of `whole`, rounded to a whole percent; an unknown or empty whole gives no share. *)
     export percent (part, whole) = ratio 100 part whole

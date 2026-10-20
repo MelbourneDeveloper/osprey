@@ -1,6 +1,6 @@
 # Osprey Storage: where your disk space goes, on the Mac and iPhone
 
-One SwiftUI app that shows what uses your disk, folder by folder. It opens on your home folder with hidden files shown, ranks everything inside by size, and lets you click into any folder. The eye button in the toolbar (⇧⌘.) leaves hidden files out of every total; ⌘↑ goes to the enclosing folder, ⌘R measures again and ⌘O measures another folder or drive. On the Mac, right-click a folder and choose Open in Finder to see it in a Finder window. It never shows a privacy prompt: folders macOS guards wait until you choose them.
+One SwiftUI app that shows what uses your disk, folder by folder. On the Mac it opens on the whole disk with hidden files shown, so apps, the system, your home folder and Documents all count; it ranks everything inside by size and lets you click into any folder. The eye button in the toolbar (⇧⌘.) leaves hidden files out of every total; ⌘↑ goes to the enclosing folder, ⌘R measures again and ⌘O measures another folder or drive. On the Mac, right-click a folder and choose Open in Finder to see it in a Finder window. On iPhone it shows what uses the phone as far as iOS lets an app see: the photo library, once you allow it, this app, and everything else.
 
 Osprey owns the app. [`storage/src`](storage/src) holds the browser's state and events, the ranking, the hidden-file rule, the symbols, the formatting and every screen, which Osprey returns as a tree of native nodes. Swift does two things: it draws that tree with the platform's own grouped list, toolbar, toggle and capacity bar, and it measures the disk.
 
@@ -23,7 +23,7 @@ The iPhone apps and this one build the same way: [`examples/ios/build.sh`](../io
 
 The renderer is the one [Issue Inbox](../mobile/ios/IssueInbox/NativeRenderer.swift) uses. This app adds node kinds that map straight to stock controls: `navigation` (a titled screen of grouped sections with a toolbar), `entry`, `gauge`, `stack`, `pathbar`, `toggle`, `progress` and `empty`. Any node can carry a `menu` of buttons, which the renderer shows as its context menu; Osprey gives each folder an Open in Finder item on the Mac, and its `reveal` command opens the folder in Finder. Osprey chooses every word, symbol, colour, share and key equivalent.
 
-On iPhone, home is the app's own container. Choose Folder opens the Files picker, and the app holds the chosen folder's security scope until the next pick.
+On iPhone, home is the app's own container, and iOS lets no app read another app's files, whatever it is granted. So the first screen breaks the phone down as far as an app can see: Photos & Videos (measured through PhotoKit once you allow it, by the original size of every asset, hidden ones included), Osprey Storage itself, and "Other apps & iOS", the used space less those two. Settings › General › iPhone Storage is the only place that splits that remainder by app. Choose Folder opens the Files picker, so iCloud Drive and On My iPhone folders can be measured, and the app holds the chosen folder's security scope until the next pick.
 
 ## The boundary
 
@@ -34,7 +34,7 @@ start home = envelope (Browse::start home)
 dispatch (model, event) = envelope (Browse::dispatch (Browse::decode model) event)
 ```
 
-Each returns the browser as opaque text, the screen, and any host work: `measure` a folder (with the folders not to enter, and whether to add it to the walk already made), `pick` one, or `reveal` one in Finder. Swift does that work and reports back as events (`progress`, `measured`, `failed`, `picked`), and Osprey ignores a report about a folder it has since left.
+Each returns the browser as opaque text, the screen, and any host work: `measure` a folder (with the folders not to enter, and whether to add it to the walk already made), `pick` one, `reveal` one in Finder, measure the `photos` library, or open the privacy `settings`. Swift does that work and reports back as events (`progress`, `measured`, `failed`, `picked`, `photos`), and Osprey ignores a report about a folder it has since left.
 
 The screen asks the platform through an effect, so [`View`](storage/src/view.ospml) never touches the file system and the [domain suite](storage/test/main.ospml) renders it from fixed data:
 
@@ -42,6 +42,7 @@ The screen asks the platform through an effect, so [`View`](storage/src/view.osp
 export effect Facts
     volume : string => Volume
     listing : string => Listing
+    photos : Unit => Photos
 ```
 
 `main.ospml` answers it with C functions the Swift host defines with `@_cdecl` in [`StorageServices.swift`](OspreyStorage/StorageServices.swift). All calls are synchronous on the main thread. Swift strings passed to Osprey are borrowed for the call. A string a Swift import returns must stay valid for the rest of the process, so each listing's paths are copied once per walk and never freed. Calling Swift crosses Osprey's memory-safety boundary.
@@ -50,15 +51,15 @@ Ranking loops over a folder's entries and keeps only the 120 largest, so a folde
 
 ## Where the numbers come from
 
-- **Volume capacity:** Foundation's `volumeTotalCapacity`, `volumeAvailableCapacity` and `volumeAvailableCapacityForImportantUsage`. The last includes space the system can purge on demand, such as caches and local snapshots, which is what Settings shows as available.
-- **Folder sizes:** one walk of the chosen folder with Foundation's directory enumerator. Each folder records the allocated size of everything below it, and the size of everything below it outside hidden items, so the hidden-files toggle needs no second walk. Hidden files, caches and package contents count. A hard-linked file counts once, a mounted volume below the folder is not entered, and APFS clones count in full, as in Finder. An iCloud Drive or File Provider folder whose contents were evicted is not entered either: it holds nothing on this disk, and listing it would make the provider fetch it from the network. "Hidden" means what Finder hides: names starting with a dot and items flagged hidden, such as `~/Library`.
+- **Volume capacity:** Foundation's `volumeTotalCapacity`, `volumeAvailableCapacity` and `volumeAvailableCapacityForImportantUsage`. The last includes space the system can purge on demand, such as caches and local snapshots. Settings counts that space as available, and so does the app: used is the total less it, so the gauge matches the Storage pane.
+- **Folder sizes:** one walk of the whole disk on the Mac, or of the chosen folder, with Foundation's directory enumerator. Each folder records the allocated size of everything below it, and the size of everything below it outside hidden items, so the hidden-files toggle needs no second walk. Hidden files, caches and package contents count. A hard-linked file counts once, a mounted volume below the folder is not entered, and APFS clones count in full, as in Finder. An iCloud Drive or File Provider folder whose contents were evicted is not entered either: it holds nothing on this disk, and listing it would make the provider fetch it from the network. "Hidden" means what Finder hides: names starting with a dot and items flagged hidden, such as `~/Library`. On the Mac the walk starts at `/`: the system's sealed volume, and the data volume through its firmlinks (`/Applications`, `/Users`, `/Library`, `/private`), with `/System/Volumes/Data` itself skipped as a mount so nothing counts twice.
 
 The system keeps no record of folder sizes that an app can read. APFS directory statistics return `ATTR_DIR_ALLOCSIZE` as 0 for ordinary folders, and the Storage pane in System Settings sizes folders through the private SpaceAttribution framework. Spotlight records file sizes but never indexes hidden files or caches, so measuring is the only complete source. On an Apple silicon Mac, a 330 GB home folder of several million files takes about three and a half minutes, with live progress.
 
 ## Permissions
 
-The app never asks for access. It reads folder metadata, the same information Finder shows, and never asks for Full Disk Access.
+macOS asks the person once before any app reads Desktop, Documents, Downloads or iCloud Drive. The walk enters them, so those questions appear during the first walk; it waits for each answer, and a folder you refuse is counted as unreadable. The Info.plist says why each is read.
 
-macOS asks the person before any app reads Desktop, Documents, Downloads, iCloud Drive, cloud storage folders or another app's container, and an app that opens one waits until the question is answered. Osprey lists those folders ([`Browse`](storage/src/browse.ospml)) and sends them with every walk, and the walk does not enter them. They appear under "Protected by macOS" instead. Choosing one opens the system folder picker already on that folder; choosing it there is the person's consent, so macOS shows no prompt, and its walk is added into the totals already measured.
+macOS also asks before an app reads another app's data, such as the containers under `~/Library/Containers`, and Mail, Messages and Safari are closed to every app without Full Disk Access. Without it, Osprey sends the container folders with every walk and the walk does not enter them: they appear under "Other apps' data", where choosing one opens the system folder picker already on that folder, which grants it without a prompt, and its walk is added into the totals already measured. The first screen offers Allow Full Disk Access, which opens that list in System Settings; turn on Osprey Storage, quit and reopen it, and the walk enters everything the system lets any app read. The app checks for that access by opening the privacy database, which never prompts. What still cannot be read, such as another user's folders, is counted in the "could not be read" footer instead of silently shrinking a total.
 
-Other apps' private data, such as Mail and Messages, is closed to every app. The walk counts those folders in the "could not be read" footer instead of silently shrinking a total.
+On iPhone the app asks for the photo library once, at its first walk; Allow in Settings opens the app's own settings page if you refused.

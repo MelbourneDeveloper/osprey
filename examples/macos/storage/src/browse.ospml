@@ -8,6 +8,7 @@ import storage::Disk
 
 type Browser =
     platform : string
+    full : bool
     home : string
     root : string
     path : string
@@ -26,16 +27,15 @@ module Browse
 
     asking model kind path = Step(model = model, commands = Json::arr (Json::obj (Json::strField "kind" kind + "," + Json::strField "path" path)))
 
-    // macOS asks the person before any app reads these folders, and a walk
-    // that opens one waits on that question. The walk never enters them
-    // unchosen; choosing one in the folder picker grants it without a prompt.
-    protectedFolders () = ["Desktop", "Documents", "Downloads", "Library/Mobile Documents", "Library/CloudStorage"]
-
-    // Every folder inside these holds another app's data, which macOS also asks about.
+    // macOS asks before any app reads another app's data, once per app, so
+    // without Full Disk Access the walk leaves every folder inside these
+    // alone; choosing one in the folder picker grants it without a prompt.
+    // Desktop, Documents, Downloads and iCloud Drive are walked: macOS asks
+    // once for each, and the answer stands.
     appFolders () = ["Library/Containers", "Library/Group Containers"]
 
     // Only the Mac guards a person's folders; an iPhone app's home is its own container.
-    guarded model names = pick (model.platform == "macos") names []
+    guarded model names = pick (model.platform == "macos" && model.full == false) names []
 
     pick flag yes no = match flag
         true => yes
@@ -45,20 +45,27 @@ module Browse
         names = guarded model folders
         Json::arr (join (range (0, length names) |> fold [] (\(output, index) => listAppend output (Json::quote (model.home + "/" + (listGet names index ?: ""))))) ",")
 
-    walk model path graft = Json::arr (Json::obj (join [
+    walk model path graft = Json::obj (join [
         Json::strField "kind" "measure",
         Json::strField "path" path,
         Json::rawField "graft" (toString graft),
-        Json::rawField "protected" (inHome model (protectedFolders ())),
         Json::rawField "apps" (inHome model (appFolders ())),
-    ] ","))
+    ] ",")
+
+    // iOS keeps every other app's files from this one; the photo library is
+    // the one store beyond it an app may measure, once the person allows it.
+    photos model path = pick (model.platform == "ios" && path == model.home) [Json::obj (Json::strField "kind" "photos" + "," + Json::strField "path" path)] []
 
     // The whole browser, or with `graft` one chosen folder inside it, added
     // to the walk already made.
-    measure model path graft = Step(model = model(stage = "measuring", walking = path, items = 0, bytes = 0), commands = walk model path graft)
+    measure model path graft = Step(model = model(stage = "measuring", walking = path, items = 0, bytes = 0), commands = Json::arr (join (listPrepend (photos model path) (walk model path graft)) ","))
 
-    (** A browser at `home` on `platform` (`macos` or `ios`) with hidden files shown, and its first walk requested. *)
-    export start home platform = measure (Browser(platform = platform, home = home, root = home, path = home, hidden = true, stage = "measuring", walking = home, items = 0, bytes = 0)) home false
+    (** A browser on `platform` (`macos` or `ios`) with hidden files shown, and its first walk requested: the whole disk on the Mac, `home` on iPhone. `full` says whether the Mac granted Full Disk Access. *)
+    export start home platform full =
+        root = match platform == "macos"
+            true => "/"
+            false => home
+        measure (Browser(platform = platform, full = full, home = home, root = root, path = root, hidden = true, stage = "measuring", walking = root, items = 0, bytes = 0)) root false
 
     (** Whether `path` is the measured folder or inside it. *)
     export within model path =
@@ -112,6 +119,9 @@ module Browse
             "choose" => asking model "pick" model.path
             "grant" => asking model "pick" value
             "reveal" => revealed model value
+            "settings" => asking model "settings" ""
+            "photos" => unchanged model
+            "allow" => Step(model = model, commands = Json::arr (join (photos model model.home) ","))
             "picked" => picked model value
             "progress" => progressed model event
             "measured" => finished model event "ready"
@@ -120,6 +130,7 @@ module Browse
 
     export encode model = Json::obj (join [
         Json::strField "platform" model.platform,
+        Json::strField "full" (toString model.full),
         Json::strField "home" model.home,
         Json::strField "root" model.root,
         Json::strField "path" model.path,
@@ -132,6 +143,7 @@ module Browse
 
     export decode source = Browser(
         platform = Json::getOr source "platform" "macos",
+        full = Json::getOr source "full" "false" == "true",
         home = Json::getOr source "home" "/",
         root = Json::getOr source "root" "/",
         path = Json::getOr source "path" "/",

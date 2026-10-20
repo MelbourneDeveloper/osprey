@@ -27,6 +27,102 @@ module Native
 
     export notice symbol tint title detail = node "empty" [field "symbol" symbol, field "tint" tint, field "text" title, field "detail" detail]
 
+module Phone
+    pick flag yes no = match flag
+        true => yes
+        false => no
+
+    sized title symbol tint bytes whole = Native::node "entry" [
+        Native::field "text" title,
+        Native::field "symbol" symbol,
+        Native::field "tint" tint,
+        Native::field "accent" tint,
+        Native::field "detail" (Disk::formatBytes bytes),
+        Native::field "caption" (Disk::shareText (bytes, whole)),
+        Native::field "value" (toString (Disk::permille (bytes, whole))),
+    ]
+
+    waiting detail action = Native::node "entry" (listConcat [
+        Native::field "text" "Photos & Videos",
+        Native::field "symbol" "photo.on.rectangle.angled",
+        Native::field "tint" "orange",
+        Native::field "accent" "gray",
+        Native::field "detail" detail,
+        Native::field "caption" "",
+        Native::field "value" "0",
+    ] action)
+
+    counts photos = photos.status == "ready" || photos.status == "limited"
+
+    library photos used = match counts photos
+        true => sized "Photos & Videos" "photo.on.rectangle.angled" "orange" photos.bytes used
+        false => match photos.status
+            "measuring" => waiting "Measuring…" []
+            "denied" => waiting "Allow in Settings" [Native::event "settings" ""]
+            _ => waiting "Allow to measure" [Native::event "allow" ""]
+
+    limits photos = pick (photos.status == "limited") " You allowed only some photos, so only those count." ""
+
+    // iOS shows no app what another app holds, so the phone's own story is the
+    // space used less what this app may measure: its folder and, once the
+    // person allows it, the part of the photo library kept on the device.
+    breakdown volume ranking photos =
+        used = Disk::used volume
+        pictured = pick (counts photos) photos.bytes 0
+        rest = satSub (satSub used pictured) ranking.bytes
+        Native::section "On this ${volume.name}" "iOS lets no app look inside another, so only Settings › General › iPhone Storage splits the rest by app." [
+            library photos used,
+            sized "Osprey Storage" "app.fill" "indigo" ranking.bytes used,
+            sized "Other apps & iOS" "square.stack.3d.up.fill" "gray" (pick (rest > 0) rest 0) used,
+            Native::button "folder.badge.plus" "Measure a Folder in Files…" (Native::event "choose" ""),
+        ]
+
+    title kind = match kind
+        "videos" => "Videos"
+        "screenshots" => "Screenshots"
+        "live" => "Live Photos"
+        _ => "Photos"
+
+    symbol kind = match kind
+        "videos" => "video.fill"
+        "screenshots" => "camera.viewfinder"
+        "live" => "livephoto"
+        _ => "photo.fill"
+
+    tint kind = match kind
+        "videos" => "purple"
+        "screenshots" => "teal"
+        "live" => "pink"
+        _ => "orange"
+
+    kindRow photos output index = match listGet photos.kinds index
+        Error _ => output
+        Success kind => match kind.items > 0
+            true => listAppend output (sized "${title kind.name} · ${Disk::formatCount kind.items}" (symbol kind.name) (tint kind.name) kind.bytes photos.bytes)
+            false => output
+
+    // Originals iCloud keeps while the device holds a smaller copy, or none.
+    cloudRow photos = pick (photos.cloud > 0) [Native::node "entry" [
+        Native::field "text" "Only in iCloud",
+        Native::field "symbol" "icloud.fill",
+        Native::field "tint" "gray",
+        Native::field "accent" "gray",
+        Native::field "detail" (Disk::formatBytes photos.cloud),
+        Native::field "caption" "",
+        Native::field "value" "0",
+    ]] []
+
+    kinds photos =
+        rows = range (0, length photos.kinds) |> fold [] (\(output, index) => kindRow photos output index)
+        footer = "${Disk::formatCount photos.items} items, hidden ones included. Only what is stored on this device counts; Optimise iPhone Storage keeps full-size originals in iCloud, where they take no space here.${limits photos}"
+        Native::section "Photos & Videos" footer (listConcat rows (cloudRow photos))
+
+    (** Whether the browser is at an iPhone app's own folder, where the screen shows the whole device. *)
+    export device model = model.platform == "ios" && model.root == model.home && model.path == model.root
+
+    (** On iPhone, at the app's own folder: what uses the device, as far as iOS lets an app see, and what the photo library holds. *)
+    export sections model volume ranking photos = pick (device model && volume.total > 0) (listConcat [breakdown volume ranking photos] (pick (counts photos) [kinds photos] [])) []
+
 module View
     limit () = 120
 
@@ -39,7 +135,13 @@ module View
         true => yes
         false => no
 
-    used volume = satSub volume.total volume.available
+    used volume = Disk::used volume
+
+    capacity volume = match volume.important > volume.available
+        true => "${Disk::formatBytes volume.important} available, ${Disk::formatBytes (satSub volume.important volume.available)} of it purgeable"
+        false => "${Disk::formatBytes volume.available} available"
+
+    phone model = model.platform == "ios"
 
     pressure share = match share >= 900
         true => "red"
@@ -53,21 +155,24 @@ module View
             Native::field "text" volume.name,
             Native::field "value" (toString share),
             Native::field "detail" "${Disk::formatBytes (used volume)} of ${Disk::formatBytes volume.total} used",
-            Native::field "caption" "${Disk::formatBytes volume.available} free · ${Disk::formatBytes volume.important} available including purgeable space",
+            Native::field "caption" (capacity volume),
         ]
 
     overview volume = match volume.total > 0
         true => Native::section "" "" [gauge volume]
         false => Native::section "" "" [Native::notice "internaldrive" "gray" "Capacity unavailable" "This folder's volume does not report its size."]
 
-    // The folder the app opened on is Home, wherever the platform keeps it.
+    // Home is the person's folder on the Mac; on iPhone it is the app's own,
+    // where the screen tells the whole phone's story.
     title model volume path = match path == model.home
-        true => "Home"
+        true => pick (phone model) "Storage" "Home"
         false => Disk::name volume.name path
+
+    reach model = pick (phone model) "Everything in this app's folder counts. iOS keeps every other app's files private from all apps." "Every file counts: apps, the system, hidden files, caches and package contents. macOS asks once before the app reads Desktop, Documents, Downloads and iCloud Drive; allow it so they count."
 
     measuring model volume =
         progress = Native::node "progress" [Native::field "text" "Measuring ${title model volume model.root}…", Native::field "detail" "${Disk::formatCount model.items} items · ${Disk::formatBytes model.bytes} so far"]
-        Native::section "" "Hidden files, caches and package contents all count. Folders macOS protects wait for you to choose them, so the app never asks for access." [progress]
+        Native::section "" (reach model) [progress]
 
     failed model volume = Native::section "" "" [Native::notice "exclamationmark.triangle.fill" "orange" "Cannot measure ${title model volume model.root}" "The folder no longer exists, or macOS did not allow it to be read. Choose another folder, or rescan."]
 
@@ -146,8 +251,12 @@ module View
             Native::field "value" (toString (capped (Disk::permille (bytes, largest)))),
         ]] []
 
-    blockedNote count = match count > 0
-        true => "${plural count "folder" "folders"} here could not be read and are not counted. macOS keeps other apps' private data, such as Mail and Messages, from every app."
+    unreadable model = match phone model
+        true => "iOS keeps them from the app."
+        false => pick model.full "They belong to the system or to another user." "Mail, Messages, Safari and other apps' private data need Full Disk Access."
+
+    blockedNote model count = match count > 0
+        true => "${plural count "folder" "folders"} here could not be read and are not counted. ${unreadable model}"
         false => ""
 
     sealed model output entry = match entry.guarded && Disk::inSight model.hidden entry
@@ -166,12 +275,15 @@ module View
 
     protectedSection model listing =
         rows = range (0, length listing.entries) |> fold [] (\(output, index) => sealed model output (listGet listing.entries index ?: nothing ()))
-        pick (length rows > 0) [Native::section "Protected by macOS" "macOS asks before any app reads these folders. Choose one to measure it: the folder picker grants it without a prompt, and nothing inside is read until then." rows] []
+        pick (length rows > 0) [Native::section "Other apps' data" "macOS asks before any app reads another app's data. Choose one to measure it, or allow Full Disk Access to measure them all." rows] []
+
+    // Without Full Disk Access, macOS keeps other apps' data out of every total.
+    access model = pick (phone model == false && model.full == false) [Native::section "Full Disk Access" "Without it, Mail, Messages, Safari and other apps' data are not counted. Turn on Osprey Storage in the list, then quit and reopen it." [Native::button "lock.shield" "Allow Full Disk Access…" (Native::event "settings" "")]] []
 
     items model ranking listing =
         largest = Disk::size model.hidden (listGet ranking.top 0 ?: nothing ())
         rows = listConcat (range (0, ranking.kept) |> fold [] (\(output, index) => row model ranking largest output index)) (remainder model ranking largest)
-        Native::section "Largest items" (blockedNote listing.blocked) rows
+        Native::section "Largest items" (blockedNote model listing.blocked) rows
 
     emptied model = match model.hidden
         true => Native::notice "tray" "gray" "Nothing here" "This folder is empty."
@@ -180,8 +292,8 @@ module View
     contents model volume listing ranking = match listing.measured
         false => [Native::section "" "" [Native::notice "questionmark.folder" "gray" "Not measured yet" "Rescan to measure this folder."]]
         true => match ranking.count > 0
-            true => listConcat [composition model volume ranking, items model ranking listing] (protectedSection model listing)
-            false => listPrepend (protectedSection model listing) (Native::section "" (blockedNote listing.blocked) [emptied model])
+            true => pick (Phone::device model) [] (listConcat [composition model volume ranking, items model ranking listing] (protectedSection model listing))
+            false => listPrepend (protectedSection model listing) (Native::section "" (blockedNote model listing.blocked) [emptied model])
 
     enclosing model = match model.path == model.root
         true => []
@@ -210,10 +322,10 @@ module View
         Native::nodes "children" sections,
     ]
 
-    ready model volume listing =
+    ready model volume listing photos =
         ranking = Disk::rank model.hidden (limit ()) listing.entries
-        head = pick (model.path == model.root) (overview volume) (pathbar volume model)
-        screen model volume (summary ranking) (listPrepend (contents model volume listing ranking) head)
+        head = pick (model.path == model.root) (listConcat (listPrepend (Phone::sections model volume ranking photos) (overview volume)) (access model)) [pathbar volume model]
+        screen model volume (summary ranking) (listConcat head (contents model volume listing ranking))
 
     (** The screen for a browser: the volume, the walk's progress or failure, or the ranked contents of the open folder. *)
     export render model =
@@ -221,4 +333,4 @@ module View
         match model.stage
             "measuring" => screen model volume "Measuring…" [overview volume, measuring model volume]
             "failed" => screen model volume "" [overview volume, failed model volume]
-            _ => ready model volume (perform Disk::Facts.listing model.path)
+            _ => ready model volume (perform Disk::Facts.listing model.path) (perform Disk::Facts.photos ())
