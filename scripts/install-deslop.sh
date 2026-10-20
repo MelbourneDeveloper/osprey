@@ -19,9 +19,14 @@ say()  { echo -e "${CYAN}${BOLD}▶ $*${RESET}"; }
 ok()   { echo -e "${GREEN}✓ $*${RESET}"; }
 fail() { echo -e "${RED}✗ $*${RESET}" >&2; exit 1; }
 
+# An anonymous API call shares the runner IP's hourly quota with every other
+# job on it and gets a 403 once that runs out; a token has its own.
+auth=()
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then auth=(-H "Authorization: Bearer $GITHUB_TOKEN"); fi
+
 # Avoid `curl | grep -m1`: grep's early exit fails under pipefail.
 say "Resolving latest deslop release"
-latest="$(curl -sSfL https://api.github.com/repos/Nimblesite/Deslop/releases/latest)" \
+latest="$(curl -sSfL ${auth[@]+"${auth[@]}"} https://api.github.com/repos/Nimblesite/Deslop/releases/latest)" \
     || fail "could not reach the GitHub API to resolve the latest deslop release"
 DESLOP_VERSION="$(awk -F'"' '/"tag_name"/ { v = $4; sub(/^v/, "", v); print v; exit }' \
     <<<"$latest")"
