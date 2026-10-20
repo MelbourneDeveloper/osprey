@@ -76,7 +76,7 @@ enum SmokeCheck {
             ("Documents counted", top.first { $0.name == "Documents" }.map { !$0.guarded && $0.bytes >= 40_000 } ?? false),
             ("another app's data left alone", sealed.first { $0.name == "com.example.app" }.map { $0.guarded && $0.bytes == 0 } ?? false),
             ("another app's data offered", offered.text.contains("Other apps' data") && offered.text.contains("\"type\":\"grant\"")),
-            ("Full Disk Access offered", ready.text.contains("Allow Full Disk Access") == !fullDiskAccess()),
+            ("Full Disk Access offered", ready.text.contains("Allow Full Disk Access")),
             ("chosen folder joins the walk", after.first { $0.name == "com.example.app" }.map { !$0.guarded && $0.bytes >= 30_000 } ?? false),
             ("chosen folder opens", joined.text.contains("\"text\":\"blob\"")),
             ("hard links keep folder and contents totals equal", projects.map { $0.bytes == projectBytes } ?? false),
