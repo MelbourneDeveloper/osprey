@@ -70,6 +70,7 @@ final class StorageStore: ObservableObject {
         switch command.kind {
         case "measure": measure(command)
         case "pick": pick(command.path)
+        case "reveal": reveal(command.path)
         default: fail("Osprey asked for unknown host work: \(command.kind)")
         }
     }
@@ -88,6 +89,14 @@ final class StorageStore: ObservableObject {
         }
         #else
         picking = true
+        #endif
+    }
+
+    /// A Finder window on `path`. Finder reads the folder, not this app, so a
+    /// protected folder opens without a prompt here.
+    private func reveal(_ path: String) {
+        #if os(macOS)
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
         #endif
     }
 

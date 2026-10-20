@@ -1,6 +1,6 @@
 # Osprey Storage: where your disk space goes, on the Mac and iPhone
 
-One SwiftUI app that shows what uses your disk, folder by folder. It opens on your home folder with hidden files shown, ranks everything inside by size, and lets you click into any folder. The eye button in the toolbar (⇧⌘.) leaves hidden files out of every total; ⌘↑ goes to the enclosing folder, ⌘R measures again and ⌘O measures another folder or drive. It never shows a privacy prompt: folders macOS guards wait until you choose them.
+One SwiftUI app that shows what uses your disk, folder by folder. It opens on your home folder with hidden files shown, ranks everything inside by size, and lets you click into any folder. The eye button in the toolbar (⇧⌘.) leaves hidden files out of every total; ⌘↑ goes to the enclosing folder, ⌘R measures again and ⌘O measures another folder or drive. On the Mac, right-click a folder and choose Open in Finder to see it in a Finder window. It never shows a privacy prompt: folders macOS guards wait until you choose them.
 
 Osprey owns the app. [`storage/src`](storage/src) holds the browser's state and events, the ranking, the hidden-file rule, the symbols, the formatting and every screen, which Osprey returns as a tree of native nodes. Swift does two things: it draws that tree with the platform's own grouped list, toolbar, toggle and capacity bar, and it measures the disk.
 
@@ -21,7 +21,7 @@ make macos-test                     # C ABI, corpus, domain suite and smoke
 
 The iPhone apps and this one build the same way: [`examples/ios/build.sh`](../ios/build.sh) compiles the Osprey project into `libOspreyApp.a` and its generated `libOspreyApp.h`, and `xcodebuild` links them into the app. [`OspreyStorage.xcconfig`](OspreyStorage.xcconfig) declares one target for `macosx`, `iphoneos` and `iphonesimulator` and picks the matching archive (`--target=macos`, `ios` or `ios-sim`). The Swift sources, the renderer and the Osprey code are the same on both. See [the Mac slice](../../docs/specs/compiler/iOSCodegen.md#the-mac-slice-ios-target-macos) for the boundary.
 
-The renderer is the one [Issue Inbox](../mobile/ios/IssueInbox/NativeRenderer.swift) uses. This app adds node kinds that map straight to stock controls: `navigation` (a titled screen of grouped sections with a toolbar), `entry`, `gauge`, `stack`, `pathbar`, `toggle`, `progress` and `empty`. Osprey chooses every word, symbol, colour, share and key equivalent.
+The renderer is the one [Issue Inbox](../mobile/ios/IssueInbox/NativeRenderer.swift) uses. This app adds node kinds that map straight to stock controls: `navigation` (a titled screen of grouped sections with a toolbar), `entry`, `gauge`, `stack`, `pathbar`, `toggle`, `progress` and `empty`. Any node can carry a `menu` of buttons, which the renderer shows as its context menu; Osprey gives each folder an Open in Finder item on the Mac, and its `reveal` command opens the folder in Finder. Osprey chooses every word, symbol, colour, share and key equivalent.
 
 On iPhone, home is the app's own container. Choose Folder opens the Files picker, and the app holds the chosen folder's security scope until the next pick.
 
@@ -34,7 +34,7 @@ start home = envelope (Browse::start home)
 dispatch (model, event) = envelope (Browse::dispatch (Browse::decode model) event)
 ```
 
-Each returns the browser as opaque text, the screen, and any host work: `measure` a folder (with the folders not to enter, and whether to add it to the walk already made) or `pick` one. Swift does that work and reports back as events (`progress`, `measured`, `failed`, `picked`), and Osprey ignores a report about a folder it has since left.
+Each returns the browser as opaque text, the screen, and any host work: `measure` a folder (with the folders not to enter, and whether to add it to the walk already made), `pick` one, or `reveal` one in Finder. Swift does that work and reports back as events (`progress`, `measured`, `failed`, `picked`), and Osprey ignores a report about a folder it has since left.
 
 The screen asks the platform through an effect, so [`View`](storage/src/view.ospml) never touches the file system and the [domain suite](storage/test/main.ospml) renders it from fixed data:
 

@@ -22,6 +22,9 @@ module Native
 
     export section header footer rows = node "section" [field "text" header, field "detail" footer, nodes "children" rows]
 
+    (** Buttons shown when the node is right-clicked: its context menu. *)
+    export menu items = nodes "menu" items
+
     export notice symbol tint title detail = node "empty" [field "symbol" symbol, field "tint" tint, field "text" title, field "detail" detail]
 
 module View
@@ -87,6 +90,11 @@ module View
 
     capped share = pick (share > 1000) 1000 share
 
+    // A folder's context menu on the Mac opens it in Finder. An iPhone has no Finder.
+    finder model path = pick (model.platform == "macos") [Native::menu [Native::button "folder" "Open in Finder" (Native::event "reveal" path)]] []
+
+    folderRow model fields path = Native::node "entry" (listConcat (listAppend fields (Native::event "open" path)) (finder model path))
+
     segment ranking index title bytes = Native::node "segment" [
         Native::field "text" title,
         Native::field "tint" (accent index),
@@ -123,7 +131,7 @@ module View
             Native::field "caption" (Disk::shareText (bytes, ranking.bytes)),
             Native::field "value" (toString (capped (Disk::permille (bytes, largest)))),
         ]
-        listAppend output (Native::node "entry" (pick entry.folder (listAppend fields (Native::event "open" entry.path)) fields))
+        listAppend output (pick entry.folder (folderRow model fields entry.path) (Native::node "entry" fields))
 
     remainder model ranking largest =
         count = satSub ranking.count ranking.kept
@@ -144,7 +152,7 @@ module View
 
     sealed model output entry = match entry.guarded && Disk::inSight model.hidden entry
         false => output
-        true => listAppend output (Native::node "entry" [
+        true => listAppend output (Native::node "entry" (listConcat [
             Native::field "text" (Disk::name "" entry.path),
             Native::field "symbol" "lock.fill",
             Native::field "tint" "gray",
@@ -154,7 +162,7 @@ module View
             Native::field "caption" "",
             Native::field "value" "0",
             Native::event "grant" entry.path,
-        ])
+        ] (finder model entry.path)))
 
     protectedSection model listing =
         rows = range (0, length listing.entries) |> fold [] (\(output, index) => sealed model output (listGet listing.entries index ?: nothing ()))

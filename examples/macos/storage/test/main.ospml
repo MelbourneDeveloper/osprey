@@ -103,6 +103,8 @@ browseCase () =
     check "and keeps the measured folder" home granted.model.root
     check "and opens the chosen one" "/Users/ada/Documents" granted.model.path
     check "its walk reports by its own path" "ready" (Browse::dispatch granted.model "{\"type\":\"measured\",\"path\":\"/Users/ada/Documents\"}").model.stage
+    check "a folder opens in Finder" "[{\"kind\":\"reveal\",\"path\":\"/Users/ada/Code\"}]" (Browse::dispatch ready "{\"type\":\"reveal\",\"value\":\"/Users/ada/Code\"}").commands
+    check "but only inside the measured folder" "[]" (Browse::dispatch ready "{\"type\":\"reveal\",\"value\":\"/Users/adam\"}").commands
     check "a protected folder is chosen in the picker" "[{\"kind\":\"pick\",\"path\":\"/Users/ada/Documents\"}]" (Browse::dispatch ready "{\"type\":\"grant\",\"value\":\"/Users/ada/Documents\"}").commands
     counted = (Browse::dispatch started.model "{\"type\":\"progress\",\"path\":\"/Users/ada\",\"items\":1200,\"bytes\":5000}").model
     check "progress" 1200 counted.items
@@ -120,6 +122,12 @@ screenCase () =
     checkTrue "protected folders listed apart" (contains shown "Protected by macOS")
     checkTrue "and chosen to measure" (contains shown "\"event\":{\"type\":\"grant\",\"value\":\"/Users/ada/Documents\"}")
     checkTrue "folders open" (contains shown "\"event\":{\"type\":\"open\",\"value\":\"/Users/ada/Code\"}")
+    finder = "\"menu\":[{\"kind\":\"button\",\"symbol\":\"folder\",\"text\":\"Open in Finder\",\"event\":{\"type\":\"reveal\",\"value\":\"/Users/ada/Code\"}}]"
+    checkTrue "a folder's context menu opens it in Finder" (contains shown finder)
+    checkTrue "a protected folder's too" (contains shown "\"event\":{\"type\":\"reveal\",\"value\":\"/Users/ada/Documents\"}")
+    checkFalse "a file has no Finder item" (contains shown "\"value\":\"/Users/ada/notes.txt\"")
+    phone = screen (storage::Browser(platform = "ios", home = home, root = home, path = home, hidden = true, stage = "ready", walking = home, items = 0, bytes = 0))
+    checkFalse "an iPhone has no Finder" (contains phone "Open in Finder")
     checkTrue "toggle reflects the setting" (contains shown "\"text\":\"Hidden Files\",\"value\":\"true\"")
     checkFalse "no way up from the root" (contains shown "Enclosing Folder")
     sighted = screen (browser home false "ready")

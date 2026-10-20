@@ -22,6 +22,7 @@ struct NativeNode: Decodable {
     var caption: String?
     var key: String?
     var toolbar: [NativeNode]?
+    var menu: [NativeNode]?
 }
 
 // One run of a `rich` node: Osprey chose the style and link. [MOBILE-MARKDOWN]
@@ -38,6 +39,12 @@ struct NativeRenderer: View {
     var body: some View {
         rendered.modifier(NodeStyle(style: node.style ?? ""))
             .accessibilityIdentifier(node.id ?? "")
+            .contextMenu {
+                // A node's `menu` is its context menu; with none, nothing shows.
+                ForEach(Array((node.menu ?? []).enumerated()), id: \.offset) { _, item in
+                    Button { send(item.event ?? [:]) } label: { Label(item.text ?? "", systemImage: item.symbol ?? "circle") }
+                }
+            }
     }
 
     private var children: some View {

@@ -71,6 +71,11 @@ module Browse
         true => unchanged (model(path = path))
         false => unchanged model
 
+    // Finder opens a folder of the measured one; nothing outside it is asked for.
+    revealed model path = match within model path
+        true => asking model "reveal" path
+        false => unchanged model
+
     up model = match model.path == model.root
         true => unchanged model
         false => unchanged (model(path = Disk::parent model.path))
@@ -106,6 +111,7 @@ module Browse
             "rescan" => measure model model.root false
             "choose" => asking model "pick" model.path
             "grant" => asking model "pick" value
+            "reveal" => revealed model value
             "picked" => picked model value
             "progress" => progressed model event
             "measured" => finished model event "ready"
