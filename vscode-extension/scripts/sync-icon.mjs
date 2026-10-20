@@ -5,7 +5,7 @@
 // GENERATE it from the canonical logo at build time rather than committing a copy.
 // Wired into `precompile` and `vscode:prepublish`; the output (icon.png) is
 // gitignored. This keeps exactly one logo in version control.
-import { copyFileSync, existsSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -15,6 +15,17 @@ const DEST = resolve(here, "../icon.png");
 
 if (!existsSync(SOURCE)) {
   console.error(`sync-icon: canonical logo not found at ${SOURCE}`);
+  process.exit(1);
+}
+
+// The logo is stored in Git LFS. A checkout without LFS leaves a small text
+// pointer in its place, which the Marketplace rejects as an icon after every
+// other channel has already published it — so refuse it here, at build time.
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+if (!readFileSync(SOURCE).subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+  console.error(
+    `sync-icon: ${SOURCE} is not a PNG (a Git LFS pointer?) — run \`git lfs pull --include=website/src/assets/images/logo.png\``,
+  );
   process.exit(1);
 }
 
