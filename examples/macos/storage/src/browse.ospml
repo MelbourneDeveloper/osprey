@@ -1,0 +1,93 @@
+// Implements [IOS-TARGET-MACOS] and [MOBILE-REACTIVE-HOST]: every event the
+// host delivers yields a new immutable browser and the host work it needs.
+// The host keeps the browser as opaque text between events.
+namespace storage
+
+import bank::Json
+import storage::Disk
+
+type Browser =
+    root : string
+    path : string
+    hidden : bool
+    stage : string
+    items : int
+    bytes : int
+
+type Step =
+    model : Browser
+    commands : string
+
+module Browse
+    unchanged model = Step(model = model, commands = "[]")
+
+    asking model kind path = Step(model = model, commands = Json::arr (Json::obj (Json::strField "kind" kind + "," + Json::strField "path" path)))
+
+    measure model = asking (model(stage = "measuring", items = 0, bytes = 0)) "measure" model.root
+
+    (** A browser at `home` with hidden files shown, and its first walk requested. *)
+    export start home = measure (Browser(root = home, path = home, hidden = true, stage = "measuring", items = 0, bytes = 0))
+
+    (** Whether `path` is the measured folder or inside it. *)
+    export within model path =
+        prefix = match endsWith model.root "/"
+            true => model.root
+            false => model.root + "/"
+        path == model.root || startsWith path prefix
+
+    opened model path = match within model path
+        true => unchanged (model(path = path))
+        false => unchanged model
+
+    up model = match model.path == model.root
+        true => unchanged model
+        false => unchanged (model(path = Disk::parent model.path))
+
+    number event key = parseInt (Json::getOr event key "0") ?: 0
+
+    current model event = Json::getOr event "path" "" == model.root && model.stage == "measuring"
+
+    // A walk of a folder the browser has since left reports nothing.
+    progressed model event = match current model event
+        true => unchanged (model(items = number event "items", bytes = number event "bytes"))
+        false => unchanged model
+
+    finished model event stage = match current model event
+        true => unchanged (model(stage = stage))
+        false => unchanged model
+
+    picked model path = match length path > 0
+        true => measure (model(root = path, path = path))
+        false => unchanged model
+
+    (** The browser after one host event, and the host work it asks for. *)
+    export dispatch model event =
+        value = Json::getOr event "value" ""
+        match Json::getOr event "type" ""
+            "open" => opened model value
+            "up" => up model
+            "hidden" => unchanged (model(hidden = value == "true"))
+            "rescan" => measure model
+            "choose" => asking model "pick" model.root
+            "picked" => picked model value
+            "progress" => progressed model event
+            "measured" => finished model event "ready"
+            "failed" => finished model event "failed"
+            _ => unchanged model
+
+    export encode model = Json::obj (join [
+        Json::strField "root" model.root,
+        Json::strField "path" model.path,
+        Json::strField "hidden" (toString model.hidden),
+        Json::strField "stage" model.stage,
+        Json::numField "items" model.items,
+        Json::numField "bytes" model.bytes,
+    ] ",")
+
+    export decode source = Browser(
+        root = Json::getOr source "root" "/",
+        path = Json::getOr source "path" "/",
+        hidden = Json::getOr source "hidden" "true" == "true",
+        stage = Json::getOr source "stage" "ready",
+        items = number source "items",
+        bytes = number source "bytes")

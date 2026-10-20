@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Implements [IOS-SWIFT-HOST] and [IOS-VERIFICATION].
+# Implements [IOS-SWIFT-HOST], [IOS-VERIFICATION] and [IOS-TARGET-MACOS]: one
+# build for every Apple app, on iPhone, its simulator or the Mac.
 set -euo pipefail
 
 script_dir=$(cd "$(dirname "$0")" && pwd)
@@ -12,19 +13,23 @@ signing=(CODE_SIGNING_ALLOWED=NO)
 case "$target" in
     ios) sdk=iphoneos; destination='generic/platform=iOS' ;;
     ios-sim) sdk=iphonesimulator; destination='generic/platform=iOS Simulator' ;;
+    macos)
+        sdk=macosx; destination='platform=macOS,arch=arm64'
+        signing=(CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=)
+        ;;
     ios-device)
         : "${OSPREY_DEVELOPMENT_TEAM:?Set OSPREY_DEVELOPMENT_TEAM to your Xcode signing team ID.}"
         : "${OSPREY_DEVICE_UDID:?Use run-device.sh to select a connected iPhone.}"
         sdk=iphoneos; destination="platform=iOS,id=$OSPREY_DEVICE_UDID"
         signing=("DEVELOPMENT_TEAM=$OSPREY_DEVELOPMENT_TEAM" -allowProvisioningUpdates -allowProvisioningDeviceRegistration)
         ;;
-    *) echo "Usage: $0 [ios|ios-sim|ios-device]" >&2; exit 2 ;;
+    *) echo "Usage: $0 [ios|ios-sim|ios-device|macos]" >&2; exit 2 ;;
 esac
 compiler_target=${target/ios-device/ios}
 
 compiler=${OSPREY_BIN:-"$repo_dir/target/release/osprey"}
 if [[ ! -x "$compiler" ]]; then
-    echo "Osprey compiler not found at $compiler. Run make ios from the repository root." >&2
+    echo "Osprey compiler not found at $compiler. Run make ios or make macos from the repository root." >&2
     exit 1
 fi
 output="$example_dir/build/$target"

@@ -1,0 +1,32 @@
+// Implements [IOS-TARGET-MACOS] and [IOS-HOST-ABI]: one target and one Osprey
+// boundary, built for the Mac, the iPhone and its simulator.
+OSPREY_PLATFORM[sdk=macosx*] = macos
+OSPREY_PLATFORM[sdk=iphoneos*] = ios
+OSPREY_PLATFORM[sdk=iphonesimulator*] = ios-sim
+OSPREY_LIBRARY_DIR = $(SRCROOT)/build/$(OSPREY_PLATFORM)
+HEADER_SEARCH_PATHS = $(inherited) "$(OSPREY_LIBRARY_DIR)"
+LIBRARY_SEARCH_PATHS = $(inherited) "$(OSPREY_LIBRARY_DIR)"
+OTHER_LDFLAGS = $(inherited) -lOspreyApp
+SWIFT_OBJC_BRIDGING_HEADER = OspreyStorage/Bridge.h
+SDKROOT = auto
+SUPPORTED_PLATFORMS = macosx iphoneos iphonesimulator
+SUPPORTS_MACCATALYST = NO
+TARGETED_DEVICE_FAMILY = 1,2
+MACOSX_DEPLOYMENT_TARGET = 13.0
+IPHONEOS_DEPLOYMENT_TARGET = 16.0
+PRODUCT_BUNDLE_IDENTIFIER = org.ospreylang.OspreyStorage
+PRODUCT_NAME = $(TARGET_NAME)
+MARKETING_VERSION = 1.0
+CURRENT_PROJECT_VERSION = 1
+CODE_SIGN_STYLE = Automatic
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_KEY_CFBundleDisplayName = Osprey Storage
+INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.utilities
+INFOPLIST_KEY_NSDesktopFolderUsageDescription = Osprey Storage measures your Desktop to show what uses your disk.
+INFOPLIST_KEY_NSDocumentsFolderUsageDescription = Osprey Storage measures your Documents folder to show what uses your disk.
+INFOPLIST_KEY_NSDownloadsFolderUsageDescription = Osprey Storage measures your Downloads folder to show what uses your disk.
+INFOPLIST_KEY_NSRemovableVolumesUsageDescription = Osprey Storage measures external drives you choose to show what uses them.
+INFOPLIST_KEY_NSNetworkVolumesUsageDescription = Osprey Storage measures network volumes you choose to show what uses them.
+INFOPLIST_KEY_LSRequiresIPhoneOS[sdk=iphone*] = YES
+INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphone*] = YES
+INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphone*] = YES

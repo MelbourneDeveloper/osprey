@@ -1,54 +1,163 @@
-// Implements [IOS-TARGET-MACOS]: Osprey owns the storage report. The host
-// answers each question by asking macOS, so this module never touches the file
-// system and its tests need no particular disk.
+// Implements [IOS-TARGET-MACOS]: Osprey decides everything the storage browser
+// shows. The host measures the disk once and answers each question, so this
+// module never touches the file system and its tests need no particular disk.
 namespace storage
 
-type Folder =
+type Entry =
     path : string
     bytes : int
+    visible : int
+    hidden : bool
+    folder : bool
 
 type Volume =
+    name : string
     total : int
     available : int
     important : int
 
 type Listing =
-    entries : List<Folder>
+    entries : List<Entry>
     blocked : int
+    measured : bool
 
-type Survey =
-    root : string
-    volume : Volume
-    measured : int
-    unreadable : int
-    folders : List<Folder>
-    inside : List<Folder>
+type Ranking =
+    top : List<Entry>
+    kept : int
+    floor : int
+    bytes : int
+    count : int
+
+type Look =
+    symbol : string
+    tint : string
 
 module Disk
-    (** What the report asks the platform. The Mac handler answers from Foundation's volume keys and by measuring the tree, hidden files included; tests answer from fixed data. *)
+    (** What the browser asks the platform. The host answers from Foundation's volume keys and from one measured walk of the tree, where `bytes` counts everything below an entry and `visible` leaves out the hidden items below it; tests answer from fixed data. *)
     export effect Facts
         volume : string => Volume
-        largest : string => Listing
+        listing : string => Listing
 
-    top count folders = match folders
+    (** What an entry counts for: everything below it, or only what is in sight. *)
+    export size hidden entry = match hidden
+        true => entry.bytes
+        false => entry.visible
+
+    counted hidden entry = hidden || entry.hidden == false
+
+    (** The first `count` items. *)
+    export top count items = match items
         [] => []
         [first, ...rest] => match count > 0
             true => listPrepend (top (satSub count 1) rest) first
             false => []
 
-    sumBytes folders = match folders
-        [] => 0
-        [first, ...rest] => satAdd first.bytes (sumBytes rest)
+    last items fallback = match items
+        [] => fallback
+        [first, ...rest] => last rest first
 
-    insideLargest limit folders = match folders
-        [] => []
-        [largest, ..._rest] => top limit (perform Facts.largest largest.path).entries
+    placed hidden entry items = match items
+        [] => [entry]
+        [first, ...rest] => match size hidden entry > size hidden first
+            true => listPrepend items entry
+            false => listPrepend (placed hidden entry rest) first
 
-    (** Ranks the entries under `root`, then asks for the entries inside the largest one. *)
-    export survey root limit =
-        listing = perform Facts.largest root
-        folders = top limit listing.entries
-        Survey(root = root, volume = perform Facts.volume root, measured = sumBytes listing.entries, unreadable = listing.blocked, folders = folders, inside = insideLargest limit folders)
+    // A full ranking only changes when an entry beats its smallest member, so
+    // most entries of a large folder cost one comparison.
+    keep hidden limit ranking entry =
+        bytes = size hidden entry
+        totals = ranking(bytes = satAdd ranking.bytes bytes, count = satAdd ranking.count 1)
+        match ranking.kept >= limit && bytes <= ranking.floor
+            true => totals
+            false =>
+                ranked = top limit (placed hidden entry ranking.top)
+                totals(top = ranked, kept = length ranked, floor = size hidden (last ranked entry))
+
+    step hidden limit entries ranking index = match listGet entries index
+        Error _ => ranking
+        Success entry => match counted hidden entry
+            true => keep hidden limit ranking entry
+            false => ranking
+
+    (** The `limit` largest entries counted under the hidden-files setting, largest first, with the size and number of everything counted. A loop, not recursion, visits the entries, so a folder of any size keeps the stack flat. *)
+    export rank hidden limit entries =
+        empty = Ranking(top = [], kept = 0, floor = 0, bytes = 0, count = 0)
+        range (0, length entries) |> fold empty (\(ranking, index) => step hidden limit entries ranking index)
+
+    nonEmpty kept piece = match length piece > 0
+        true => listAppend kept piece
+        false => kept
+
+    segments path =
+        pieces = split path "/" ?: []
+        range (0, length pieces) |> fold [] (\(kept, index) => nonEmpty kept (listGet pieces index ?: ""))
+
+    (** The last component of a path; the volume root has none and goes by `fallback`. *)
+    export name fallback path = last (segments path) fallback
+
+    joined base pieces = match length pieces > 0
+        false => base
+        true => match endsWith base "/"
+            true => base + join pieces "/"
+            false => base + "/" + join pieces "/"
+
+    (** The enclosing folder; the volume root encloses itself. *)
+    export parent path =
+        pieces = segments path
+        joined "/" (top (satSub (length pieces) 1) pieces)
+
+    (** The folders from `root` down to `path`, outermost first. *)
+    export trail root path =
+        below = segments (drop path (length root))
+        range (0, length below) |> fold [root] (\(folders, index) => listAppend folders (joined root (top (satAdd index 1) below)))
+
+    extension path =
+        pieces = split (name "" path) "." ?: []
+        match length pieces > 1
+            true => toLowerCase (last pieces "")
+            false => ""
+
+    videos () = ["mov", "mp4", "m4v", "avi", "mkv", "webm", "braw", "prores"]
+    images () = ["png", "jpg", "jpeg", "heic", "gif", "tif", "tiff", "dng", "raw", "psd", "webp", "svg"]
+    sounds () = ["mp3", "m4a", "wav", "aif", "aiff", "flac", "aac", "caf"]
+    archives () = ["zip", "gz", "tgz", "tar", "xz", "bz2", "7z", "rar", "dmg", "iso", "pkg", "ipa", "xip", "img", "qcow2", "vmdk", "vdi"]
+    sources () = ["swift", "rs", "c", "h", "m", "mm", "cpp", "js", "ts", "py", "go", "java", "kt", "json", "osp", "ospml", "sh", "html", "css"]
+    documents () = ["pdf", "txt", "md", "rtf", "doc", "docx", "pages", "key", "numbers", "xls", "xlsx", "ppt", "pptx", "csv", "epub"]
+
+    fileLook kind = match listContains (videos ()) kind
+        true => Look(symbol = "film.fill", tint = "purple")
+        false => match listContains (images ()) kind
+            true => Look(symbol = "photo.fill", tint = "orange")
+            false => match listContains (sounds ()) kind
+                true => Look(symbol = "waveform", tint = "pink")
+                false => match listContains (archives ()) kind
+                    true => Look(symbol = "shippingbox.fill", tint = "brown")
+                    false => match listContains (sources ()) kind
+                        true => Look(symbol = "chevron.left.forwardslash.chevron.right", tint = "teal")
+                        false => match listContains (documents ()) kind
+                            true => Look(symbol = "doc.richtext.fill", tint = "green")
+                            false => Look(symbol = "doc.fill", tint = "gray")
+
+    // Finder's own folders keep their familiar symbols.
+    folderSymbol title = match title
+        "Applications" => "square.grid.3x3.fill"
+        "Desktop" => "menubar.dock.rectangle"
+        "Documents" => "doc.text.fill"
+        "Downloads" => "arrow.down.circle.fill"
+        "Library" => "building.columns.fill"
+        "Movies" => "film.stack.fill"
+        "Music" => "music.note"
+        "Pictures" => "photo.on.rectangle.angled"
+        "Developer" => "hammer.fill"
+        ".Trash" => "trash.fill"
+        _ => "folder.fill"
+
+    (** The symbol and tint for an entry: apps and Finder's folders by name, files by kind. *)
+    export look entry = match entry.folder
+        false => fileLook (extension entry.path)
+        true => match extension entry.path == "app"
+            true => Look(symbol = "app.fill", tint = "indigo")
+            false => Look(symbol = folderSymbol (name "" entry.path), tint = "blue")
 
     scaled tenths unit larger = match larger
         [] => shown tenths unit
@@ -64,59 +173,26 @@ module Disk
         true => "unknown"
         false => scaled (satMul bytes 10) "B" ["KB", "MB", "GB", "TB"]
 
-    (** The share of `whole`, rounded to a whole percent; an unknown or empty whole gives no share. *)
-    export percent (part, whole) = match whole > 0
+    (** A count with thousands separators. *)
+    export formatCount count = match count < 1000
+        true => toString count
+        false => formatCount (intDiv count 1000) + "," + (padStart (toString (count % 1000)) 3 "0" ?: "")
+
+    ratio scale part whole = match whole > 0
         false => 0
         true =>
             handle Arith
                 overflow _ _ _ _ => 0
                 remainderByZero _ => 0
-            intDiv (satAdd (satMul part 100) (intDiv whole 2)) whole
+            intDiv (satAdd (satMul part scale) (intDiv whole 2)) whole
 
-    bar share = match share > 100
-        true => bar 100
-        false => (repeat "█" (intDiv share 5) ?: "") + (repeat "░" (satSub 20 (intDiv share 5)) ?: "")
+    (** The share of `whole`, rounded to a whole percent; an unknown or empty whole gives no share. *)
+    export percent (part, whole) = ratio 100 part whole
 
-    relative base path =
-        prefix = match endsWith base "/"
-            true => base
-            false => base + "/"
-        match startsWith path prefix
-            true => drop path (length prefix)
-            false => path
+    (** The same share in thousandths, for drawing. *)
+    export permille (part, whole) = ratio 1000 part whole
 
-    line base whole folder =
-        share = percent (folder.bytes, whole)
-        size = padStart (formatBytes folder.bytes) 9 " " ?: ""
-        "${size}  ${bar share} ${padStart (toString share) 3 " " ?: ""}%  ${relative base folder.path}"
-
-    lines base whole folders = match folders
-        [] => []
-        [first, ...rest] => listPrepend (lines base whole rest) (line base whole first)
-
-    section title base whole folders empty = match folders
-        [] => "${title}\n  ${empty}"
-        _ => join (listPrepend (lines base whole folders) title) "\n"
-
-    volumeLine volume = match volume.total > 0
-        false => "Volume capacity is unavailable for this path."
-        true => "Volume: ${formatBytes volume.total} total, ${formatBytes (satSub volume.total volume.available)} used, ${formatBytes volume.available} free, ${formatBytes volume.important} available for important data."
-
-    insideSection survey = match survey.folders
-        [] => []
-        [largest, ..._rest] => ["", section "Inside ${relative survey.root largest.path}" largest.path largest.bytes survey.inside "Nothing inside to rank: it is a file, or an empty or unreadable folder."]
-
-    unreadableLines count = match count > 0
-        false => []
-        true => ["Folders that could not be read: ${count}. macOS protects them; grant the host Full Disk Access to count them."]
-
-    (** The report text. Each share is of its section's measured total; the bar is twenty cells wide. *)
-    export render survey =
-        used = satSub survey.volume.total survey.volume.available
-        header = [
-            "Storage report for ${survey.root}",
-            volumeLine survey.volume,
-            "Measured ${formatBytes survey.measured} here, hidden files included (${percent (survey.measured, used)}% of used space).",
-        ]
-        ranking = ["", section "Largest items" survey.root survey.measured survey.folders "Nothing here could be measured: the folder is empty or unreadable."]
-        join (listConcat (listConcat (listConcat header (unreadableLines survey.unreadable)) ranking) (insideSection survey)) "\n"
+    (** A share as people read it: a sliver is "< 1%", never "0%". *)
+    export shareText (part, whole) = match percent (part, whole) == 0 && part > 0
+        true => "< 1%"
+        false => "${percent (part, whole)}%"

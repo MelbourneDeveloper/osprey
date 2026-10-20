@@ -129,7 +129,7 @@ enum HostSmoke {
     }
 
     // Every span in the rendered tree, depth first. [MOBILE-MARKDOWN]
-    private static func spans(_ node: InboxNode?) -> [InboxSpan] {
+    private static func spans(_ node: NativeNode?) -> [NativeSpan] {
         guard let node else { return [] }
         return (node.spans ?? []) + (node.children ?? []).flatMap { spans($0) }
     }
