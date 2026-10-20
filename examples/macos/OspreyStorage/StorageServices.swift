@@ -63,9 +63,21 @@ func storageEntryHidden(_ index: Int64) -> Bool { listedEntry(index)?.hidden ?? 
 @_cdecl("storage_entry_folder")
 func storageEntryFolder(_ index: Int64) -> Bool { listedEntry(index)?.folder ?? false }
 
+/// A folder the walk left alone because macOS asks before an app reads it.
+@_cdecl("storage_entry_guarded")
+func storageEntryGuarded(_ index: Int64) -> Bool { listedEntry(index)?.guarded ?? false }
+
 /// Folders below the last listed one that the walk could not read.
 @_cdecl("storage_unreadable")
 func storageUnreadable() -> Int64 { listed.blocked }
+
+/// An iCloud Drive or File Provider folder whose contents were evicted holds
+/// nothing on this disk, and listing it would make the provider fetch it from
+/// the network, so the walk does not enter it.
+private func dataless(_ path: String) -> Bool {
+    var status = stat()
+    return lstat(path, &status) == 0 && status.st_flags & UInt32(SF_DATALESS) != 0
+}
 
 /// The path with every symlink resolved, as Foundation's enumerator reports
 /// paths. `URL.resolvingSymlinksInPath` would strip `/private` back off `/var`.
@@ -79,7 +91,8 @@ func canonical(_ path: String) -> String {
 /// and Spotlight skips hidden files, so the host measures the tree once: each
 /// folder records what lies below it, and what lies below it outside hidden
 /// items. Hidden files and package contents count; a hard-linked file counts
-/// once; mounted volumes below the root are not entered.
+/// once; mounted volumes, evicted cloud folders and the folders Osprey guards
+/// are not entered, so the walk never triggers a privacy prompt.
 final class DiskTree: @unchecked Sendable {
     struct Entry {
         let path: UnsafePointer<CChar>?
@@ -87,6 +100,18 @@ final class DiskTree: @unchecked Sendable {
         let visible: Int64
         let hidden: Bool
         let folder: Bool
+        let guarded: Bool
+    }
+
+    /// Folders Osprey asks the walk not to enter: `protected` ones, and every
+    /// folder inside `apps`.
+    struct Guard {
+        let protected: Set<String>
+        let apps: Set<String>
+
+        func covers(_ path: String) -> Bool {
+            protected.contains(path) || apps.contains((path as NSString).deletingLastPathComponent)
+        }
     }
 
     struct Listing {
@@ -99,6 +124,7 @@ final class DiskTree: @unchecked Sendable {
     private struct Folder {
         let parent: Int
         let hidden: Bool
+        var guarded = false
         var bytes: Int64 = 0
         var visible: Int64 = 0
         var blocked: Int64 = 0
@@ -118,7 +144,7 @@ final class DiskTree: @unchecked Sendable {
 
     /// Walks `root`, reporting files and bytes seen so far about four times a
     /// second. Returns nil when the root cannot be read or the task is cancelled.
-    static func measure(_ root: String, progress: (Int64, Int64) -> Void) -> DiskTree? {
+    static func measure(_ root: String, guarding: Guard, progress: (Int64, Int64) -> Void) -> DiskTree? {
         let tree = DiskTree()
         let url = URL(fileURLWithPath: root, isDirectory: true)
         _ = tree.add(url.path, parent: -1, hidden: false)
@@ -133,8 +159,10 @@ final class DiskTree: @unchecked Sendable {
             stack.removeLast(max(stack.count - walker.level, 0))
             let parent = stack.last ?? 0
             if values.isDirectory == true {
-                if values.isVolume == true { walker.skipDescendants() }
-                stack.append(tree.add(item.path, parent: parent, hidden: values.isHidden == true))
+                let id = tree.add(item.path, parent: parent, hidden: values.isHidden == true)
+                tree.folders[id].guarded = guarding.covers(item.path)
+                if tree.folders[id].guarded || values.isVolume == true || dataless(item.path) { walker.skipDescendants() }
+                stack.append(id)
                 continue
             }
             if (values.linkCount ?? 1) > 1, let id = values.fileResourceIdentifier as? NSObject,
@@ -180,6 +208,33 @@ final class DiskTree: @unchecked Sendable {
         }
     }
 
+    /// Adds a walk of one folder inside this one: the folder takes the walk's
+    /// totals, every folder above it moves by the difference, and its folders
+    /// join the index.
+    func graft(_ walked: DiskTree, at path: String) {
+        guard let target = index[path], let measured = walked.folders.first else { return }
+        let before = folders[target]
+        folders[target] = Folder(parent: before.parent, hidden: before.hidden, bytes: measured.bytes,
+                                 visible: measured.visible, blocked: measured.blocked)
+        var hiddenBelow = before.hidden, parent = before.parent
+        while parent >= 0 {
+            folders[parent].bytes += measured.bytes - before.bytes
+            folders[parent].blocked += measured.blocked - before.blocked
+            if !hiddenBelow { folders[parent].visible += measured.visible - before.visible }
+            hiddenBelow = hiddenBelow || folders[parent].hidden
+            parent = folders[parent].parent
+        }
+        let offset = folders.count - 1
+        for folder in walked.folders.dropFirst() {
+            var moved = Folder(parent: folder.parent == 0 ? target : folder.parent + offset, hidden: folder.hidden,
+                               bytes: folder.bytes, visible: folder.visible, blocked: folder.blocked)
+            moved.guarded = folder.guarded
+            folders.append(moved)
+        }
+        for (folder, id) in walked.index where id > 0 { index[folder] = id + offset }
+        listings = [:]
+    }
+
     /// A measured folder's direct entries, largest first so Osprey's ranking
     /// rarely reorders. Each folder is listed once per walk, and its strings
     /// stay valid for the process as the boundary requires.
@@ -199,9 +254,10 @@ final class DiskTree: @unchecked Sendable {
         let hidden = values.isHidden == true
         let path = UnsafePointer(strdup(item.path))
         if values.isDirectory == true, let child = index[item.path] {
-            return Entry(path: path, bytes: folders[child].bytes, visible: folders[child].visible, hidden: hidden, folder: true)
+            let folder = folders[child]
+            return Entry(path: path, bytes: folder.bytes, visible: folder.visible, hidden: hidden, folder: true, guarded: folder.guarded)
         }
         let size = Int64(values.totalFileAllocatedSize ?? 0)
-        return Entry(path: path, bytes: size, visible: size, hidden: hidden, folder: values.isDirectory == true)
+        return Entry(path: path, bytes: size, visible: size, hidden: hidden, folder: values.isDirectory == true, guarded: false)
     }
 }

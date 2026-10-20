@@ -1,8 +1,14 @@
 import Foundation
+#if os(macOS)
+import AppKit
+#endif
 
 private struct StorageCommand: Decodable {
     let kind: String
     let path: String
+    var graft: Bool?
+    var protected: [String]?
+    var apps: [String]?
 }
 
 private struct StorageEnvelope: Decodable {
@@ -22,12 +28,17 @@ final class StorageStore: ObservableObject {
     private var model = ""
     private var walk: Task<Void, Never>?
     private var scoped: URL?
+    #if os(macOS)
+    static let platform = "macos"
+    #else
+    static let platform = "ios"
+    #endif
 
     func start() {
         guard ui == nil, failure == nil else { return }
         let status = osprey_main()
         guard status == 0 else { return fail("Osprey initialization failed: \(status)") }
-        accept(osprey_storage_start(canonical(NSHomeDirectory())))
+        accept(osprey_storage_start(canonical(NSHomeDirectory()), StorageStore.platform))
     }
 
     func send(_ event: [String: Any]) {
@@ -57,26 +68,47 @@ final class StorageStore: ObservableObject {
 
     private func run(_ command: StorageCommand) {
         switch command.kind {
-        case "measure": measure(command.path)
-        case "pick": picking = true
+        case "measure": measure(command)
+        case "pick": pick(command.path)
         default: fail("Osprey asked for unknown host work: \(command.kind)")
         }
     }
 
+    /// The system folder picker. On the Mac it opens on `path`, so granting a
+    /// protected folder is one click; choosing it is the person's consent, and
+    /// macOS shows no prompt.
+    private func pick(_ path: String) {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.directoryURL = URL(fileURLWithPath: path, isDirectory: true)
+        panel.begin { [weak self] response in
+            if response == .OK, let url = panel.url { self?.picked(.success(url)) }
+        }
+        #else
+        picking = true
+        #endif
+    }
+
     /// Walks off the main thread; every result goes back to Osprey as an event.
-    private func measure(_ root: String) {
+    private func measure(_ command: StorageCommand) {
+        let root = command.path, graft = command.graft == true
+        let guarding = DiskTree.Guard(protected: Set(command.protected ?? []), apps: Set(command.apps ?? []))
         walk?.cancel()
         walk = Task.detached(priority: .userInitiated) { [weak self] in
-            let tree = DiskTree.measure(root) { items, bytes in
+            let tree = DiskTree.measure(root, guarding: guarding) { items, bytes in
                 Task { @MainActor in self?.send(["type": "progress", "path": root, "items": items, "bytes": bytes]) }
             }
-            await self?.finish(root, tree)
+            await self?.finish(root, graft, tree)
         }
     }
 
-    private func finish(_ root: String, _ tree: DiskTree?) {
+    private func finish(_ root: String, _ graft: Bool, _ tree: DiskTree?) {
         guard !Task.isCancelled else { return }
-        if let tree { DiskTree.current = tree }
+        if let tree {
+            if graft, let current = DiskTree.current { current.graft(tree, at: root) } else { DiskTree.current = tree }
+        }
         send(["type": tree == nil ? "failed" : "measured", "path": root])
     }
 

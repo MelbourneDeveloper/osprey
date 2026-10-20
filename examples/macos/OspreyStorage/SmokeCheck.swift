@@ -41,21 +41,34 @@ enum SmokeCheck {
     }
 
     /// `Projects` holds 10 KB in sight and 300 KB inside a hidden `.git`; a
-    /// hidden `.cache` holds 200 KB; `Locked` cannot be read.
+    /// hidden `.cache` holds 200 KB; `Locked` cannot be read; `Documents`
+    /// holds 40 KB that macOS would ask about.
     private static func browserChecks() -> [(String, Bool)] {
         guard let root = try? Fixture.make() else { return [("fixture", false)] }
         defer { Fixture.remove(root) }
-        let started = envelope(osprey_storage_start(root))
-        DiskTree.current = DiskTree.measure(root) { _, _ in }
+        let started = envelope(osprey_storage_start(root, "macos"))
+        DiskTree.current = DiskTree.measure(root, guarding: started.guarding) { _, _ in }
         let ready = dispatch(started, ["type": "measured", "path": root])
         let top = entries(storageScan(root))
         let unreadable = storageUnreadable()
+        let documents = root + "/Documents"
+        let granted = dispatch(ready, ["type": "picked", "value": documents])
+        if let walked = DiskTree.measure(documents, guarding: granted.guarding, progress: { _, _ in }) {
+            DiskTree.current?.graft(walked, at: documents)
+        }
+        let joined = dispatch(granted, ["type": "measured", "path": documents])
+        let after = entries(storageScan(root))
         let projects = top.first { $0.name == "Projects" }
         let sighted = dispatch(ready, ["type": "hidden", "value": "false"])
         let inside = dispatch(ready, ["type": "open", "value": root + "/Projects"])
         return [
-            ("asks for the walk", started.text.contains("\"commands\":[{\"kind\":\"measure\",\"path\":\"\(root)\"}]")),
-            ("ranks every entry", Set(top.map(\.name)) == ["Projects", ".cache", "notes.txt", "Locked"]),
+            ("asks for the walk", started.text.contains("\"commands\":[{\"kind\":\"measure\",\"path\":\"\(root)\",\"graft\":false")),
+            ("guards protected folders", started.guarding.covers(root + "/Documents") && started.guarding.covers(root + "/Library/Containers/com.apple.mail")),
+            ("lists every entry", Set(top.map(\.name)) == ["Projects", ".cache", "notes.txt", "Locked", "Documents"]),
+            ("protected folder left alone", top.first { $0.name == "Documents" }.map { $0.guarded && $0.bytes == 0 } ?? false),
+            ("protected folder offered", ready.text.contains("Protected by macOS") && ready.text.contains("\"type\":\"grant\"")),
+            ("chosen folder joins the walk", after.first { $0.name == "Documents" }.map { !$0.guarded && $0.bytes >= 40_000 } ?? false),
+            ("chosen folder opens", joined.text.contains("\"text\":\"report.pdf\"")),
             ("hidden files inside a folder counted", (projects?.bytes ?? 0) >= 310_000),
             ("hidden files inside a folder can be left out", (projects?.visible ?? 0) >= 10_000 && (projects?.visible ?? 0) < 300_000),
             ("hidden folder flagged", top.first { $0.name == ".cache" }?.hidden == true),
@@ -71,12 +84,15 @@ enum SmokeCheck {
     private struct Envelope {
         let text: String
         let model: String
+        let guarding: DiskTree.Guard
     }
 
     private static func envelope(_ pointer: UnsafePointer<CChar>?) -> Envelope {
         let raw = text(pointer)
         let json = (try? JSONSerialization.jsonObject(with: Data(raw.utf8))) as? [String: Any]
-        return Envelope(text: raw, model: json?["model"] as? String ?? "")
+        let walk = (json?["commands"] as? [[String: Any]])?.first
+        let guarding = DiskTree.Guard(protected: Set(walk?["protected"] as? [String] ?? []), apps: Set(walk?["apps"] as? [String] ?? []))
+        return Envelope(text: raw, model: json?["model"] as? String ?? "", guarding: guarding)
     }
 
     private static func dispatch(_ from: Envelope, _ event: [String: Any]) -> Envelope {
@@ -86,10 +102,10 @@ enum SmokeCheck {
 
     private static func text(_ pointer: UnsafePointer<CChar>?) -> String { pointer.map { String(cString: $0) } ?? "" }
 
-    private static func entries(_ count: Int64) -> [(name: String, bytes: Int64, visible: Int64, hidden: Bool)] {
+    private static func entries(_ count: Int64) -> [(name: String, bytes: Int64, visible: Int64, hidden: Bool, guarded: Bool)] {
         (0..<max(count, 0)).map {
             (URL(fileURLWithPath: text(storageEntryPath($0))).lastPathComponent, storageEntryBytes($0),
-             storageEntryVisible($0), storageEntryHidden($0))
+             storageEntryVisible($0), storageEntryHidden($0), storageEntryGuarded($0))
         }
     }
 }
@@ -98,7 +114,7 @@ enum SmokeCheck {
 private enum Fixture {
     static let files: [(String, Int)] = [
         ("Projects/app.swift", 10_000), ("Projects/.git/pack", 300_000), (".cache/blob", 200_000),
-        ("notes.txt", 1_000), ("Locked/secret", 50_000),
+        ("notes.txt", 1_000), ("Locked/secret", 50_000), ("Documents/report.pdf", 40_000),
     ]
 
     static func make() throws -> String {

@@ -8,7 +8,7 @@ Start with algebraic effects: declare an operation, request it with `perform`, a
 | [Talon Bank](projects/modules/README.md) | Shared web/iOS/Android application, SQLite and mock storage, auditing, metrics, and platform rendering |
 | [Issue Inbox](mobile/README.md) | Shared iOS/Android state and UI, with SQL/HTTP requests interpreted by a platform-command handler |
 | [iPhone counter](ios/README.md) | A native logging callback behind a value effect |
-| [Mac disk usage](macos/README.md) | Swift answers a `Disk::Facts` effect from Foundation to rank the folders using the most space, hidden files included |
+| [Storage browser](macos/README.md) | One SwiftUI app for the Mac and iPhone: Osprey owns every screen of a folder-by-folder storage browser, with hidden files on or off |
 | [Graphics scenes](graphics/README.md) | Osprey runs three real-time scenes; a Swift Metal host draws them on macOS and a Direct3D 12 bridge on Windows |
 | [GPT-2](gpt2/README.md) | The published GPT-2 weights, generation and a training step written once against a static `Tensor` effect and run by two handlers — host lists or the GPU surface, on the CPU or on Metal or OpenCL — with identical output on the CPU, checked against a pure-Python reference |
 
@@ -46,7 +46,7 @@ proving both flavors print the same bytes.
   larger application/runtime examples.
 - **`bugs/`** — regression reproductions.
 - **[`ios/`](ios)** — a SwiftUI iPhone app calling Osprey logic through a generated C header, with device/simulator builds and executable smoke checks.
-- **[`macos/`](macos/README.md)** — a Swift command-line Mac app on the same C boundary, where Osprey calls Swift `@_cdecl` functions to rank folders by disk use.
+- **[`macos/`](macos/README.md)** — a SwiftUI storage browser for the Mac and iPhone on the same C boundary: Osprey owns the screens, Swift draws them and measures the disk.
 - **[`mobile/`](mobile/README.md)** — the same reactive issue inbox on iOS and Android, with Osprey modules defining the native screen tree, state, SQLite persistence, GitHub requests, and triage workflows.
 
 ## Native mobile application

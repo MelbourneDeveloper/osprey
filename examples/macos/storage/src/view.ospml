@@ -57,19 +57,24 @@ module View
         true => Native::section "" "" [gauge volume]
         false => Native::section "" "" [Native::notice "internaldrive" "gray" "Capacity unavailable" "This folder's volume does not report its size."]
 
-    measuring model =
-        progress = Native::node "progress" [Native::field "text" "Measuring ${Disk::name "/" model.root}…", Native::field "detail" "${Disk::formatCount model.items} items · ${Disk::formatBytes model.bytes} so far"]
-        Native::section "" "Hidden files, caches and package contents all count. A large folder takes a minute or two." [progress]
+    // The folder the app opened on is Home, wherever the platform keeps it.
+    title model volume path = match path == model.home
+        true => "Home"
+        false => Disk::name volume.name path
 
-    failed model = Native::section "" "" [Native::notice "exclamationmark.triangle.fill" "orange" "Cannot measure ${Disk::name "/" model.root}" "The folder no longer exists, or macOS did not allow it to be read. Choose another folder, or rescan."]
+    measuring model volume =
+        progress = Native::node "progress" [Native::field "text" "Measuring ${title model volume model.root}…", Native::field "detail" "${Disk::formatCount model.items} items · ${Disk::formatBytes model.bytes} so far"]
+        Native::section "" "Hidden files, caches and package contents all count. Folders macOS protects wait for you to choose them, so the app never asks for access." [progress]
+
+    failed model volume = Native::section "" "" [Native::notice "exclamationmark.triangle.fill" "orange" "Cannot measure ${title model volume model.root}" "The folder no longer exists, or macOS did not allow it to be read. Choose another folder, or rescan."]
 
     // Lists are visited by loops, so no folder is deep or wide enough to
     // exhaust the stack.
-    crumb volume path = Native::button "folder.fill" (Disk::name volume.name path) (Native::event "open" path)
+    crumb model volume path = Native::button (pick (path == model.home) "house.fill" "folder.fill") (title model volume path) (Native::event "open" path)
 
     pathbar volume model =
         folders = Disk::trail model.root model.path
-        crumbs = range (0, length folders) |> fold [] (\(output, index) => listAppend output (crumb volume (listGet folders index ?: model.root)))
+        crumbs = range (0, length folders) |> fold [] (\(output, index) => listAppend output (crumb model volume (listGet folders index ?: model.root)))
         Native::section "" "" [Native::node "pathbar" [Native::nodes "children" crumbs]]
 
     plural count one many = match count == 1
@@ -78,7 +83,7 @@ module View
 
     summary ranking = "${Disk::formatBytes ranking.bytes} · ${plural ranking.count "item" "items"}"
 
-    nothing () = Entry(path = "", bytes = 0, visible = 0, hidden = false, folder = false)
+    nothing () = Entry(path = "", bytes = 0, visible = 0, hidden = false, folder = false, guarded = false)
 
     capped share = pick (share > 1000) 1000 share
 
@@ -101,8 +106,8 @@ module View
         others = pick (rest > 0) [segment ranking (length (palette ())) "Everything else" rest] []
         bar = Native::node "stack" [Native::nodes "children" (listConcat (range (0, length leading) |> fold [] (\(output, index) => leader model ranking leading output index)) others)]
         scope = pick model.hidden "hidden files included" "hidden files left out"
-        footer = "${Disk::formatBytes ranking.bytes} measured here, ${scope}: ${Disk::percent (ranking.bytes, used volume)}% of the space used on ${volume.name}."
-        Native::section (Disk::name volume.name model.path) footer [bar]
+        footer = "${Disk::formatBytes ranking.bytes} measured here, ${scope}: ${Disk::shareText (ranking.bytes, used volume)} of the space used on ${volume.name}."
+        Native::section "" footer [bar]
 
     row model ranking largest output index =
         entry = listGet ranking.top index ?: nothing ()
@@ -134,8 +139,26 @@ module View
         ]] []
 
     blockedNote count = match count > 0
-        true => "${plural count "folder" "folders"} here could not be read, so their contents are not counted. macOS protects them; grant Full Disk Access in System Settings › Privacy & Security to count them."
+        true => "${plural count "folder" "folders"} here could not be read and are not counted. macOS keeps other apps' private data, such as Mail and Messages, from every app."
         false => ""
+
+    sealed model output entry = match entry.guarded && Disk::inSight model.hidden entry
+        false => output
+        true => listAppend output (Native::node "entry" [
+            Native::field "text" (Disk::name "" entry.path),
+            Native::field "symbol" "lock.fill",
+            Native::field "tint" "gray",
+            Native::field "accent" "gray",
+            Native::field "style" (pick entry.hidden "hidden" ""),
+            Native::field "detail" "Choose to measure",
+            Native::field "caption" "",
+            Native::field "value" "0",
+            Native::event "grant" entry.path,
+        ])
+
+    protectedSection model listing =
+        rows = range (0, length listing.entries) |> fold [] (\(output, index) => sealed model output (listGet listing.entries index ?: nothing ()))
+        pick (length rows > 0) [Native::section "Protected by macOS" "macOS asks before any app reads these folders. Choose one to measure it: the folder picker grants it without a prompt, and nothing inside is read until then." rows] []
 
     items model ranking listing =
         largest = Disk::size model.hidden (listGet ranking.top 0 ?: nothing ())
@@ -149,8 +172,8 @@ module View
     contents model volume listing ranking = match listing.measured
         false => [Native::section "" "" [Native::notice "questionmark.folder" "gray" "Not measured yet" "Rescan to measure this folder."]]
         true => match ranking.count > 0
-            true => [composition model volume ranking, items model ranking listing]
-            false => [Native::section "" (blockedNote listing.blocked) [emptied model]]
+            true => listConcat [composition model volume ranking, items model ranking listing] (protectedSection model listing)
+            false => listPrepend (protectedSection model listing) (Native::section "" (blockedNote listing.blocked) [emptied model])
 
     enclosing model = match model.path == model.root
         true => []
@@ -173,7 +196,7 @@ module View
     // The open folder names the screen, so each folder starts at its top.
     screen model volume subtitle sections = Native::node "navigation" [
         Native::field "id" model.path,
-        Native::field "text" (Disk::name volume.name model.path),
+        Native::field "text" (title model volume model.path),
         Native::field "detail" subtitle,
         Native::nodes "toolbar" (toolbar model),
         Native::nodes "children" sections,
@@ -188,6 +211,6 @@ module View
     export render model =
         volume = perform Disk::Facts.volume model.root
         match model.stage
-            "measuring" => screen model volume "Measuring…" [overview volume, measuring model]
-            "failed" => screen model volume "" [overview volume, failed model]
+            "measuring" => screen model volume "Measuring…" [overview volume, measuring model volume]
+            "failed" => screen model volume "" [overview volume, failed model volume]
             _ => ready model volume (perform Disk::Facts.listing model.path)

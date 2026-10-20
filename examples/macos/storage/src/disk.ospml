@@ -9,6 +9,7 @@ type Entry =
     visible : int
     hidden : bool
     folder : bool
+    guarded : bool
 
 type Volume =
     name : string
@@ -43,7 +44,11 @@ module Disk
         true => entry.bytes
         false => entry.visible
 
-    counted hidden entry = hidden || entry.hidden == false
+    (** Whether the hidden-files setting shows an entry. *)
+    export inSight hidden entry = hidden || entry.hidden == false
+
+    // A protected folder was never entered, so it has no size to rank.
+    counted hidden entry = inSight hidden entry && entry.guarded == false
 
     (** The first `count` items. *)
     export top count items = match items
