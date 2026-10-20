@@ -345,7 +345,8 @@ run-mac-hd: _runtime_macos
 
 ## macos-test: The iPhone C ABI fixture, the whole corpus against the same
 ##             goldens and skip manifest, and the storage example, on this Mac.
-macos-test: macos
+##             The storage domain suite runs natively, so it needs `_runtime`.
+macos-test: macos _runtime
 	$(MAKE) _test_macos
 
 .PHONY: mobile-ios mobile-ios-test mobile-domain-test mobile-test
