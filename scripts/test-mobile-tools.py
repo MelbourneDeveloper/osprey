@@ -3,6 +3,7 @@
 
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -15,6 +16,11 @@ BANK_RUN = "examples/projects/modules/mobile/android/run.sh"
 ANDROID_ENV = "scripts/android-env.sh"
 # What every runner has: no Homebrew, no cargo bin, no developer extras.
 BASE_PATH = "/usr/bin:/bin"
+# Editor task panels read only files named Makefile, never their includes, and
+# list every line that starts `NAME:`, `NAME :=` included. A public target's
+# name starts with a letter; private steps start with `_`.
+PANEL_ENTRY = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_-]*)\s*:", re.M)
+RULE = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_-]*)[ \t]*:(?!=)", re.M)
 STUB_TOOL = """#!/bin/sh
 case "$*" in
   *"am instrument"*) printf '%s\\n' "$REPORT" ;;
@@ -38,6 +44,16 @@ def corpus_jobs(target, override=None):
 
 
 class BuildFragments(unittest.TestCase):
+    def test_task_panels_list_every_public_target_and_no_variable(self):
+        fragments = [*ROOT.glob("scripts/make/*.mk"), *ROOT.glob("scripts/*.mk")]
+        hidden = {f"{path.name}: {name}" for path in fragments for name in RULE.findall(path.read_text())
+                  if not name.startswith("_")}
+        self.assertEqual(hidden, set(), "public targets in fragments, where task panels cannot see them")
+        for makefile in [ROOT / "Makefile", *ROOT.glob("*/Makefile")]:
+            text = makefile.read_text()
+            listed = set(PANEL_ENTRY.findall(text)) - set(RULE.findall(text))
+            self.assertEqual(listed, set(), f"{makefile.relative_to(ROOT)}: `NAME :=` lines a task panel lists")
+
     def test_node_dependency_guard_follows_nested_build_fragments(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -21,7 +21,7 @@
 #include <metal_stdlib>
 using namespace metal;
 
-// `Uniforms` mirrors `OspGfxUniforms` in ospgfx.m field for field. Both sides
+// `Uniforms` mirrors `OspGfxUniforms` in ospgfx_abi.h field for field. Both sides
 // spell the slot count out, and `crates/osprey-cli/tests/graphics_scenes.rs`
 // asserts the two agree: a silent disagreement here does not fail to compile,
 // it quietly shifts `res` and `time` and corrupts every scene at once.

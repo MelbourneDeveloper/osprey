@@ -208,6 +208,24 @@ fn directive_parses_both_spellings_and_ignores_others() {
     assert_eq!(directive("  // @link:  pq  ", "link"), Some("pq"));
     assert_eq!(directive("let x = 1", "link"), None);
     assert_eq!(directive("// @link: sqlite3", "linkdir"), None);
+    // A directive qualified with another operating system links nothing here,
+    // and one naming this build's system links like an unqualified one.
+    let elsewhere = if cfg!(windows) { "linux" } else { "windows" };
+    assert_eq!(
+        directive(&format!("// @link({elsewhere}): ospgfx"), "link"),
+        None
+    );
+    let here = if cfg!(windows) {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    };
+    assert_eq!(
+        directive(&format!("// @link({here}): ospgfx"), "link"),
+        Some("ospgfx")
+    );
 }
 
 // [DEBUGGER-BUILD-OPTIONS] Debug modifiers enable a native debug build.

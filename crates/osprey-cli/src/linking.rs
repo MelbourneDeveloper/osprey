@@ -66,13 +66,41 @@ fn ffi_flag(line: &str) -> Option<String> {
         .or_else(|| directive(line, "linkdir").map(|dir| format!("-L{dir}")))
 }
 
-/// The trimmed value of a `// @<key>:` FFI directive line (accepting the
-/// space-less `//@<key>:` spelling too), or `None` if `line` is not one.
+/// The operating system a native build runs on, as a qualified directive
+/// names it: `// @link(windows): ospgfx` links only a Windows executable.
+const NATIVE_OS: &str = if cfg!(target_os = "windows") {
+    "windows"
+} else if cfg!(target_os = "macos") {
+    "macos"
+} else {
+    "linux"
+};
+
+/// The trimmed value of a `// @<key>:` FFI directive line, or of one qualified
+/// with this build's operating system (accepting the space-less `//@` spelling
+/// too), or `None` if `line` is neither. Implements [FFI-LINK-DIRECTIVES].
 pub(super) fn directive<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+    unscoped(line, key).or_else(|| unscoped(line, &format!("{key}({NATIVE_OS})")))
+}
+
+fn unscoped<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     let t = line.trim();
     t.strip_prefix(&format!("// @{key}:"))
         .or_else(|| t.strip_prefix(&format!("//@{key}:")))
         .map(str::trim)
+}
+
+/// The first unqualified link directive in `source`, as a capability name. An
+/// app-library archive carries no library and its host does the linking, so
+/// such a target refuses the directive instead of silently dropping it; a
+/// directive qualified with a native operating system does not apply there.
+/// Implements [FFI-LINK-DIRECTIVES] and [IOS-TARGET-CAPABILITIES].
+pub(crate) fn unscoped_link_directive(source: &str) -> Option<String> {
+    source.lines().find_map(|line| {
+        ["link", "linkdir"].iter().find_map(|key| {
+            unscoped(line, key).map(|value| format!("link directive `// @{key}: {value}`"))
+        })
+    })
 }
 
 /// Search the conventional install/build locations for a runtime static lib:

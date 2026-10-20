@@ -35,7 +35,7 @@ struct InboxSnapshot: Decodable {
 private struct InboxEnvelope: Decodable {
     let model: String
     let view: InboxSnapshot
-    let ui: InboxNode
+    let ui: NativeNode
     let commands: [HostCommand]
 }
 
@@ -43,7 +43,7 @@ private struct InboxEnvelope: Decodable {
 @MainActor
 final class InboxStore: ObservableObject {
     @Published private(set) var snapshot = InboxSnapshot.empty
-    @Published private(set) var ui: InboxNode?
+    @Published private(set) var ui: NativeNode?
     @Published private(set) var hostError: String?
     private var model = ""
     private var started = false

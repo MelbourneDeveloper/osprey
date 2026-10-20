@@ -22,10 +22,18 @@
       ]
     },
     {
+      "title": "Tutorials",
+      "items": [
+        { "text": "All tutorials", "url": "/docs/tutorials/" },
+        { "text": "Osprey and Swift (video)", "url": "/docs/tutorials/swift-interop/" }
+      ]
+    },
+    {
       "title": "Build applications",
       "items": [
         { "text": "Web apps", "url": "/docs/web-apps/" },
         { "text": "iOS and Android apps", "url": "/docs/mobile-apps/" },
+        { "text": "Mac and iPhone apps", "url": "/docs/mac-and-iphone-apps/" },
         { "text": "Playground", "url": "/playground/" },
         { "text": "WebAssembly studio", "url": "/wasm/" }
       ]
@@ -60,6 +68,7 @@
       "title": "Learn",
       "items": [
         { "text": "Documentation", "url": "/docs/" },
+        { "text": "Video Tutorials", "url": "/docs/tutorials/" },
         { "text": "Algebraic Effects", "url": "/docs/effects/" },
         { "text": "Python Flavor", "url": "/docs/python-flavor/" },
         { "text": "Web Apps Guide", "url": "/docs/web-apps/" },

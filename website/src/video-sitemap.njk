@@ -1,0 +1,29 @@
+---
+permalink: video-sitemap.xml
+eleventyExcludeFromCollections: true
+---
+{#- Google video sitemap: one entry per watch page, from the same data as the
+    page's VideoObject (lib/videos.mjs). Listed in robots.txt.
+    https://developers.google.com/search/docs/crawling-indexing/sitemaps/video-sitemaps -#}
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
+{%- for item in collections.all %}{% if item.data.video %}{% set v = item.data.video | video %}
+  <url>
+    <loc>{{ site.url }}{{ item.url }}</loc>
+    <video:video>
+      <video:thumbnail_loc>{{ site.url }}{{ v.poster }}</video:thumbnail_loc>
+      <video:title>{{ v.name }}</video:title>
+      <video:description>{{ v.description }}</video:description>
+      <video:content_loc>{{ site.url }}{{ v.content }}</video:content_loc>
+      <video:duration>{{ v.duration }}</video:duration>
+      <video:publication_date>{{ v.uploadDate }}</video:publication_date>
+      <video:family_friendly>yes</video:family_friendly>
+      <video:requires_subscription>no</video:requires_subscription>
+      <video:live>no</video:live>
+{%- for tag in v.tags %}
+      <video:tag>{{ tag }}</video:tag>
+{%- endfor %}
+    </video:video>
+  </url>
+{%- endif %}{% endfor %}
+</urlset>

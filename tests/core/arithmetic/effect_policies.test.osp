@@ -184,3 +184,32 @@ fn resultRelay() = {
 }
 
 test("direct handler calls preserve Result operation values", resultRelay)
+
+/// A value policy that must stop work, as the graphics scenes need on a C ABI
+/// target: the arm records the fault and answers, a second handler reads the
+/// record, and the loop ends at its next boundary.
+effect Halt {
+    stopped: fn() -> bool
+}
+
+fn frames(n, last) = match (perform Halt.stopped() == false) && (n < 5) {
+    true => frames(n + 1, 9223372036854775807 + n)
+    false => "${n} frames, last ${last}"
+}
+
+fn haltOnFault() = {
+    mut fault = ""
+    handle Halt {
+        stopped => fault != ""
+    }
+    handle Arith {
+        overflow op lhs rhs _ => {
+            fault = "${lhs} ${op} ${rhs}"
+            0
+        }
+    }
+    let ran = frames(0, 0)
+    checkAll("a recorded fault stops the loop at its next boundary", [ran == "2 frames, last 0", fault == "9223372036854775807 + 1"])
+}
+
+test("a recorded fault stops a loop at its next boundary", haltOnFault)

@@ -11,7 +11,7 @@ Use this feature order on introductory pages:
 1. **Algebraic effects:** declare an operation, request it with `perform`, and choose its implementation with a callable `handler` value or a block-scoped `handle`.
 2. **Inferred types and explicit data:** pattern matching covers every case; `Result` keeps expected failures visible.
 3. **Flavors:** every flavor's concrete syntax tree lowers into one canonical AST, so types, effects, modules and code generation are shared and one project can mix flavors. The Default, ML and Python flavors ship today; the point is the shared AST, not the count.
-4. **Deployment:** LLVM native binaries, WebAssembly, and C ABI libraries for iOS and Android.
+4. **Deployment:** LLVM native binaries, WebAssembly, and C ABI libraries for iOS, macOS and Android.
 5. **Concurrency and memory choices:** isolated fibers, tracing GC, and reference counting where the target supports them.
 
 Not every page needs the full list. Give the reader code, its result, and a next step; avoid repeating the same feature summary across sections.

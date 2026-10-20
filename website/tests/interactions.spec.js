@@ -361,6 +361,7 @@ test.describe("documentation sub-page navigation", () => {
     await expect(navigation).toBeVisible();
     await expect(navigation.locator(".docs-nav-section-title")).toHaveText([
       "Start here",
+      "Tutorials",
       "Build applications",
       "Language",
       "Reference",

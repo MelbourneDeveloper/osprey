@@ -1,9 +1,11 @@
-# iOS device and simulator archives, using Xcode's SDK and Apple clang.
+# iOS device, simulator and Mac archives, using Xcode's SDK and Apple clang.
 # Processes and HTTP/OpenSSL have no implementation in this target. Files,
-# fibers and substituting effects use the existing native runtime. [IOS-TARGET-CAPABILITIES]
+# fibers and substituting effects use the existing native runtime. The Mac
+# slice compiles the same sources with the same flags, so a Swift host links
+# one boundary on every Apple platform. [IOS-TARGET-CAPABILITIES] [IOS-TARGET-MACOS]
 IOS_RT_SRC ?= $(MOBILE_RT_SRC)
 
-.PHONY: ios ios-test _runtime_ios _runtime_ios_sim _test_ios _test_ios_goldens
+.PHONY: ios ios-test macos macos-test _runtime_ios _runtime_ios_sim _runtime_macos _test_ios _test_ios_goldens _test_macos
 
 _runtime_ios:
 	@bash scripts/ios-runtime.sh iphoneos arm64-apple-ios15.0 \
@@ -13,16 +15,16 @@ _runtime_ios_sim:
 	@bash scripts/ios-runtime.sh iphonesimulator arm64-apple-ios15.0-simulator \
 		$(RTB)/libosprey_runtime_ios_sim.a $(B) -DOSPREY_IOS -- $(IOS_RT_SRC)
 
-## ios: Build the iPhone and simulator libraries and SwiftUI example apps.
-##      Requires macOS, Xcode and both iOS SDKs. Device output is unsigned.
-ios: _runtime_ios _runtime_ios_sim
-	cargo build --release -p osprey-cli
-	OSPREY_BIN="$(CURDIR)/$(BIN)" bash examples/ios/build.sh ios
-	OSPREY_BIN="$(CURDIR)/$(BIN)" bash examples/ios/build.sh ios-sim
+_runtime_macos:
+	@bash scripts/ios-runtime.sh macosx arm64-apple-macos12.0 \
+		$(RTB)/libosprey_runtime_macos.a $(B) -DOSPREY_IOS -- $(IOS_RT_SRC)
 
-## ios-test: Validate C ABI calls, language goldens and the SwiftUI simulator app.
-ios-test: ios
-	$(MAKE) _test_ios
+_test_macos:
+	OSPREY_BIN="$(CURDIR)/$(BIN)" bash scripts/test-macos.sh
+	@echo "==> [macos] golden stdout comparison on this Mac..."
+	@OSPREY_TARGET=macos zsh crates/run_test_corpus.sh
+	$(BIN) examples/macos/storage/test --run
+	OSPREY_MACOS_SKIP_BUILD=1 bash examples/macos/run.sh --smoke
 
 _test_ios: _test_ios_goldens
 	OSPREY_BIN="$(CURDIR)/$(BIN)" bash scripts/test-ios.sh
@@ -40,19 +42,3 @@ _test_ios: _test_ios_goldens
 _test_ios_goldens:
 	@echo "==> [ios-sim] golden stdout comparison in the simulator..."
 	@OSPREY_TARGET=ios-sim zsh crates/run_test_corpus.sh
-
-.PHONY: mobile-ios mobile-ios-test mobile-domain-test mobile-test
-mobile-ios: _runtime_ios _runtime_ios_sim
-	cargo build --release -p osprey-cli
-	bash examples/mobile/ios/run.sh --build ios
-	bash examples/mobile/ios/run.sh --build ios-sim
-
-mobile-ios-test: mobile-ios
-	OSPREY_IOS_SKIP_BUILD=1 bash examples/mobile/ios/run.sh --smoke
-
-mobile-domain-test: _runtime
-	python3 scripts/test-mobile-tools.py
-	cargo build --release -p osprey-cli
-	$(BIN) examples/mobile/inbox/test --run
-
-mobile-test: mobile-domain-test mobile-ios-test android-test

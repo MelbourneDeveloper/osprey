@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if [[ $(uname -s) != Darwin ]] || ! command -v xcrun >/dev/null; then
-    echo "iOS runtime builds require macOS and Xcode with the iOS SDKs" >&2
+    echo "Apple runtime builds require macOS and Xcode with the selected SDK" >&2
     exit 1
 fi
 
@@ -37,7 +37,7 @@ mirror="compiler/lib/$(basename "$archive")"
 } >"$scratch/inputs"
 
 if [[ ! -s "$archive" ]] || ! cmp -s "$scratch/inputs" "$fingerprint"; then
-    echo "==> building iOS C runtime: $triple"
+    echo "==> building Apple C runtime: $triple"
     for source in "${sources[@]}"; do
         "$clang" -target "$triple" -isysroot "$sdk_path" "${flags[@]}" \
             "compiler/runtime/$source.c" -o "$scratch/$source.o"

@@ -55,6 +55,12 @@ fn validate_boundary(abi: &HostAbi, ir: &str) -> Result<(), String> {
 
 fn validate_exports(abi: &HostAbi) -> Result<(), String> {
     for export in &abi.exports {
+        if export.ret == CType::Ptr || export.params.iter().any(|(_, ty)| *ty == CType::Ptr) {
+            return Err(format!(
+                "Python export `{}` passes a Ptr; the Python host exchanges int, float, bool and string",
+                export.source_name
+            ));
+        }
         if [CALL, OBJECT, INSTALL, ABI]
             .iter()
             .any(|name| *name == export.c_name)

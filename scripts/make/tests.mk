@@ -370,3 +370,36 @@ _tui: build
 _gpu-demo: build
 	@echo "==> rendering gpu* kernel demo on the host backend (CPU)"
 	./$(BIN) tests/core/gpu/raster.test.$(if $(filter ml,$(FLAVOR)),ospml,osp) --run
+
+# The same suite against an ALREADY-BUILT binary. No prerequisites, so the
+# staged pipeline can run it on the downloaded `osprey-build` artifact. Going
+# through `bank-test` there rebuilt the whole workspace and then ran `tsc -b`
+# in vscode-extension, whose node_modules that job never installs — three
+# TS2688 errors and a dead stage, for work the build job had already done.
+_bank_test:
+	@echo "==> Bank native tests (osprey test)..."
+	./$(BIN) test examples/projects/modules/test
+
+# _language-test: Run the assertion-driven Default + ML core language corpus.
+_language-test: build
+	$(MAKE) _test_language_corpus
+
+_lint: $(EXT_NODE_DEPS)
+	@echo "==> Linting..."
+	node scripts/verify-node-deps-guard.mjs
+	node scripts/verify-no-dead-code.mjs
+	node scripts/verify-release-gates.mjs
+	python3 scripts/test-release-gate.py
+	cargo fmt --all --check
+	cargo clippy --workspace --all-targets -- -D warnings
+	cd $(EXT_DIR) && npm run lint
+
+# _deslop: Code-duplication gate. Fails the build when measured
+# duplication exceeds the ceiling in .deslop.toml (exit 3). Exclusions and the
+# threshold live in that committed config — the single source of truth.
+# The installer resolves the latest release for both local and hosted CI.
+
+_deslop:
+	@echo "==> Duplication gate (deslop)..."
+	bash scripts/install-deslop.sh
+	deslop . --nohtml --nojson --output $(CURDIR)/target/deslop-report --log-to-console --log-level error --no-color

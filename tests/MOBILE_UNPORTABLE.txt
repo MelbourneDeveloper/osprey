@@ -1,7 +1,7 @@
 # Programs the mobile C ABI targets reject, with the exact reason they gave.
 #
-# One file covers ios-sim, android-arm64 and android-x64 because they share one
-# boundary implementation and therefore one set of holes. If a target ever
+# One file covers ios-sim, macos, android-arm64 and android-x64 because they
+# share one boundary implementation and therefore one set of holes. If a target ever
 # rejects a different set, this comparison fails and the file must be split
 # rather than widened — a shared manifest that quietly accepted either set
 # would hide the divergence it exists to catch.
@@ -49,10 +49,10 @@ tests/regressions/basics/processes/async_process_management.test.osp process spa
 tests/regressions/basics/processes/async_process_management.test.ospml process spawning builtin `spawnProcess`
 tests/regressions/basics/processes/callback_stdout_demo.test.osp process spawning builtin `spawnProcess`
 tests/regressions/basics/processes/callback_stdout_demo.test.ospml process spawning builtin `spawnProcess`
-tests/regressions/db/database_effect.test.osp C ABI: extern `sqlite3_open` has an unsupported C ABI signature: parameters must be int, float, bool or string; returns may also be Unit
-tests/regressions/db/database_effect.test.ospml C ABI: extern `sqlite3_open` has an unsupported C ABI signature: parameters must be int, float, bool or string; returns may also be Unit
-tests/regressions/db/sqlite_basics.test.osp C ABI: extern `sqlite3_open` has an unsupported C ABI signature: parameters must be int, float, bool or string; returns may also be Unit
-tests/regressions/db/sqlite_basics.test.ospml C ABI: extern `sqlite3_open` has an unsupported C ABI signature: parameters must be int, float, bool or string; returns may also be Unit
+tests/regressions/db/database_effect.test.osp link directive `// @link: sqlite3`
+tests/regressions/db/database_effect.test.ospml link directive `// @link: sqlite3`
+tests/regressions/db/sqlite_basics.test.osp link directive `// @link: sqlite3`
+tests/regressions/db/sqlite_basics.test.ospml link directive `// @link: sqlite3`
 tests/regressions/effects/abort_vs_resume.test.osp a continuation for `Step.run` (a suspended continuation cannot cross or outlive a synchronous host call)
 tests/regressions/effects/abort_vs_resume.test.ospml a continuation for `Step.run` (a suspended continuation cannot cross or outlive a synchronous host call)
 tests/regressions/effects/fiber_effects.test.osp a continuation for `Gift.get` (a suspended continuation cannot cross or outlive a synchronous host call)

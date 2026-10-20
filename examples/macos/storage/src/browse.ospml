@@ -1,0 +1,142 @@
+// Implements [IOS-TARGET-MACOS] and [MOBILE-REACTIVE-HOST]: every event the
+// host delivers yields a new immutable browser and the host work it needs.
+// The host keeps the browser as opaque text between events.
+namespace storage
+
+import bank::Json
+import storage::Disk
+
+type Browser =
+    platform : string
+    home : string
+    root : string
+    path : string
+    hidden : bool
+    stage : string
+    walking : string
+    items : int
+    bytes : int
+
+type Step =
+    model : Browser
+    commands : string
+
+module Browse
+    unchanged model = Step(model = model, commands = "[]")
+
+    asking model kind path = Step(model = model, commands = Json::arr (Json::obj (Json::strField "kind" kind + "," + Json::strField "path" path)))
+
+    // macOS asks the person before any app reads these folders, and a walk
+    // that opens one waits on that question. The walk never enters them
+    // unchosen; choosing one in the folder picker grants it without a prompt.
+    protectedFolders () = ["Desktop", "Documents", "Downloads", "Library/Mobile Documents", "Library/CloudStorage"]
+
+    // Every folder inside these holds another app's data, which macOS also asks about.
+    appFolders () = ["Library/Containers", "Library/Group Containers"]
+
+    // Only the Mac guards a person's folders; an iPhone app's home is its own container.
+    guarded model names = pick (model.platform == "macos") names []
+
+    pick flag yes no = match flag
+        true => yes
+        false => no
+
+    inHome model folders =
+        names = guarded model folders
+        Json::arr (join (range (0, length names) |> fold [] (\(output, index) => listAppend output (Json::quote (model.home + "/" + (listGet names index ?: ""))))) ",")
+
+    walk model path graft = Json::arr (Json::obj (join [
+        Json::strField "kind" "measure",
+        Json::strField "path" path,
+        Json::rawField "graft" (toString graft),
+        Json::rawField "protected" (inHome model (protectedFolders ())),
+        Json::rawField "apps" (inHome model (appFolders ())),
+    ] ","))
+
+    // The whole browser, or with `graft` one chosen folder inside it, added
+    // to the walk already made.
+    measure model path graft = Step(model = model(stage = "measuring", walking = path, items = 0, bytes = 0), commands = walk model path graft)
+
+    (** A browser at `home` on `platform` (`macos` or `ios`) with hidden files shown, and its first walk requested. *)
+    export start home platform = measure (Browser(platform = platform, home = home, root = home, path = home, hidden = true, stage = "measuring", walking = home, items = 0, bytes = 0)) home false
+
+    (** Whether `path` is the measured folder or inside it. *)
+    export within model path =
+        prefix = match endsWith model.root "/"
+            true => model.root
+            false => model.root + "/"
+        path == model.root || startsWith path prefix
+
+    opened model path = match within model path
+        true => unchanged (model(path = path))
+        false => unchanged model
+
+    // Finder opens a folder of the measured one; nothing outside it is asked for.
+    revealed model path = match within model path
+        true => asking model "reveal" path
+        false => unchanged model
+
+    up model = match model.path == model.root
+        true => unchanged model
+        false => unchanged (model(path = Disk::parent model.path))
+
+    number event key = parseInt (Json::getOr event key "0") ?: 0
+
+    current model event = Json::getOr event "path" "" == model.walking && model.stage == "measuring"
+
+    // A walk of a folder the browser has since left reports nothing.
+    progressed model event = match current model event
+        true => unchanged (model(items = number event "items", bytes = number event "bytes"))
+        false => unchanged model
+
+    finished model event stage = match current model event
+        true => unchanged (model(stage = stage))
+        false => unchanged model
+
+    // A folder chosen inside the measured one joins that walk; any other
+    // folder starts a new one.
+    picked model path = match length path > 0
+        false => unchanged model
+        true => match within model path && path != model.root && model.stage == "ready"
+            true => measure (model(path = path)) path true
+            false => measure (model(root = path, path = path)) path false
+
+    (** The browser after one host event, and the host work it asks for. *)
+    export dispatch model event =
+        value = Json::getOr event "value" ""
+        match Json::getOr event "type" ""
+            "open" => opened model value
+            "up" => up model
+            "hidden" => unchanged (model(hidden = value == "true"))
+            "rescan" => measure model model.root false
+            "choose" => asking model "pick" model.path
+            "grant" => asking model "pick" value
+            "reveal" => revealed model value
+            "picked" => picked model value
+            "progress" => progressed model event
+            "measured" => finished model event "ready"
+            "failed" => finished model event "failed"
+            _ => unchanged model
+
+    export encode model = Json::obj (join [
+        Json::strField "platform" model.platform,
+        Json::strField "home" model.home,
+        Json::strField "root" model.root,
+        Json::strField "path" model.path,
+        Json::strField "hidden" (toString model.hidden),
+        Json::strField "stage" model.stage,
+        Json::strField "walking" model.walking,
+        Json::numField "items" model.items,
+        Json::numField "bytes" model.bytes,
+    ] ",")
+
+    export decode source = Browser(
+        platform = Json::getOr source "platform" "macos",
+        home = Json::getOr source "home" "/",
+        root = Json::getOr source "root" "/",
+        path = Json::getOr source "path" "/",
+        hidden = Json::getOr source "hidden" "true" == "true",
+        stage = Json::getOr source "stage" "ready",
+        walking = Json::getOr source "walking" "",
+        items = number source "items",
+        bytes = number source "bytes")

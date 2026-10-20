@@ -39,6 +39,9 @@ pub(crate) fn gen_field_access(cg: &mut Codegen, target: &Expr, field: &str) -> 
     load_field_value(cg, target, &owner, field, inferred.as_ref())
 }
 
+/// The receiver's record: the owner codegen tracked, else the record inference
+/// named (a `perform` result carries only its inferred type), else a guess by
+/// field name. Implements [TYPE-FIELD-ACCESS-NON-RECORD].
 fn field_owner(cg: &mut Codegen, target: &Value, field: &str) -> Result<String> {
     if let Some(ty @ Type::Record { name, .. }) = target.inferred_type.as_ref() {
         if name.is_empty() {
@@ -48,14 +51,43 @@ fn field_owner(cg: &mut Codegen, target: &Value, field: &str) -> Result<String> 
             }
         }
     }
-    target
-        .osp_ty
-        .clone()
-        .filter(|owner| {
-            cg.record_layout(owner)
-                .is_some_and(|(_, fields)| fields.iter().any(|(name, _)| name == field))
-        })
-        .or_else(|| cg.find_field_owner(field))
+    let inferred = target
+        .inferred_type
+        .as_ref()
+        .and_then(|ty| crate::types::owner_name(&cg.prog, ty));
+    [target.osp_ty.clone(), inferred]
+        .into_iter()
+        .flatten()
+        .find(|owner| declares_field(cg, owner, field))
+        .map_or_else(|| guessed_field_owner(cg, target, field), Ok)
+}
+
+fn declares_field(cg: &Codegen, owner: &str, field: &str) -> bool {
+    cg.record_layout(owner)
+        .is_some_and(|(_, fields)| fields.iter().any(|(name, _)| name == field))
+}
+
+/// Broken-code quarantine: a receiver whose record neither codegen tracked nor
+/// inference named falls back to choosing a record by field name. Where several
+/// records declare that field the choice is arbitrary and the load would read
+/// another record's slot without a diagnostic, so the access fails loudly.
+fn guessed_field_owner(cg: &Codegen, target: &Value, field: &str) -> Result<String> {
+    let owners = cg
+        .prog
+        .ctors
+        .values()
+        .filter(|ctor| ctor.fields.iter().any(|(name, _)| name == field))
+        .count();
+    if owners > 1 {
+        let receiver = target
+            .inferred_type
+            .as_ref()
+            .map_or_else(|| "an untracked receiver".to_string(), ToString::to_string);
+        return Err(CodegenError::unsupported(format!(
+            "quarantined field access `{field}` on {receiver}: {owners} records declare it and the receiver's record was not tracked"
+        )));
+    }
+    cg.find_field_owner(field)
         .ok_or_else(|| CodegenError::invalid(format!("field `{field}` on a non-record")))
 }
 
@@ -199,5 +231,56 @@ fn actual_payload_type(value: &Value) -> LType {
     match value.result_inner {
         Some(inner) => inner,
         None => value.ty,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use osprey_types::{CtorLayout, ProgramTypes};
+
+    fn record(owner: &str, fields: &[&str]) -> CtorLayout {
+        CtorLayout {
+            owner: owner.to_string(),
+            owner_is_record: true,
+            type_params: Vec::new(),
+            fields: fields
+                .iter()
+                .map(|name| ((*name).to_string(), Type::con("int", Vec::new())))
+                .collect(),
+        }
+    }
+
+    fn quarantine(field: &str, receiver: &str) -> CodegenError {
+        CodegenError::unsupported(format!(
+            "quarantined field access `{field}` on {receiver}: 2 records declare it and the receiver's record was not tracked"
+        ))
+    }
+
+    /// [TYPE-FIELD-ACCESS-NON-RECORD]: with two records declaring `x`, a guess
+    /// by field name could read the other record's slot, so it must fail.
+    #[test]
+    fn a_shared_field_on_an_untracked_receiver_fails_loudly() {
+        let ctors = [
+            record("Point", &["x", "y"]),
+            record("Pixel", &["x", "shade"]),
+        ];
+        let mut prog = ProgramTypes::default();
+        prog.ctors
+            .extend(ctors.into_iter().map(|ctor| (ctor.owner.clone(), ctor)));
+        let cg = Codegen::with_types(prog);
+        let untracked = Value::new("%receiver", LType::Ptr);
+        assert_eq!(
+            guessed_field_owner(&cg, &untracked, "x"),
+            Err(quarantine("x", "an untracked receiver"))
+        );
+        let typed = Value {
+            inferred_type: Some(Type::con("int", Vec::new())),
+            ..untracked
+        };
+        assert_eq!(
+            guessed_field_owner(&cg, &typed, "x"),
+            Err(quarantine("x", "int"))
+        );
     }
 }

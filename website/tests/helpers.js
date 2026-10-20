@@ -12,6 +12,9 @@ const PAGES = [
   { name: "docs-my-first-app", path: "/docs/my-first-app/", kind: "prose" },
   { name: "docs-mobile-apps", path: "/docs/mobile-apps/", kind: "prose" },
   { name: "docs-web-apps", path: "/docs/web-apps/", kind: "prose" },
+  { name: "docs-mac-and-iphone-apps", path: "/docs/mac-and-iphone-apps/", kind: "prose" },
+  { name: "docs-tutorials", path: "/docs/tutorials/", kind: "prose" },
+  { name: "docs-tutorial-video", path: "/docs/tutorials/swift-interop/", kind: "prose" },
   { name: "docs-function", path: "/docs/functions/map/", kind: "prose" },
   { name: "docs-type", path: "/docs/types/string/", kind: "prose" },
   { name: "blog-index", path: "/blog/", kind: "listing" },
@@ -23,6 +26,7 @@ const PAGES = [
     kind: "prose",
   },
   { name: "status", path: "/status/", kind: "prose" },
+  { name: "benchmarks", path: "/benchmarks/", kind: "prose" },
   // Full-screen studio: the 3-tab demo fills the viewport, so the footer is
   // intentionally hidden and the page never scrolls (kind stays "wasm" so the
   // interaction + overflow tests still target it).
@@ -59,7 +63,10 @@ function collectProblems(page, pageName) {
     if (!isKnown(pageName, String(e))) pageErrors.push(String(e));
   });
   page.on("requestfailed", (r) => {
-    if (!IGNORED_REQUEST_HOSTS.test(r.url())) failedRequests.push(`${r.url()} (${r.failure()?.errorText})`);
+    // A video with preload="metadata" reads its header and the browser cancels
+    // the rest of the download: that abort is the browser working, not a defect.
+    const mediaAbort = r.resourceType() === "media" && r.failure()?.errorText === "net::ERR_ABORTED";
+    if (!mediaAbort && !IGNORED_REQUEST_HOSTS.test(r.url())) failedRequests.push(`${r.url()} (${r.failure()?.errorText})`);
   });
   page.on("response", (r) => {
     if (r.status() >= 400 && !IGNORED_REQUEST_HOSTS.test(r.url())) failedRequests.push(`${r.status()} ${r.url()}`);

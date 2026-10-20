@@ -1,5 +1,6 @@
 ---
 layout: page.njk
+wide: true
 title: Benchmarks
 description: How Osprey's elapsed time and peak memory compare to Rust, C, C#, Dart, OCaml, and Haskell on classic compute benchmarks.
 date: "git Last Modified"

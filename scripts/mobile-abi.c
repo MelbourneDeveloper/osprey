@@ -40,6 +40,14 @@ int64_t hostMeasure(const char *text) {
     return (int64_t)strlen(text);
 }
 
+// A handle the host owns. Osprey stores it, returns it and passes it back to a
+// host import without looking inside. [FFI-PTR]
+static int handle_target = 7;
+
+int64_t hostResolve(void *window) {
+    return window == &handle_target ? *(int *)window : -1;
+}
+
 // `volatile` defeats constant folding: a bool the compiler can see through
 // proves nothing about how a bool is passed in a register.
 static volatile bool yes = true;
@@ -121,6 +129,12 @@ static void check_strings(void) {
     assert(osprey_measured("") == 0 && measures == 2);
 }
 
+static void check_pointers(void) {
+    assert(osprey_passBack(&handle_target) == &handle_target);
+    assert(osprey_passBack(NULL) == NULL);
+    assert(osprey_resolve(&handle_target) == 7);
+}
+
 static void check_unit_export(void) {
     osprey_emit(41, yes, "boot");
     assert(records == 2);
@@ -134,6 +148,7 @@ int main(void) {
     check_doubles();
     check_booleans();
     check_strings();
+    check_pointers();
     check_unit_export();
     puts("Mobile C ABI passed");
     return 0;

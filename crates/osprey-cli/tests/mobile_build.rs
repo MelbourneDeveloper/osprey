@@ -42,7 +42,7 @@ impl Fixture {
             std::env::temp_dir().join(format!("osprey_mobile_build_{name}_{}", std::process::id()));
         fs::create_dir_all(root.join("compiler/bin"))?;
         fs::create_dir_all(root.join("sdk"))?;
-        for runtime in ["ios", "ios_sim", "android_arm64", "android_x64"] {
+        for runtime in ["ios", "ios_sim", "macos", "android_arm64", "android_x64"] {
             fs::write(
                 root.join(format!("compiler/bin/libosprey_runtime_{runtime}.a")),
                 "runtime fixture",
@@ -114,6 +114,7 @@ fn mobile_builds_publish_matching_headers_archives_and_clean_scratch() -> std::i
     for (target, triple, runtime) in [
         ("ios", "arm64-apple-ios15.0", "ios"),
         ("ios-sim", "arm64-apple-ios15.0-simulator", "ios_sim"),
+        ("macos", "arm64-apple-macos12.0", "macos"),
         ("android-arm64", "aarch64-linux-android26", "android_arm64"),
         ("android-x64", "x86_64-linux-android26", "android_x64"),
     ] {
@@ -193,6 +194,13 @@ fn mobile_sdk_errors_are_actionable_and_ndk_overrides_win() -> std::io::Result<(
             .env("MOBILE_SDK", fixture.0.join("missing"))
             .output()?,
         "iphonesimulator SDK unavailable",
+    );
+    fails(
+        &fixture
+            .command("macos", "app.a")
+            .env("MOBILE_SDK", fixture.0.join("missing"))
+            .output()?,
+        "macosx SDK unavailable",
     );
     for key in ["ANDROID_NDK_HOME", "ANDROID_NDK_ROOT"] {
         fails(

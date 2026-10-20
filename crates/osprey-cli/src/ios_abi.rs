@@ -32,6 +32,8 @@ pub(crate) enum CType {
     Float,
     Bool,
     Str,
+    /// An opaque host handle [FFI-PTR]: Osprey stores and passes it back.
+    Ptr,
     Unit,
 }
 
@@ -48,6 +50,7 @@ impl CType {
             names::FLOAT => Some(Self::Float),
             names::BOOL => Some(Self::Bool),
             names::STRING => Some(Self::Str),
+            names::PTR => Some(Self::Ptr),
             names::UNIT => Some(Self::Unit),
             _ => None,
         }
@@ -59,6 +62,7 @@ impl CType {
             Self::Float => "double",
             Self::Bool => "bool",
             Self::Str => "const char *",
+            Self::Ptr => "void *",
             Self::Unit => "void",
         }
     }
@@ -69,6 +73,7 @@ impl CType {
             Self::Float => names::FLOAT,
             Self::Bool => names::BOOL,
             Self::Str => names::STRING,
+            Self::Ptr => names::PTR,
             Self::Unit => names::UNIT,
         }
     }
@@ -79,7 +84,7 @@ impl CType {
             Self::Int => "i64",
             Self::Float => "double",
             Self::Bool => "i1",
-            Self::Str => "i8*",
+            Self::Str | Self::Ptr => "i8*",
             Self::Unit => "void",
         }
     }

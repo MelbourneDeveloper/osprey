@@ -153,7 +153,9 @@ pub(super) fn run_check(cli: &Cli, input: &CompilationInput) -> ExitCode {
 /// Capability errors are compilation diagnostics, before LLVM or linking.
 /// [IOS-TARGET-CAPABILITIES] [WASM-TARGET-CAPABILITIES]
 pub(super) fn target_error(cli: &Cli, input: &CompilationInput) -> Option<ExitCode> {
-    if let Err(error) = target_capabilities::validate(input.program(), &cli.target) {
+    if let Err(error) = target_capabilities::validate(input.program(), &cli.target)
+        .and_then(|()| target_capabilities::validate_links(input.source(), &cli.target))
+    {
         eprintln!("{}: {error}", input.display_path());
         return Some(ExitCode::FAILURE);
     }
@@ -171,8 +173,8 @@ fn mobile_target_error(cli: &Cli, input: &CompilationInput) -> Option<ExitCode> 
     if android::Target::parse(&cli.target).is_some() {
         return app_target_error(&cli.mode, android::validate(cli), source);
     }
-    if ios::Target::parse(&cli.target).is_some() {
-        return app_target_error(&cli.mode, ios::validate(cli), source);
+    if let Some(target) = ios::Target::parse(&cli.target) {
+        return app_target_error(&cli.mode, ios::validate(cli, target), source);
     }
     None
 }
@@ -314,7 +316,7 @@ fn build_mobile(
         return android::build(path, program, out, target, entry_only);
     }
     if let Some(target) = ios::Target::parse(&cli.target) {
-        ios::validate(cli)?;
+        ios::validate(cli, target)?;
         return ios::build(path, program, out, target, entry_only);
     }
     Err(toolchain::fail(&format!(
@@ -348,11 +350,13 @@ pub(super) fn run_program(cli: &Cli, input: &CompilationInput) -> ExitCode {
         "android-arm64" | "android-x64" => {
             toolchain::fail("Android libraries must run inside a host app; use --compile")
         }
-        "ios" | "ios-sim" => match ios::validate(cli) {
-            Err(code) => code,
-            Ok(()) => toolchain::fail("iOS libraries must run inside a host app"),
+        name => match ios::Target::parse(name) {
+            Some(target) => ios::validate(cli, target).map_or_else(
+                |code| code,
+                |()| toolchain::fail("Apple app-logic libraries must run inside a host app"),
+            ),
+            None => run_native(cli, input),
         },
-        _ => run_native(cli, input),
     }
 }
 

@@ -1,0 +1,203 @@
+// Implements [IOS-TARGET-MACOS]: Osprey decides everything the storage browser
+// shows. The host measures the disk once and answers each question, so this
+// module never touches the file system and its tests need no particular disk.
+namespace storage
+
+type Entry =
+    path : string
+    bytes : int
+    visible : int
+    hidden : bool
+    folder : bool
+    guarded : bool
+
+type Volume =
+    name : string
+    total : int
+    available : int
+    important : int
+
+type Listing =
+    entries : List<Entry>
+    blocked : int
+    measured : bool
+
+type Ranking =
+    top : List<Entry>
+    kept : int
+    floor : int
+    bytes : int
+    count : int
+
+type Look =
+    symbol : string
+    tint : string
+
+module Disk
+    (** What the browser asks the platform. The host answers from Foundation's volume keys and from one measured walk of the tree, where `bytes` counts everything below an entry and `visible` leaves out the hidden items below it; tests answer from fixed data. *)
+    export effect Facts
+        volume : string => Volume
+        listing : string => Listing
+
+    (** What an entry counts for: everything below it, or only what is in sight. *)
+    export size hidden entry = match hidden
+        true => entry.bytes
+        false => entry.visible
+
+    (** Whether the hidden-files setting shows an entry. *)
+    export inSight hidden entry = hidden || entry.hidden == false
+
+    // A protected folder was never entered, so it has no size to rank.
+    counted hidden entry = inSight hidden entry && entry.guarded == false
+
+    (** The first `count` items. *)
+    export top count items = match items
+        [] => []
+        [first, ...rest] => match count > 0
+            true => listPrepend (top (satSub count 1) rest) first
+            false => []
+
+    last items fallback = match items
+        [] => fallback
+        [first, ...rest] => last rest first
+
+    placed hidden entry items = match items
+        [] => [entry]
+        [first, ...rest] => match size hidden entry > size hidden first
+            true => listPrepend items entry
+            false => listPrepend (placed hidden entry rest) first
+
+    // A full ranking only changes when an entry beats its smallest member, so
+    // most entries of a large folder cost one comparison.
+    keep hidden limit ranking entry =
+        bytes = size hidden entry
+        totals = ranking(bytes = satAdd ranking.bytes bytes, count = satAdd ranking.count 1)
+        match ranking.kept >= limit && bytes <= ranking.floor
+            true => totals
+            false =>
+                ranked = top limit (placed hidden entry ranking.top)
+                totals(top = ranked, kept = length ranked, floor = size hidden (last ranked entry))
+
+    step hidden limit entries ranking index = match listGet entries index
+        Error _ => ranking
+        Success entry => match counted hidden entry
+            true => keep hidden limit ranking entry
+            false => ranking
+
+    (** The `limit` largest entries counted under the hidden-files setting, largest first, with the size and number of everything counted. A loop, not recursion, visits the entries, so a folder of any size keeps the stack flat. *)
+    export rank hidden limit entries =
+        empty = Ranking(top = [], kept = 0, floor = 0, bytes = 0, count = 0)
+        range (0, length entries) |> fold empty (\(ranking, index) => step hidden limit entries ranking index)
+
+    nonEmpty kept piece = match length piece > 0
+        true => listAppend kept piece
+        false => kept
+
+    segments path =
+        pieces = split path "/" ?: []
+        range (0, length pieces) |> fold [] (\(kept, index) => nonEmpty kept (listGet pieces index ?: ""))
+
+    (** The last component of a path; the volume root has none and goes by `fallback`. *)
+    export name fallback path = last (segments path) fallback
+
+    joined base pieces = match length pieces > 0
+        false => base
+        true => match endsWith base "/"
+            true => base + join pieces "/"
+            false => base + "/" + join pieces "/"
+
+    (** The enclosing folder; the volume root encloses itself. *)
+    export parent path =
+        pieces = segments path
+        joined "/" (top (satSub (length pieces) 1) pieces)
+
+    (** The folders from `root` down to `path`, outermost first. *)
+    export trail root path =
+        below = segments (drop path (length root))
+        range (0, length below) |> fold [root] (\(folders, index) => listAppend folders (joined root (top (satAdd index 1) below)))
+
+    extension path =
+        pieces = split (name "" path) "." ?: []
+        match length pieces > 1
+            true => toLowerCase (last pieces "")
+            false => ""
+
+    videos () = ["mov", "mp4", "m4v", "avi", "mkv", "webm", "braw", "prores"]
+    images () = ["png", "jpg", "jpeg", "heic", "gif", "tif", "tiff", "dng", "raw", "psd", "webp", "svg"]
+    sounds () = ["mp3", "m4a", "wav", "aif", "aiff", "flac", "aac", "caf"]
+    archives () = ["zip", "gz", "tgz", "tar", "xz", "bz2", "7z", "rar", "dmg", "iso", "pkg", "ipa", "xip", "img", "qcow2", "vmdk", "vdi"]
+    sources () = ["swift", "rs", "c", "h", "m", "mm", "cpp", "js", "ts", "py", "go", "java", "kt", "json", "osp", "ospml", "sh", "html", "css"]
+    documents () = ["pdf", "txt", "md", "rtf", "doc", "docx", "pages", "key", "numbers", "xls", "xlsx", "ppt", "pptx", "csv", "epub"]
+
+    fileLook kind = match listContains (videos ()) kind
+        true => Look(symbol = "film.fill", tint = "purple")
+        false => match listContains (images ()) kind
+            true => Look(symbol = "photo.fill", tint = "orange")
+            false => match listContains (sounds ()) kind
+                true => Look(symbol = "waveform", tint = "pink")
+                false => match listContains (archives ()) kind
+                    true => Look(symbol = "shippingbox.fill", tint = "brown")
+                    false => match listContains (sources ()) kind
+                        true => Look(symbol = "chevron.left.forwardslash.chevron.right", tint = "teal")
+                        false => match listContains (documents ()) kind
+                            true => Look(symbol = "doc.richtext.fill", tint = "green")
+                            false => Look(symbol = "doc.fill", tint = "gray")
+
+    // Finder's own folders keep their familiar symbols.
+    folderSymbol title = match title
+        "Applications" => "square.grid.3x3.fill"
+        "Desktop" => "menubar.dock.rectangle"
+        "Documents" => "doc.text.fill"
+        "Downloads" => "arrow.down.circle.fill"
+        "Library" => "building.columns.fill"
+        "Movies" => "film.stack.fill"
+        "Music" => "music.note"
+        "Pictures" => "photo.on.rectangle.angled"
+        "Developer" => "hammer.fill"
+        ".Trash" => "trash.fill"
+        _ => "folder.fill"
+
+    (** The symbol and tint for an entry: apps and Finder's folders by name, files by kind. *)
+    export look entry = match entry.folder
+        false => fileLook (extension entry.path)
+        true => match extension entry.path == "app"
+            true => Look(symbol = "app.fill", tint = "indigo")
+            false => Look(symbol = folderSymbol (name "" entry.path), tint = "blue")
+
+    scaled tenths unit larger = match larger
+        [] => shown tenths unit
+        [next, ...rest] => match tenths >= 10000
+            true => scaled (intDiv (satAdd tenths 500) 1000) next rest
+            false => shown tenths unit
+
+    shown tenths "B" = "${intDiv tenths 10} B"
+    shown tenths unit = "${intDiv tenths 10}.${tenths % 10} ${unit}"
+
+    (** Decimal units with one rounded decimal, as Finder and System Settings count them. *)
+    export formatBytes bytes = match bytes < 0
+        true => "unknown"
+        false => scaled (satMul bytes 10) "B" ["KB", "MB", "GB", "TB"]
+
+    (** A count with thousands separators. *)
+    export formatCount count = match count < 1000
+        true => toString count
+        false => formatCount (intDiv count 1000) + "," + (padStart (toString (count % 1000)) 3 "0" ?: "")
+
+    ratio scale part whole = match whole > 0
+        false => 0
+        true =>
+            handle Arith
+                overflow _ _ _ _ => 0
+                remainderByZero _ => 0
+            intDiv (satAdd (satMul part scale) (intDiv whole 2)) whole
+
+    (** The share of `whole`, rounded to a whole percent; an unknown or empty whole gives no share. *)
+    export percent (part, whole) = ratio 100 part whole
+
+    (** The same share in thousandths, for drawing. *)
+    export permille (part, whole) = ratio 1000 part whole
+
+    (** A share as people read it: a sliver is "< 1%", never "0%". *)
+    export shareText (part, whole) = match percent (part, whole) == 0 && part > 0
+        true => "< 1%"
+        false => "${percent (part, whole)}%"

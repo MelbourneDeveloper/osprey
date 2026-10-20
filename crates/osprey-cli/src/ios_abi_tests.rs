@@ -178,6 +178,7 @@ fn c_types_map_only_scalars() {
     };
     assert_eq!(CType::from_type(&con("int")), Some(CType::Int));
     assert_eq!(CType::from_type(&con("Unit")), Some(CType::Unit));
+    assert_eq!(CType::from_type(&con("Ptr")), Some(CType::Ptr));
     assert_eq!(CType::from_type(&con("Point")), None);
     assert_eq!(
         CType::from_type(&Type::Con {
@@ -211,6 +212,33 @@ fn imports_use_c_bool_attributes_and_adapt_unit_returns() {
         "{out}"
     );
     assert!(!out.contains("call i64 @host_log("), "{out}");
+}
+
+#[test]
+fn opaque_handles_cross_both_directions_as_void_pointers() {
+    // [IOS-HOST-ABI] [FFI-PTR] A host handle goes out and comes back unchanged:
+    // `void *` in C, `UnsafeMutableRawPointer?` in Swift, `i8*` in LLVM.
+    let source =
+        "extern fn host_open(name: string) -> Ptr\nextern fn host_size(window: Ptr) -> int\n\
+        fn open(name) = host_open(name)\nfn size(window) = host_size(window)\n";
+    let (abi, ir) = abi_of(source);
+    let header = header_for_target(&abi, "handles.osp", "macos");
+    for declaration in [
+        "void *osprey_open(const char *name);",
+        "int64_t osprey_size(void *window);",
+        "void *host_open(const char *name);",
+        "int64_t host_size(void *window);",
+    ] {
+        assert!(header.contains(declaration), "{declaration}\n{header}");
+    }
+    let out = with_host_abi(&ir, &abi).expect("adapted handles");
+    for line in [
+        "declare i8* @host_open(i8*)",
+        "define i8* @osprey_open(i8* %p0)",
+        "define i64 @osprey_size(i8* %p0)",
+    ] {
+        assert!(out.contains(line), "{line}\n{out}");
+    }
 }
 
 #[test]
@@ -351,7 +379,7 @@ fn exports_with_their_own_handler_are_supported() {
 
 #[test]
 fn generated_header_and_ir_compile_with_clang() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "extern fn host_flag(b: bool) -> bool\nextern fn host_log(n: int) -> Unit\nfn flag(b) = host_flag(b)\nfn log(n) = host_log(n)\nfn score(n) = toFloat(n)\nfn text() = \"hello\"\n";
+    let source = "extern fn host_flag(b: bool) -> bool\nextern fn host_log(n: int) -> Unit\nextern fn host_handle(n: int) -> Ptr\nfn flag(b) = host_flag(b)\nfn log(n) = host_log(n)\nfn handle(n) = host_handle(n)\nfn score(n) = toFloat(n)\nfn text() = \"hello\"\n";
     let (abi, ir) = abi_of(source);
     for language in ["c-header", "c++-header"] {
         clang_accepts(

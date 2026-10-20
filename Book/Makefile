@@ -1,17 +1,18 @@
+# Assignments use `?=`: editor task panels list `NAME :=` lines as targets.
 PANDOC ?= pandoc
 EPUBCHECK ?= epubcheck
 RSVG_CONVERT ?= rsvg-convert
 MAGICK ?= magick
 JQ ?= jq
 MMDC ?= mmdc
-MERMAID_FLAGS := --quiet --configFile styles/mermaid.json --backgroundColor 'rgb(7,13,31)'
+MERMAID_FLAGS ?= --quiet --configFile styles/mermaid.json --backgroundColor 'rgb(7,13,31)'
 OSPREY ?= ../target/release/osprey
 
-BOOK_JSON := book.json
-MANUSCRIPT := $(shell $(JQ) -r '.sections[].file' $(BOOK_JSON))
-EPUB := dist/the-osprey-book-outline.epub
-HTML := dist/index.html
-DIAGRAM_PNGS := \
+BOOK_JSON ?= book.json
+MANUSCRIPT ?= $(shell $(JQ) -r '.sections[].file' $(BOOK_JSON))
+EPUB ?= dist/the-osprey-book-outline.epub
+HTML ?= dist/index.html
+DIAGRAM_PNGS ?= \
 	assets/diagrams/00-reading-journey.png \
 	assets/diagrams/01-program-anatomy.png \
 	assets/diagrams/01-source-to-output.png \
@@ -22,7 +23,7 @@ DIAGRAM_PNGS := \
 	assets/diagrams/03-mismatch-locator.png \
 	$(patsubst %.mmd,%.png,$(wildcard assets/diagrams/04-*.mmd assets/diagrams/08-*.mmd assets/diagrams/09-*.mmd assets/diagrams/10-*.mmd))
 
-MERMAID_PNGS := $(patsubst %.mmd,%.png,$(wildcard assets/diagrams/*.mmd))
+MERMAID_PNGS ?= $(patsubst %.mmd,%.png,$(wildcard assets/diagrams/*.mmd))
 
 .PHONY: check check-examples render-assets epub html release clean
 

@@ -1,0 +1,89 @@
+/* Video tutorials (lib/videos.mjs): the player, its chapter list, the
+   transcript, and the poster card that links to a watch page. */
+.prose figure.video { margin: var(--space-6) 0 var(--space-4); }
+.prose figure.video video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  background: var(--surface-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+}
+.prose figure.video figcaption {
+  margin-top: var(--space-2);
+  color: var(--on-surface-variant);
+  font-size: 0.9rem;
+}
+.prose .video-chapters ol,
+.prose .video-transcript {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-6);
+}
+.prose .video-chapters ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--space-2);
+}
+.prose .video-chapters a {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  min-height: 48px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-low);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius);
+  color: var(--on-surface);
+  text-decoration: none;
+  transition: border-color var(--transition-fast);
+}
+.prose .video-chapters a:hover,
+.prose .video-chapters a:focus-visible { border-color: var(--primary); }
+.prose .video-chapters a:focus-visible,
+.prose .video-transcript a:focus-visible,
+.prose .video-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.prose .video-chapters time,
+.prose .video-transcript time {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--primary);
+}
+.prose .video-transcript li {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--outline-variant);
+}
+.prose .video-transcript a {
+  display: inline-flex;
+  align-items: center;
+  min-width: 48px;
+  min-height: 48px;
+  text-decoration: none;
+}
+.prose .video-transcript span { padding-top: var(--space-3); }
+.prose .video-card {
+  position: relative;
+  display: block;
+  margin: var(--space-6) 0;
+  overflow: hidden;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--transition-fast);
+}
+.prose .video-card img { display: block; width: 100%; height: auto; margin: 0; }
+.prose .video-card:hover,
+.prose .video-card:focus-visible { border-color: var(--primary); }
+.prose .video-card-length {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  background: var(--primary);
+  color: var(--on-primary);
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+}

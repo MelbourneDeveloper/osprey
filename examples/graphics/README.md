@@ -1,10 +1,16 @@
 # Osprey graphics examples
 
-Three real-time scenes — `kali`, `opal`, `character` — where Osprey is the host
-program and the GPU is the rasteriser. Osprey opens the window, reads the clock,
+Three real-time scenes — `kali`, `opal`, `character` — where Osprey runs the
+scene and the GPU is the rasteriser. Osprey opens the window, reads the clock,
 and recomputes the scene every frame in its own fixed-point arithmetic; a
 fragment shader shades every pixel from the parameter slots Osprey pushes into
 it.
+
+On macOS a scene compiles for the [Mac slice](../../docs/specs/compiler/iOSCodegen.md#the-mac-slice-ios-target-macos)
+and a Swift host links it, exactly as the [storage report](../macos/README.md)
+and the iPhone apps do: Swift defines the six `osp_gfx_*` imports with
+`@_cdecl` and calls `osprey_main`. On Windows the native executable links the
+Direct3D 12 bridge, because no Windows host-library target exists.
 
 **The Osprey sources are the same files on every platform.** Not ported, not
 conditionally compiled, not `#ifdef`-ed: `base/base.osp` and the three
@@ -16,7 +22,7 @@ everything below exists to keep it true.
 ```mermaid
 flowchart TB
   osp["base/base.osp<br/>one host, one clock"] --> abi["six extern fns<br/>osp_gfx_*"]
-  abi --> mac["ospgfx.m<br/>Metal + Cocoa"]
+  abi --> mac["macos/GraphicsBridge.swift<br/>Swift host: Metal + AppKit"]
   abi --> win["ospgfx_d3d12.c<br/>D3D12 + Win32"]
   mac --> msl["base.metal"]
   win --> hlsl["base.hlsl"]
@@ -31,14 +37,17 @@ ospgfx_abi.h               the one C declaration of the Osprey-facing ABI:
                            slot count, both scales, uniform block, validation
 base.metal                 macOS shader library: 3 named fragment entries
 base.hlsl                  the Direct3D 12 twin of base.metal, entry for entry
-ospgfx.m                   macOS bridge: Cocoa window, Metal layer
+macos/Bridge.h             imports ospgfx_abi.h and the scene's generated header
+macos/GraphicsBridge.swift macOS host: the six imports with @_cdecl, AppKit window, Metal layer
+macos/main.swift           calls osprey_main, which runs the scene until its window closes
+macos/run.sh               builds a scene with scripts/macos-host.sh and runs it
 ospgfx_d3d12.h             Windows bridge: D3D12 context and constants
 ospgfx_d3d12_setup.c       Windows bridge: one-time device/swap-chain bring-up
 ospgfx_d3d12.c             Windows bridge: the six exported symbols, frame path
 ```
 
-Both bridges include `ospgfx_abi.h` and export the same six symbols with the
-same semantics: values arrive in 4096ths (`osp_gfx_set`) or thousandths
+Both bridges take `ospgfx_abi.h` (the Swift host through its bridging header)
+and define the same six symbols with the same semantics: values arrive in 4096ths (`osp_gfx_set`) or thousandths
 (`osp_gfx_set_milli`), out-of-range slots are ignored, `osp_gfx_draw` returns 1
 while the window lives and 0 once it closes, and `osp_gfx_ticks` is milliseconds
 since the window opened. The slot store, the window-extent and scale validation
@@ -55,13 +64,19 @@ learns which GPU API is underneath it.
     make graphics SCENE=opal
     make graphics SCENE=character
 
-On macOS that builds `libospgfx.dylib` with clang and checks `base.metal` with
-`xcrun metal` first. On Windows it must be run from the **MSYS2 UCRT64 shell** —
+On macOS that builds the Mac runtime, checks `base.metal` with `xcrun metal`,
+compiles the scene with `--target=macos --entry-only` (the host calls only
+`osprey_main`), links the Swift host and runs it from the repository root.
+`examples/graphics/macos/run.sh opal` does the same for one scene, and
+`make graphics-smoke` renders every scene for 60 frames and fails unless each
+reports them. `OSPREY_GFX_FRAMES=<n>` ends a scene after `n` frames. On Windows it must be run from the **MSYS2 UCRT64 shell** —
 the same toolchain that builds Osprey's C runtime there — where it builds
-`ospgfx.dll` plus the `libospgfx.dll.a` import library that `// @link: ospgfx`
+`ospgfx.dll` plus the `libospgfx.dll.a` import library that `// @link(windows): ospgfx`
 resolves, checks `base.hlsl` with `fxc.exe` when the Windows SDK's compiler is
 on `PATH`, and prepends this directory to `PATH` so the DLL is found at run
 time. `make graphics GFX_WARN=-Wall` drops `-Werror` if a warning blocks you.
+The directives in `base/base.osp` are qualified, `// @link(windows): ospgfx`, so
+they link only the Windows executable and the Mac slice never sees them.
 
 ### Building the Windows bridge with MSVC instead
 
@@ -78,7 +93,11 @@ this one is offered for people already living in an MSVC toolchain.
 
 ## Verification status
 
-`base.metal` and `ospgfx.m` are built and observed working on macOS.
+`base.metal` and the Swift host render all three scenes on macOS. On an Apple
+silicon Mac in October 2026, 90 frames of each on a 1920×1200 drawable ran at
+102 (Kali), 114 (Opal) and 119 (Character) fps. `make macos-test` builds every
+scene's host in CI; rendering needs a desktop session and a Metal GPU, so it
+runs locally through `make graphics-smoke`.
 
 **`base.hlsl`, `ospgfx_d3d12.h`, `ospgfx_d3d12_setup.c`, `ospgfx_d3d12.c` and
 the Windows half of the Makefile are unverified.** They were written on a macOS
@@ -130,7 +149,7 @@ Direct3D 12 adapter.
            -ld3d12 -ldxgi -ld3dcompiler -ldxguid -luser32
 
 3. **Type-check and link the unchanged Osprey scenes.** `--compile` is what
-   exercises `// @link: ospgfx` against the import library from step 2.
+   exercises `// @link(windows): ospgfx` against the import library from step 2.
 
        target/release/osprey.exe examples/graphics/kali --check
        target/release/osprey.exe examples/graphics/opal --check

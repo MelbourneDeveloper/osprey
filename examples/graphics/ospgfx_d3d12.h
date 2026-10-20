@@ -1,15 +1,15 @@
 // Osprey -> Windows graphics bridge: a Win32 window backed by a Direct3D 12
-// swap chain, exposing the same flat C ABI ospgfx.m exposes on macOS
+// swap chain, exposing the same flat C ABI the Swift host (macos/) defines on macOS
 // ([FFI-LINK-DIRECTIVES], [FFI-PTR] — docs/specs/compiler/0019-ForeignFunctionInterface.md).
 //
 // UNVERIFIED ON THE MACHINE THAT WROTE IT. This backend was authored on macOS,
 // which has no MSVC, no Windows SDK, no mingw-w64 and no fxc or dxc, so not one
 // line of it has been compiled, linked or run. It is careful transcription of
-// ospgfx.m against the Direct3D 12 documentation, and nothing more than that
+// the Metal bridge against the Direct3D 12 documentation, and nothing more than that
 // until a Windows machine says otherwise. `make graphics` on Windows is what
 // turns it around; README.md in this directory lists the exact commands.
 //
-// ospgfx.m is the reference. It carries the rationale for the design — Osprey
+// macos/GraphicsBridge.swift is the reference. It carries the rationale — Osprey
 // as the host that owns the window, the clock and the scene state; the GPU as
 // the rasteriser; the two slot scales; why the fragment entry is a parameter —
 // and this backend does not repeat that prose, recording only what Direct3D
@@ -48,7 +48,7 @@
 #include <stdint.h>
 
 // The slot count, the two fixed-point scales, the uniform block and the
-// argument validation are the Osprey-facing ABI shared with ospgfx.m, declared
+// argument validation are the Osprey-facing ABI shared with the Swift host, declared
 // once in ospgfx_abi.h. base.hlsl mirrors the uniform layout by hand — the GPU
 // cannot see the header — and crates/osprey-cli/tests/graphics_scenes.rs
 // asserts the mirror agrees.

@@ -1,4 +1,5 @@
-//! iPhone app-logic archives with a generated C interface. [IOS-TARGET]
+//! Apple app-logic archives with a generated C interface: iPhone, the iOS
+//! Simulator and the Mac share one boundary. [IOS-TARGET] [IOS-TARGET-MACOS]
 
 use crate::ios_abi;
 use crate::toolchain::{fail, publish, run_tool, tool, write, Scratch};
@@ -14,53 +15,110 @@ const TOOLCHAIN_HINT: &str = "install Xcode and select it with xcode-select";
 pub(crate) enum Target {
     Device,
     Simulator,
+    Mac,
 }
+
+/// Everything that distinguishes one slice, stated once per slice.
+struct Slice {
+    /// The `--target` value. A generated header and every diagnostic name it,
+    /// so following either one rebuilds the slice the reader already chose.
+    name: &'static str,
+    sdk: &'static str,
+    triple: &'static str,
+    runtime: &'static str,
+    /// The platform a diagnostic names.
+    platform: &'static str,
+    /// The `make` goal that builds the runtime, and the example directory.
+    goal: &'static str,
+}
+
+const SLICES: [(Target, Slice); 3] = [
+    (
+        Target::Device,
+        Slice {
+            name: "ios",
+            sdk: "iphoneos",
+            triple: "arm64-apple-ios15.0",
+            runtime: "libosprey_runtime_ios.a",
+            platform: "iOS",
+            goal: "ios",
+        },
+    ),
+    (
+        Target::Simulator,
+        Slice {
+            name: "ios-sim",
+            sdk: "iphonesimulator",
+            triple: "arm64-apple-ios15.0-simulator",
+            runtime: "libosprey_runtime_ios_sim.a",
+            platform: "iOS",
+            goal: "ios",
+        },
+    ),
+    (
+        Target::Mac,
+        Slice {
+            name: "macos",
+            sdk: "macosx",
+            triple: "arm64-apple-macos12.0",
+            runtime: "libosprey_runtime_macos.a",
+            platform: "macOS",
+            goal: "macos",
+        },
+    ),
+];
 
 impl Target {
     pub(crate) fn parse(value: &str) -> Option<Self> {
-        match value {
-            "ios" => Some(Self::Device),
-            "ios-sim" => Some(Self::Simulator),
-            _ => None,
+        SLICES
+            .iter()
+            .find(|(_, slice)| slice.name == value)
+            .map(|(target, _)| *target)
+    }
+
+    fn slice(self) -> &'static Slice {
+        match self {
+            Self::Device => &SLICES[0].1,
+            Self::Simulator => &SLICES[1].1,
+            Self::Mac => &SLICES[2].1,
         }
     }
 
-    /// The `--target` value that selects this slice. A generated header and
-    /// every diagnostic must name it, so following either one rebuilds the
-    /// slice the reader already chose rather than the other one.
     pub(crate) fn name(self) -> &'static str {
-        match self {
-            Self::Device => "ios",
-            Self::Simulator => "ios-sim",
-        }
+        self.slice().name
     }
 
     fn sdk(self) -> &'static str {
-        match self {
-            Self::Device => "iphoneos",
-            Self::Simulator => "iphonesimulator",
-        }
+        self.slice().sdk
     }
 
     fn triple(self) -> &'static str {
-        match self {
-            Self::Device => "arm64-apple-ios15.0",
-            Self::Simulator => "arm64-apple-ios15.0-simulator",
-        }
+        self.slice().triple
     }
 
     fn runtime(self) -> &'static str {
-        match self {
-            Self::Device => "libosprey_runtime_ios.a",
-            Self::Simulator => "libosprey_runtime_ios_sim.a",
-        }
+        self.slice().runtime
+    }
+
+    /// The diagnostic for a slice whose runtime archive has not been built.
+    fn missing_runtime(self) -> String {
+        let slice = self.slice();
+        format!(
+            "{} not found — run `make {}` to build the {} runtime",
+            slice.runtime, slice.goal, slice.platform
+        )
     }
 }
 
 /// Refuse native-only settings before invoking the cross compiler.
 /// Implements [IOS-TARGET-OPTIONS].
-pub(crate) fn validate(cli: &Cli) -> Result<(), ExitCode> {
-    crate::reject_cross_target_options(cli, "iOS", Some("a Swift host (see examples/ios/)"))
+pub(crate) fn validate(cli: &Cli, target: Target) -> Result<(), ExitCode> {
+    let slice = target.slice();
+    crate::reject_cross_target_options(
+        cli,
+        slice.platform,
+        Some(&format!("a Swift host (see examples/{}/)", slice.goal)),
+    )
 }
 
 /// Emit the app's C ABI and LLVM implementation before any toolchain work.
@@ -85,15 +143,11 @@ pub(crate) fn build(
     target: Target,
     entry_only: bool,
 ) -> Result<(), ExitCode> {
-    validate_output(out).map_err(|e| fail(&e))?;
+    validate_output(out, target).map_err(|e| fail(&e))?;
     let (ir, header) = source(program, path, target, entry_only).map_err(|e| fail(&e))?;
     let sdk = sdk_path(target)?;
-    let runtime = find_runtime_lib(target.runtime()).ok_or_else(|| {
-        fail(&format!(
-            "{} not found — run `make ios` to build the iOS runtime",
-            target.runtime()
-        ))
-    })?;
+    let runtime =
+        find_runtime_lib(target.runtime()).ok_or_else(|| fail(&target.missing_runtime()))?;
     let scratch = Scratch::new(path, target.sdk())?;
     write(&scratch.path.join("app.ll"), &ir)?;
     let obj = scratch.path.join("app.o");
@@ -106,8 +160,8 @@ pub(crate) fn build(
     publish(&archive, out, &header)
 }
 
-fn validate_output(out: &Path) -> Result<(), String> {
-    crate::toolchain::validate_archive_output(out, "iOS")
+fn validate_output(out: &Path, target: Target) -> Result<(), String> {
+    crate::toolchain::validate_archive_output(out, target.slice().platform)
 }
 
 fn sdk_path(target: Target) -> Result<PathBuf, ExitCode> {

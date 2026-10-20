@@ -109,6 +109,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        # The site's images and videos are Git LFS files.
+        with:
+          lfs: true
 
       - uses: actions/setup-node@v4
         with:
@@ -563,6 +566,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        # The site's images and videos are Git LFS files.
+        with:
+          lfs: true
       - uses: ./.github/actions/detect-ci-scope
         id: filter
       - uses: actions/setup-node@v4
@@ -800,8 +806,8 @@ jobs:
       - name: VS Code extension thresholds
         run: make _coverage_check_vscode_extension
 
-      - name: iOS device and simulator builds, ABI, goldens and app persistence
-        run: make ios-test mobile-ios-test bank-ios-test
+      - name: iOS and macOS builds, ABI, goldens and app persistence
+        run: make ios-test macos-test mobile-ios-test bank-ios-test
 
       - name: Native bank simulator results
         if: always()

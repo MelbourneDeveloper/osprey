@@ -1,19 +1,13 @@
-## graphics: Build the platform graphics bridge and run the animated GPU demo
-#            Osprey drives the scene; the GPU shades every pixel. macOS renders
-#            it through Metal, Windows through Direct3D 12 — and the Osprey
-#            sources are the same files on both, which is the entire point.
-#            SCENE=kali|opal|character selects one of the three scenes; every
-#            one is a one-file project sharing examples/graphics/base/base.osp
-#            and one named fragment entry in the platform shader library.
-#            GFX_WARN overrides the C warning set. See $(GFX_DIR)/README.md.
+# Graphics: settings and the platform hosts behind `make graphics` and
+# `make graphics-smoke`, which the root Makefile documents.
 GFX_DIR := examples/graphics
 GFX_WARN ?= -Wall -Werror
 SCENE ?= kali
 
 ifeq ($(OS),Windows_NT)
 # Direct3D 12. Built with the same MinGW UCRT64 toolchain that builds the C
-# runtime on Windows, so `// @link: ospgfx` in base/base.osp resolves the import
-# library below exactly as it resolves the dylib on macOS.
+# runtime on Windows, so `// @link(windows): ospgfx` in base/base.osp resolves
+# the import library below.
 #
 # UNVERIFIED. This branch, the two C files it compiles and base.hlsl were all
 # written on a macOS machine with no Windows toolchain and have never been
@@ -31,7 +25,7 @@ GFX_ENTRIES := osp_vertex:vs_5_0 osp_fragment:ps_5_0 \
 
 ifeq ($(MSYSTEM),)
 # Native PowerShell has neither bash for the recipes below nor a MinGW cc.
-graphics _graphics-shader:
+_graphics _graphics-shader:
 	@Write-Host "make graphics needs the MSYS2 UCRT64 shell -- see $(GFX_DIR)/README.md"
 else
 $(GFX_LIB): $(GFX_SRC) $(GFX_DIR)/ospgfx_d3d12.h $(GFX_DIR)/ospgfx_abi.h
@@ -57,41 +51,48 @@ _graphics-shader:
 
 # The DLL lives beside its source rather than beside the compiled scene, so the
 # loader is pointed at it for the length of the run.
-graphics: build $(GFX_LIB) _graphics-shader
+_graphics: build $(GFX_LIB) _graphics-shader
 	@echo "==> launching Osprey graphics demo: $(SCENE) (close the window to exit)"
 	PATH="$(CURDIR)/$(GFX_DIR):$$PATH" ./$(BIN) $(GFX_DIR)/$(SCENE) --run
 endif
 
 else
-GFX_LIB := $(GFX_DIR)/libospgfx.dylib
 GFX_SHADER := $(GFX_DIR)/base.metal
-
-$(GFX_LIB): $(GFX_DIR)/ospgfx.m $(GFX_DIR)/ospgfx_abi.h
-	@echo "==> building Osprey -> macOS graphics bridge"
-	clang -dynamiclib -fobjc-arc -O2 $(GFX_WARN) \
-		-install_name $(CURDIR)/$(GFX_LIB) \
-		-framework Cocoa -framework Metal -framework QuartzCore \
-		-o $(GFX_LIB) $(GFX_DIR)/ospgfx.m
+GFX_SCENES := kali opal character
+GFX_SMOKE_FRAMES ?= 60
 
 # The bridge compiles the shader at run time, so a syntax error in it would
 # otherwise only surface as a window that refuses to open. Check it up front
-# when the Metal toolchain is installed, and skip quietly when it is not.
+# when the Metal toolchain is installed, and skip quietly when it is not. Xcode
+# 26 and later ship `metal` as a stub until the toolchain component downloads,
+# so availability is asked of the compiler itself rather than of `xcrun --find`.
 _graphics-shader:
-	@if xcrun -sdk macosx --find metal >/dev/null 2>&1; then \
+	@if xcrun -sdk macosx metal --version >/dev/null 2>&1; then \
 		echo "==> checking $(GFX_SHADER)"; \
 		xcrun -sdk macosx metal -c $(GFX_SHADER) -o /dev/null; \
 	else \
-		echo "==> skipping shader check (no Metal toolchain)"; \
+		echo "==> skipping shader check (no Metal toolchain; xcodebuild -downloadComponent MetalToolchain installs it)"; \
 	fi
 
-graphics: build $(GFX_LIB) _graphics-shader
+# The scene compiles for the Mac slice and links into the Swift Metal host in
+# $(GFX_DIR)/macos, the way every macOS example joins Osprey and Swift.
+# [IOS-TARGET-MACOS]
+_graphics: build _runtime_macos _graphics-shader
 	@echo "==> launching Osprey graphics demo: $(SCENE) (close the window to exit)"
-	./$(BIN) $(GFX_DIR)/$(SCENE) --run
+	OSPREY_BIN="$(CURDIR)/$(BIN)" bash $(GFX_DIR)/macos/run.sh $(SCENE)
+
+# _graphics-smoke: every scene for GFX_SMOKE_FRAMES frames on Metal.
+_graphics-smoke: build _runtime_macos _graphics-shader
+	@for scene in $(GFX_SCENES); do \
+		report=$$(OSPREY_GFX_FRAMES=$(GFX_SMOKE_FRAMES) OSPREY_BIN="$(CURDIR)/$(BIN)" \
+			bash $(GFX_DIR)/macos/run.sh $$scene) || exit 1; \
+		echo "$$report"; \
+		case "$$report" in *": $(GFX_SMOKE_FRAMES) frames in "*) ;; \
+			*) echo "graphics-smoke: $$scene did not draw $(GFX_SMOKE_FRAMES) frames" >&2; exit 1 ;; esac; \
+	done
 endif
 
-## gpt2: Run GPT-2 (usage: make gpt2 FLAVOR=default|python PROMPT="..." TOKENS=20 BACKEND=gpu|lists)
-## BACKEND=gpu runs the model on the GPU surface: every kernel and product on GPU=auto|metal|opencl, or on the CPU with GPU=host; BACKEND=lists runs the same model over host lists.
-## The published weights and merges download once into examples/gpt2/weights (ignored by git).
+# GPT-2 settings and the one-time weight download behind gpt2 and gpt2-train.
 GPT2_DIR    := examples/gpt2
 GPT2_SOURCE := https://huggingface.co/openai-community/gpt2/resolve/main
 PROMPT      ?= The capital of France is
@@ -105,27 +106,6 @@ $(GPT2_DIR)/weights/%:
 	@$(MKDIR) $(GPT2_DIR)/weights
 	@echo "==> downloading $* from openai-community/gpt2"
 	curl -fsSL --retry 3 -o $@ $(GPT2_SOURCE)/$*
-
-gpt2: build $(GPT2_DIR)/weights/model.safetensors $(GPT2_DIR)/weights/merges.txt
-	@case "$(FLAVOR)" in default|python) ;; *) echo "gpt2 FLAVOR must be default or python" >&2; exit 1 ;; esac
-	@printf '%s\n%s\n%s\n' "$(PROMPT)" "$(TOKENS)" "$(BACKEND)" | OSPREY_GPU=$(GPU) ./$(BIN) $(GPT2_GENERATOR) --run --memory=arc
-
-## gpt2-train: One training step of GPT-2 on the prompt: loss, gradients, SGD, loss again (usage: make gpt2-train PROMPT="..." BACKEND=gpu|lists)
-gpt2-train: build $(GPT2_DIR)/weights/model.safetensors $(GPT2_DIR)/weights/merges.txt
-	@test "$(FLAVOR)" = default || { echo "gpt2-train FLAVOR must be default" >&2; exit 1; }
-	@printf '%s\n%s\n' "$(PROMPT)" "$(BACKEND)" | OSPREY_GPU=$(GPU) ./$(BIN) $(GPT2_DIR)/train --run --memory=arc
-
-## run: Compile and run an Osprey file (usage: make run FILE=<path>)
-run: build
-	@if [ -z "$(FILE)" ]; then echo "Usage: make run FILE=<path>"; exit 1; fi
-	./$(BIN) $(FILE) --run
-
-## install: Install osprey + runtime archives system-wide
-install: build
-	cargo install --path crates/osprey-cli --force
-	sudo $(MKDIR) /usr/local/lib
-	sudo cp $(RTB)/libfiber_runtime.a $(RTB)/libhttp_runtime.a /usr/local/lib/
-	@echo "==> installed osprey and runtime archives."
 
 # _uninstall: Remove osprey + runtime archives from the system
 _uninstall:
@@ -149,25 +129,3 @@ _website-build: $(WEBSITE_NODE_DEPS)
 _test_bench_tools:
 	@echo "==> Bench tooling tests..."
 	python3 benchmarks/test_merge_results.py
-
-## bench: Build, then run the cross-language performance benchmark suite
-##        (Osprey vs Rust/C/OCaml/Haskell — CPU via hyperfine, peak memory via
-##        /usr/bin/time). Absent toolchains are skipped. Informational only:
-##        NOT part of `make ci`/`make test` (perf is noisy on shared runners).
-##        Pass a name filter via BENCH_FILTER=<substr>; results in
-##        benchmarks/results/results.html. Every run preserves unmeasured
-##        values and publishes only validated replacements. See benchmarks/README.md.
-bench: build
-	@zsh benchmarks/run.sh $(BENCH_FILTER)
-
-## bench-osprey: Re-time ONLY the Osprey columns — default, `--memory=arc`,
-##        `--memory=gc` and wasm32 — and merge them into the results already on
-##        disk. No other language is compiled, run or timed, so this is the fast
-##        loop for a compiler/runtime change. Every non-Osprey measurement in
-##        benchmarks/results/ survives byte-for-byte at the data-record level;
-##        the Osprey re-run happens in a temp dir and is published only if every
-##        case succeeded, so a broken build can never erase the recorded data.
-##        Needs one prior `make bench` for the other languages' baseline.
-##        Honours BENCH_FILTER=<substr>. See benchmarks/README.md.
-bench-osprey: build
-	@BENCH_PARTIAL=1 zsh benchmarks/run.sh $(BENCH_FILTER)

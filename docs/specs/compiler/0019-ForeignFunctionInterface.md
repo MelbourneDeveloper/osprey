@@ -9,7 +9,7 @@ Each flavor has its own declaration spelling; both lower to `Stmt::Extern`.
 ABI mapping, link directives, and linking are shared after that boundary
 ([FLAVOR-BOUNDARY]).
 
-For an iOS application, the compiler also exposes Osprey functions to a C/Swift host: `--target=ios` and `--target=ios-sim` emit a static library with a generated scalar C header. Swift owns the platform APIs and supplies `extern fn` implementations. The narrower supported signatures, string ownership, initialization, and compile-time rejection of unsupported target features are specified by the [iOS application target](../platforms/0038-iOSTarget.md), with a runnable [SwiftUI example](../../../examples/ios). General native FFI features below must not be assumed available across that target's host boundary.
+For an iOS or macOS application, the compiler also exposes Osprey functions to a C/Swift host: `--target=ios`, `--target=ios-sim` and `--target=macos` emit a static library with a generated scalar C header. Swift owns the platform APIs and supplies `extern fn` implementations. The narrower supported signatures, string ownership, initialization, and compile-time rejection of unsupported target features are specified by the [iOS application target](../platforms/0038-iOSTarget.md), with a runnable [SwiftUI example](../../../examples/ios) and a [Mac storage example](../../../examples/macos) that calls Swift. General native FFI features below must not be assumed available across that target's host boundary.
 
 ## Link Directives [FFI-LINK-DIRECTIVES]
 
@@ -25,9 +25,21 @@ both `--run` and `--compile`. Each value is one process argument; no shell parse
 it. Invalid library names or paths therefore fail in the compiler driver rather
 than executing as commands.
 
+A directive may name the operating system whose native executables it links:
+`// @link(windows): ospgfx` and `// @linkdir(windows): examples/graphics` apply
+when the compiler builds on Windows and are ignored elsewhere, so shared source
+can carry one platform's library. `windows`, `macos` and `linux` are recognized.
+
+An app-library target (`ios`, `ios-sim`, `macos`, `android-*`) builds an archive
+whose host links every import, so it rejects an unqualified directive before any
+toolchain work: link the library in the host application and declare its
+functions with `extern` ([IOS-TARGET-CAPABILITIES](iOSCodegen.md#target-capability-checking-ios-target-capabilities)).
+A directive qualified with a native operating system does not apply to those
+targets.
+
 ## The `Ptr` Type [FFI-PTR]
 
-`Ptr` is an opaque C pointer (`i8*`). It may appear in signatures and may be
+`Ptr` is an opaque C pointer (`i8*`). It also crosses the app-library C boundary as `void *` ([IOS-HOST-ABI](iOSCodegen.md#c-function-boundary-ios-host-abi)). It may appear in signatures and may be
 stored or passed. It supports no arithmetic, dereference, or field access.
 
 C out-parameters (`sqlite3_open(path, &db)`) use the runtime's **pointer cells** — themselves plain `extern fn` declarations against the bundled runtime archive, not builtins:

@@ -12,5 +12,6 @@ ok 11 - total helpers choose modular or saturating arithmetic
 ok 12 - nonzero literal divisors need no policy
 ok 13 - recovery arithmetic forwards to the outer policy
 ok 14 - direct handler calls preserve Result operation values
-1..14
-# tests=14 passed=14 failed=0 skipped=0
+ok 15 - a recorded fault stops a loop at its next boundary
+1..15
+# tests=15 passed=15 failed=0 skipped=0
