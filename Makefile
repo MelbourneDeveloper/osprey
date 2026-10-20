@@ -1,8 +1,8 @@
 # Build from the repository root. See docs/contributing/repository-map.md.
 # Every public target is defined in this file, so `make` and editor task panels
 # list them from one place; the included fragments hold the configuration and
-# the private `_` steps behind them. Assignments here use `?=`, never `:=`,
-# which those panels list as targets.
+# the private `_` steps behind them. Keep `NAME := value` lines in the
+# fragments: those panels list them as targets.
 .DEFAULT_GOAL := build
 
 include scripts/make/config.mk
