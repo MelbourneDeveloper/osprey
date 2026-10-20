@@ -471,9 +471,10 @@ jobs:
         timeout-minutes: 6
         shell: bash
         run: |
+          set +e
           uname -r; cat /proc/sys/kernel/yama/ptrace_scope; env | grep -i debuginfod || echo "no DEBUGINFOD env"
           work=$(mktemp -d)
-          printf 'fn add(a, b) = a + b\n\ntest("adds", fn() => {\n    let x = add(2, 3)\n    expect(x, 5)\n})\n' > "$work/steps.test.osp"
+          printf 'fn add(a, b) = wrapAdd(a, b)\n\ntest("adds", fn() => {\n    let x = add(2, 3)\n    expect(x, 5)\n})\n' > "$work/steps.test.osp"
           TIMEFORMAT='took %Rs'
           for i in 1 2; do echo "osprey debug build $i"; time target/release/osprey "$work/steps.test.osp" --debug --debug-opt=none --compile -o "$work/steps-$i"; done
           for i in 1 2 3; do echo "preflight $i"; time python3 .github/actions/setup-osprey-compiler/lldb-dap-preflight.py /usr/bin/lldb-dap; done
