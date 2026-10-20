@@ -467,6 +467,26 @@ jobs:
       - name: Restore artifact permissions
         run: chmod +x target/release/osprey
 
+      - name: TEMP debug-launch timing diagnostics
+        timeout-minutes: 6
+        shell: bash
+        run: |
+          uname -r; cat /proc/sys/kernel/yama/ptrace_scope; env | grep -i debuginfod || echo "no DEBUGINFOD env"
+          work=$(mktemp -d)
+          printf 'fn add(a, b) = a + b\n\ntest("adds", fn() => {\n    let x = add(2, 3)\n    expect(x, 5)\n})\n' > "$work/steps.test.osp"
+          TIMEFORMAT='took %Rs'
+          for i in 1 2; do echo "osprey debug build $i"; time target/release/osprey "$work/steps.test.osp" --debug --debug-opt=none --compile -o "$work/steps-$i"; done
+          for i in 1 2 3; do echo "preflight $i"; time python3 .github/actions/setup-osprey-compiler/lldb-dap-preflight.py /usr/bin/lldb-dap; done
+          cat > "$work/osp.py" <<'EOF'
+          import importlib.util, sys, time
+          spec = importlib.util.spec_from_file_location("pf", ".github/actions/setup-osprey-compiler/lldb-dap-preflight.py")
+          pf = importlib.util.module_from_spec(spec); spec.loader.exec_module(pf)
+          start = time.time(); pf.run_handshake("/usr/bin/lldb-dap", sys.argv[1], sys.argv[2])
+          print(f"osprey binary full session {time.time() - start:.1f}s")
+          EOF
+          for i in 1 2 3; do timeout 120 python3 "$work/osp.py" "$work/steps-1" "$work" || echo "osprey session $i failed/timed out ($?)"; done
+          DEBUGINFOD_URLS= timeout 120 python3 "$work/osp.py" "$work/steps-1" "$work" || echo "no-debuginfod session failed"
+
       - name: Extension suite with V8 coverage
         run: xvfb-run -a make _test_vscode_extension
 
