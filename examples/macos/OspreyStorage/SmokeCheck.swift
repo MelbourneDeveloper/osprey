@@ -59,6 +59,8 @@ enum SmokeCheck {
         let joined = dispatch(granted, ["type": "measured", "path": documents])
         let after = entries(storageScan(root))
         let projects = top.first { $0.name == "Projects" }
+        let projectBytes = entries(storageScan(root + "/Projects")).reduce(Int64(0)) { $0 + $1.bytes }
+        let documentBytes = entries(storageScan(documents)).reduce(Int64(0)) { $0 + $1.bytes }
         let sighted = dispatch(ready, ["type": "hidden", "value": "false"])
         let inside = dispatch(ready, ["type": "open", "value": root + "/Projects"])
         return [
@@ -69,6 +71,8 @@ enum SmokeCheck {
             ("protected folder offered", ready.text.contains("Protected by macOS") && ready.text.contains("\"type\":\"grant\"")),
             ("chosen folder joins the walk", after.first { $0.name == "Documents" }.map { !$0.guarded && $0.bytes >= 40_000 } ?? false),
             ("chosen folder opens", joined.text.contains("\"text\":\"report.pdf\"")),
+            ("hard links keep folder and contents totals equal", projects.map { $0.bytes == projectBytes } ?? false),
+            ("grafted hard links keep folder and contents totals equal", after.first { $0.name == "Documents" }.map { $0.bytes == documentBytes } ?? false),
             ("hidden files inside a folder counted", (projects?.bytes ?? 0) >= 310_000),
             ("hidden files inside a folder can be left out", (projects?.visible ?? 0) >= 10_000 && (projects?.visible ?? 0) < 300_000),
             ("hidden folder flagged", top.first { $0.name == ".cache" }?.hidden == true),
@@ -123,6 +127,9 @@ private enum Fixture {
             let file = root.appendingPathComponent(path)
             try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data((0..<size).map { UInt8($0 % 251) }).write(to: file)
+        }
+        for (original, link) in [("Projects/app.swift", "Projects/app-link.swift"), ("Documents/report.pdf", "Documents/report-link.pdf")] {
+            try FileManager.default.linkItem(at: root.appendingPathComponent(original), to: root.appendingPathComponent(link))
         }
         try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: root.appendingPathComponent("Locked").path)
         return canonical(root.path)

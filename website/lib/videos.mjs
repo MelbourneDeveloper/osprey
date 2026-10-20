@@ -59,7 +59,7 @@ export const video = (id) => {
   const chapters = cues(entry.chapters);
   const starts = chapters.map((chapter) => Math.floor(chapter.start));
   if (new Set(starts).size !== starts.length) throw new Error(`Video "${id}" has two chapters starting at the same second`);
-  return { id, ...entry, chapters, transcript: cues(entry.captions), duration: Math.floor(chapters.at(-1).end) };
+  return { id, ...entry, chapterTrack: entry.chapters, chapters, transcript: cues(entry.captions), duration: Math.floor(chapters.at(-1).end) };
 };
 
 // A link that starts the video at `start`: `?t=` is what Google's key moments
@@ -75,7 +75,7 @@ export const videoPlayer = (id) => {
   <video id="video-${v.id}" controls preload="metadata" playsinline width="${v.width}" height="${v.height}" poster="${v.poster}" aria-label="${escapeHtml(v.name)}">
     <source src="${v.content}" type="video/mp4">
     <track kind="captions" srclang="en" label="English" src="${v.captions}" default>
-    <track kind="chapters" srclang="en" label="Chapters" src="${v.chapters}">
+    <track kind="chapters" srclang="en" label="Chapters" src="${v.chapterTrack}">
   </video>
   <figcaption>${escapeHtml(v.name)} (${clock(v.duration)}). Captions are on; choose a chapter to jump to it.</figcaption>
 </figure>

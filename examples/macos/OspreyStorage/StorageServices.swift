@@ -141,6 +141,7 @@ final class DiskTree: @unchecked Sendable {
     private var folders: [Folder] = []
     private var index: [String: Int] = [:]
     private var listings: [String: Listing] = [:]
+    private var hardLinkSizes: [String: Int64] = [:]
 
     /// Walks `root`, reporting files and bytes seen so far about four times a
     /// second. Returns nil when the root cannot be read or the task is cancelled.
@@ -165,12 +166,7 @@ final class DiskTree: @unchecked Sendable {
                 stack.append(id)
                 continue
             }
-            if (values.linkCount ?? 1) > 1, let id = values.fileResourceIdentifier as? NSObject,
-                !linked.insert(id).inserted
-            {
-                continue
-            }
-            let size = Int64(values.totalFileAllocatedSize ?? 0)
+            guard let size = tree.fileSize(item, values, &linked) else { continue }
             tree.folders[parent].bytes += size
             if values.isHidden != true { tree.folders[parent].visible += size }
             files += 1
@@ -184,6 +180,16 @@ final class DiskTree: @unchecked Sendable {
         }
         tree.total()
         return tree
+    }
+
+    /// A hard link keeps the bytes assigned during the walk, including zero
+    /// when another path already accounts for that file.
+    private func fileSize(_ item: URL, _ values: URLResourceValues, _ linked: inout Set<NSObject>) -> Int64? {
+        let size = Int64(values.totalFileAllocatedSize ?? 0)
+        guard (values.linkCount ?? 1) > 1, let id = values.fileResourceIdentifier as? NSObject else { return size }
+        let counted = linked.insert(id).inserted
+        hardLinkSizes[item.path] = counted ? size : 0
+        return counted ? size : nil
     }
 
     private func add(_ path: String, parent: Int, hidden: Bool) -> Int {
@@ -232,6 +238,8 @@ final class DiskTree: @unchecked Sendable {
             folders.append(moved)
         }
         for (folder, id) in walked.index where id > 0 { index[folder] = id + offset }
+        hardLinkSizes = hardLinkSizes.filter { !$0.key.hasPrefix(path + "/") }
+            .merging(walked.hardLinkSizes) { _, measured in measured }
         listings = [:]
     }
 
@@ -257,7 +265,7 @@ final class DiskTree: @unchecked Sendable {
             let folder = folders[child]
             return Entry(path: path, bytes: folder.bytes, visible: folder.visible, hidden: hidden, folder: true, guarded: folder.guarded)
         }
-        let size = Int64(values.totalFileAllocatedSize ?? 0)
+        let size = hardLinkSizes[item.path] ?? Int64(values.totalFileAllocatedSize ?? 0)
         return Entry(path: path, bytes: size, visible: size, hidden: hidden, folder: values.isDirectory == true, guarded: false)
     }
 }

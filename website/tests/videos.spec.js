@@ -15,6 +15,14 @@ const jsonLd = (html) =>
   [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(([, json]) => JSON.parse(json));
 const meta = (html, key) => html.match(new RegExp(`<meta (?:property|name)="${key}" content="([^"]*)">`))?.[1];
 
+test("the native chapter track loads its WebVTT file", async () => {
+  const { videoPlayer, cues } = await import("../lib/videos.mjs");
+  const player = videoPlayer("swift-interop");
+  const source = player.match(/<track kind="chapters"[^>]*src="([^"]+)"/)[1];
+  expect(source).toBe("/assets/videos/osprey-swift-interop.chapters.vtt");
+  expect(cues(source).length).toBeGreaterThan(3);
+});
+
 test("the watch page describes its video with VideoObject and key moments", () => {
   const html = read("docs/tutorials/swift-interop/index.html");
   const video = jsonLd(html).find((data) => data["@type"] === "VideoObject");
