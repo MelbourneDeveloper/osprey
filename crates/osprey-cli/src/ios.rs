@@ -99,6 +99,15 @@ impl Target {
     fn runtime(self) -> &'static str {
         self.slice().runtime
     }
+
+    /// The diagnostic for a slice whose runtime archive has not been built.
+    fn missing_runtime(self) -> String {
+        let slice = self.slice();
+        format!(
+            "{} not found — run `make {}` to build the {} runtime",
+            slice.runtime, slice.goal, slice.platform
+        )
+    }
 }
 
 /// Refuse native-only settings before invoking the cross compiler.
@@ -137,13 +146,8 @@ pub(crate) fn build(
     validate_output(out, target).map_err(|e| fail(&e))?;
     let (ir, header) = source(program, path, target, entry_only).map_err(|e| fail(&e))?;
     let sdk = sdk_path(target)?;
-    let runtime = find_runtime_lib(target.runtime()).ok_or_else(|| {
-        let slice = target.slice();
-        fail(&format!(
-            "{} not found — run `make {}` to build the {} runtime",
-            slice.runtime, slice.goal, slice.platform
-        ))
-    })?;
+    let runtime =
+        find_runtime_lib(target.runtime()).ok_or_else(|| fail(&target.missing_runtime()))?;
     let scratch = Scratch::new(path, target.sdk())?;
     write(&scratch.path.join("app.ll"), &ir)?;
     let obj = scratch.path.join("app.o");

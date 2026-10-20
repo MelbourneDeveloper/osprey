@@ -383,6 +383,32 @@ fn wasm_target_rejects_debug_then_dispatches_to_the_backend() {
     let _ = run_program(&c, &input);
 }
 
+/// [IOS-TARGET-MACOS] A library target never runs on its own: `--run` names
+/// its host, and a run reached with the options already validated still fails.
+#[test]
+fn library_targets_refuse_to_run_without_their_host() {
+    let program = osprey_syntax::parse_program("print(1)\n").program;
+    let input = CompilationInput::script("p.osp", String::new(), program);
+    for target in [
+        "python",
+        "android-arm64",
+        "android-x64",
+        "ios",
+        "ios-sim",
+        "macos",
+    ] {
+        for mode in ["--run", "--compile"] {
+            let mut c = cli("p.osp", mode, Policy::allow_all());
+            c.target = target.to_string();
+            assert_eq!(
+                run_program(&c, &input),
+                ExitCode::FAILURE,
+                "{target} {mode}"
+            );
+        }
+    }
+}
+
 /// [DEBUGGER-BUILD-OPTIONS] A failed IR write is a build failure, not a lost artifact.
 #[test]
 fn debug_build_rejects_an_unwritable_artifact_path() -> Result<(), String> {

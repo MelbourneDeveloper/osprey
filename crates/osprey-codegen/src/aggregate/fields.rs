@@ -233,3 +233,54 @@ fn actual_payload_type(value: &Value) -> LType {
         None => value.ty,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use osprey_types::{CtorLayout, ProgramTypes};
+
+    fn record(owner: &str, fields: &[&str]) -> CtorLayout {
+        CtorLayout {
+            owner: owner.to_string(),
+            owner_is_record: true,
+            type_params: Vec::new(),
+            fields: fields
+                .iter()
+                .map(|name| ((*name).to_string(), Type::con("int", Vec::new())))
+                .collect(),
+        }
+    }
+
+    fn quarantine(field: &str, receiver: &str) -> CodegenError {
+        CodegenError::unsupported(format!(
+            "quarantined field access `{field}` on {receiver}: 2 records declare it and the receiver's record was not tracked"
+        ))
+    }
+
+    /// [TYPE-FIELD-ACCESS-NON-RECORD]: with two records declaring `x`, a guess
+    /// by field name could read the other record's slot, so it must fail.
+    #[test]
+    fn a_shared_field_on_an_untracked_receiver_fails_loudly() {
+        let ctors = [
+            record("Point", &["x", "y"]),
+            record("Pixel", &["x", "shade"]),
+        ];
+        let mut prog = ProgramTypes::default();
+        prog.ctors
+            .extend(ctors.into_iter().map(|ctor| (ctor.owner.clone(), ctor)));
+        let cg = Codegen::with_types(prog);
+        let untracked = Value::new("%receiver", LType::Ptr);
+        assert_eq!(
+            guessed_field_owner(&cg, &untracked, "x"),
+            Err(quarantine("x", "an untracked receiver"))
+        );
+        let typed = Value {
+            inferred_type: Some(Type::con("int", Vec::new())),
+            ..untracked
+        };
+        assert_eq!(
+            guessed_field_owner(&cg, &typed, "x"),
+            Err(quarantine("x", "int"))
+        );
+    }
+}

@@ -157,6 +157,18 @@ fn each_slice_names_itself_in_its_header_and_diagnostics() {
 }
 
 #[test]
+fn a_missing_runtime_names_the_make_goal_that_builds_it() {
+    assert_eq!(
+        TARGETS.map(Target::missing_runtime),
+        [
+            "libosprey_runtime_ios.a not found — run `make ios` to build the iOS runtime",
+            "libosprey_runtime_ios_sim.a not found — run `make ios` to build the iOS runtime",
+            "libosprey_runtime_macos.a not found — run `make macos` to build the macOS runtime",
+        ]
+    );
+}
+
+#[test]
 fn mac_and_iphone_slices_share_one_boundary() {
     // [IOS-TARGET-MACOS] One Swift bridge serves every Apple host only if the
     // same program yields the same C declarations and the same adapted IR on
