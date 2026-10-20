@@ -475,6 +475,8 @@ jobs:
         run: |
           set +e
           uname -r
+          echo "step env: ${DEBUGINFOD_URLS-unset}"; bash -lc 'echo "login env: ${DEBUGINFOD_URLS-unset}"'
+          sudo grep -rIl DEBUGINFOD /etc 2>/dev/null; ls ~/.cache/llvm-debuginfod 2>&1 | head -3
           mkdir -p target/path-bin && cp target/release/osprey target/path-bin/osprey
           cd vscode-extension
           export LLDBDAP_LOG="$PWD/lldb-dap.log"
