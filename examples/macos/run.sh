@@ -18,6 +18,10 @@ export OSPREY_IOS_SMOKE_FILE=storage-smoke-result.txt
 export OSPREY_IOS_SMOKE_ARG=--smoke
 export OSPREY_IOS_SMOKE_EXPECT=OSPREY_MACOS_STORAGE_SMOKE_OK
 app="$example_dir/build/macos/products/OspreyStorage.app"
+icon="$example_dir/build/Assets.xcassets/AppIcon.appiconset/ios.png"
+if [[ ! -f "$icon" || "$example_dir/make-icon.swift" -nt "$icon" ]]; then
+    swift "$example_dir/make-icon.swift" "$example_dir/build/Assets.xcassets"
+fi
 
 build_mac() {
     if [[ ${OSPREY_MACOS_SKIP_BUILD:-0} != 1 ]]; then bash "$apple_dir/build.sh" macos >&2; fi

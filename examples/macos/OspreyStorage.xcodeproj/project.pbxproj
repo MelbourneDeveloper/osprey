@@ -9,6 +9,7 @@
         A00000000000000000000003 = {isa = PBXBuildFile; fileRef = A00000000000000000000013; };
         A00000000000000000000004 = {isa = PBXBuildFile; fileRef = A00000000000000000000017; };
         A00000000000000000000005 = {isa = PBXBuildFile; fileRef = A00000000000000000000018; };
+        A00000000000000000000006 = {isa = PBXBuildFile; fileRef = A00000000000000000000019; };
         A00000000000000000000011 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OspreyStorageApp.swift; sourceTree = "<group>"; };
         A00000000000000000000012 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageStore.swift; sourceTree = "<group>"; };
         A00000000000000000000013 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageServices.swift; sourceTree = "<group>"; };
@@ -17,9 +18,10 @@
         A00000000000000000000016 = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = OspreyStorage.xcconfig; sourceTree = SOURCE_ROOT; };
         A00000000000000000000017 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeCheck.swift; sourceTree = "<group>"; };
         A00000000000000000000018 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeRenderer.swift; path = ../mobile/ios/IssueInbox/NativeRenderer.swift; sourceTree = SOURCE_ROOT; };
+        A00000000000000000000019 = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = build/Assets.xcassets; sourceTree = SOURCE_ROOT; };
         A00000000000000000000020 = {
             isa = PBXGroup;
-            children = (A00000000000000000000021, A00000000000000000000023, A00000000000000000000022, A00000000000000000000016);
+            children = (A00000000000000000000021, A00000000000000000000023, A00000000000000000000019, A00000000000000000000022, A00000000000000000000016);
             sourceTree = "<group>";
         };
         A00000000000000000000021 = {
@@ -53,7 +55,7 @@
         };
         A00000000000000000000031 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001, A00000000000000000000002, A00000000000000000000003, A00000000000000000000004, A00000000000000000000005); runOnlyForDeploymentPostprocessing = 0; };
         A00000000000000000000032 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-        A00000000000000000000033 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        A00000000000000000000033 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000006); runOnlyForDeploymentPostprocessing = 0; };
         A00000000000000000000040 = {
             isa = PBXProject;
             attributes = {BuildIndependentTargetsInParallel = YES; LastSwiftUpdateCheck = 2610; LastUpgradeCheck = 2610; };

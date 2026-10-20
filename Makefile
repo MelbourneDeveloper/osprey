@@ -326,7 +326,7 @@ ios-test: ios
 	$(MAKE) _test_ios
 
 ## macos: Build the Mac runtime, the compiler and every macOS example: the
-##        storage report and the three graphics scenes, each a Swift host
+##        storage app and the three graphics scenes, each a Swift host
 ##        linked to the Mac slice. Requires an Apple silicon Mac with Xcode.
 ##        [IOS-TARGET-MACOS]
 macos: _runtime_macos
@@ -335,6 +335,13 @@ macos: _runtime_macos
 	for scene in kali opal character; do \
 		OSPREY_BIN="$(CURDIR)/$(BIN)" bash examples/graphics/macos/run.sh --build $$scene || exit 1; \
 	done
+
+## run-mac-hd: Rebuild the compiler, the Mac runtime and the Osprey Storage
+##             app, then open it: where your disk space goes, folder by folder.
+.PHONY: run-mac-hd
+run-mac-hd: _runtime_macos
+	cargo build --release -p osprey-cli
+	OSPREY_BIN="$(CURDIR)/$(BIN)" bash examples/macos/run.sh
 
 ## macos-test: The iPhone C ABI fixture, the whole corpus against the same
 ##             goldens and skip manifest, and the storage example, on this Mac.
