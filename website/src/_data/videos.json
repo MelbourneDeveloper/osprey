@@ -1,0 +1,26 @@
+{
+  "_comment": "Every video tutorial, keyed by the id a page names in its `video` front matter. lib/videos.mjs derives the player, key moments, transcript, VideoObject markup and video sitemap entry from this and the two WebVTT tracks, so nothing is written twice. The duration is the end of the last chapter, in whole seconds.",
+  "swift-interop": {
+    "name": "Osprey and Swift interop: Mac and iPhone app tutorial",
+    "description": "A three-minute video tutorial. Osprey exports compile to a C header that Swift calls, Swift @_cdecl functions become Osprey imports, and one Xcode target ships the same app to the Mac and the iPhone.",
+    "content": "/assets/videos/osprey-swift-interop.mp4",
+    "poster": "/assets/videos/osprey-swift-interop-poster.jpg",
+    "posterAlt": "Osprey + Swift title card with the Osprey bird, the Osprey Storage app icon and the words One app, Mac and iPhone",
+    "captions": "/assets/videos/osprey-swift-interop.en.vtt",
+    "chapters": "/assets/videos/osprey-swift-interop.chapters.vtt",
+    "width": 1920,
+    "height": 1080,
+    "uploadDate": "2026-10-20T20:32:57+11:00",
+    "tags": [
+      "Osprey",
+      "Swift",
+      "SwiftUI",
+      "macOS",
+      "iOS",
+      "C interop",
+      "@_cdecl",
+      "Xcode",
+      "algebraic effects"
+    ]
+  }
+}

@@ -12,6 +12,7 @@ import { renderToString as renderTypeDiagram } from "typediagram-core";
 // Shared by the syntaxhighlight plugin, the transform below, and the browser
 // studio page — one grammar, one colour scheme for the language.
 import { ospreyGrammar } from "./src/js/osprey-grammar.mjs";
+import videos from "./lib/videos.mjs";
 
 const SITE_URL = "https://www.ospreylang.dev";
 const AUTHOR_URL = "https://www.christianfindlay.com/";
@@ -142,17 +143,26 @@ function enrichBlogPost(post, hero, modified) {
   if (post.datePublished) post.dateModified = modified || post.datePublished;
 }
 
-function enrichBlogBreadcrumb(graph) {
-  const breadcrumb = graph.find((item) => item["@type"] === "BreadcrumbList");
-  const items = breadcrumb?.itemListElement;
-  if (!items) return;
-  if (items.some((item) => item.item === `${SITE_URL}/blog/`)) return;
-  items.at(-1).position = 3;
-  items.splice(1, 0, {
+// The sections a page sits in, outermost first: the theme's breadcrumb knows
+// only Home and the page, so every page below one of these gains its trail.
+const SECTIONS = [
+  ["/blog/", "Blog"],
+  ["/docs/", "Documentation"],
+  ["/docs/tutorials/", "Tutorials"],
+  ["/spec/", "Specification"],
+];
+
+function enrichBreadcrumb(graph, url) {
+  const items = graph.find((item) => item["@type"] === "BreadcrumbList")?.itemListElement;
+  if (!items || items.length !== 2) return;
+  const trail = SECTIONS.filter(([path]) => url !== path && url.startsWith(path)).map(([path, name]) => ({
     "@type": "ListItem",
-    position: 2,
-    name: "Blog",
-    item: `${SITE_URL}/blog/`,
+    name,
+    item: `${SITE_URL}${path}`,
+  }));
+  items.splice(1, 0, ...trail);
+  items.forEach((item, index) => {
+    item.position = index + 1;
   });
 }
 
@@ -165,20 +175,27 @@ function enrichBlogOrganization(graph) {
   if (website) website.publisher = { "@id": organization["@id"] };
 }
 
-function updateBlogStructuredData(html, hero, modified) {
+// Rewrites the theme's JSON-LD graph in place with `edit(graph)`; an edit that
+// returns false leaves the page's markup untouched.
+function rewriteStructuredData(html, edit) {
   const pattern = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/;
   return html.replace(pattern, (element, rawJson) => {
     const data = JSON.parse(rawJson, (_key, value) =>
       typeof value === "string" ? decodeEntities(value) : value
     );
-    const graph = data["@graph"];
-    const post = graph?.find((item) => item["@type"] === "BlogPosting");
-    if (!post) return element;
-    enrichBlogPost(post, hero, modified);
-    enrichBlogBreadcrumb(graph);
-    enrichBlogOrganization(graph);
+    if (!data["@graph"] || edit(data["@graph"]) === false) return element;
     const json = JSON.stringify(data, null, 2).replace(/</g, "\\u003c");
     return `<script type="application/ld+json">\n${json}\n  </script>`;
+  });
+}
+
+function updateBlogStructuredData(html, hero, modified) {
+  return rewriteStructuredData(html, (graph) => {
+    const post = graph.find((item) => item["@type"] === "BlogPosting");
+    if (!post) return false;
+    enrichBlogPost(post, hero, modified);
+    enrichBlogOrganization(graph);
+    return true;
   });
 }
 
@@ -304,12 +321,19 @@ export default function (eleventyConfig) {
   });
 
   // The theme's virtual robots template blocks /assets/, which prevents search
-  // crawlers from fetching page CSS and blog images. Keep the generated file,
-  // but remove that one directive so crawlers can render pages like users do.
+  // crawlers from fetching page CSS, blog images and the tutorial videos. Keep
+  // the generated file, but remove that one directive so crawlers can render
+  // pages like users do, and list the video sitemap beside the main one.
   eleventyConfig.addTransform("robots-allow-rendering-assets", function (content, outputPath) {
     if (!outputPath || !outputPath.endsWith("robots.txt")) return content;
-    return content.replace("Disallow: /assets/\n", "");
+    const sitemap = `Sitemap: ${SITE_URL}/sitemap.xml\n`;
+    return content
+      .replace("Disallow: /assets/\n", "")
+      .replace(sitemap, `${sitemap}Sitemap: ${SITE_URL}/video-sitemap.xml\n`);
   });
+
+  // Video tutorials: player, transcript, VideoObject markup and social tags.
+  videos(eleventyConfig, { url: SITE_URL, author: "Christian Findlay", authorUrl: AUTHOR_URL });
 
   // Blog posts use their own editorial artwork in search and social previews.
   // The virtual theme only knows the site-wide default image, so enrich its
@@ -321,6 +345,12 @@ export default function (eleventyConfig) {
     if (!hero) return content;
     const modified = content.match(/\bdata-date-modified="([^"]+)"/)?.[1];
     return updateBlogStructuredData(updateBlogSocialCards(content, hero, modified), hero, modified);
+  });
+
+  // Breadcrumbs that follow the site's sections (SECTIONS), on every page.
+  eleventyConfig.addTransform("breadcrumbs", function (content, outputPath) {
+    if (!outputPath || !outputPath.endsWith(".html")) return content;
+    return rewriteStructuredData(content, (graph) => enrichBreadcrumb(graph, this.page.url));
   });
 
   // Google Analytics (gtag.js) — injected into every generated HTML page's

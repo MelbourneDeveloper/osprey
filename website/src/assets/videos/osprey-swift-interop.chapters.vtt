@@ -1,0 +1,37 @@
+WEBVTT
+
+00:00.000 --> 00:11.000
+Osprey Storage on the Mac and iPhone
+
+00:11.000 --> 00:24.000
+The app measures and ranks a folder
+
+00:24.000 --> 00:38.000
+What Osprey owns and what Swift owns
+
+00:38.000 --> 00:50.000
+Osprey exports start and dispatch
+
+00:50.000 --> 01:04.000
+The generated C header
+
+01:04.000 --> 01:18.000
+Swift calls Osprey through a bridging header
+
+01:18.000 --> 01:50.000
+Osprey calls Swift: extern and @_cdecl
+
+01:50.000 --> 02:01.000
+An effect handler at the boundary
+
+02:01.000 --> 02:13.000
+Testing the Osprey side without Swift
+
+02:13.000 --> 02:36.000
+Screens are native nodes drawn by SwiftUI
+
+02:36.000 --> 02:58.000
+One Xcode target for the Mac, iPhone and simulator
+
+02:58.000 --> 03:14.537
+Run it yourself

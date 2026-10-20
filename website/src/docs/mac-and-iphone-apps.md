@@ -2,20 +2,16 @@
 mlTwins: manual
 layout: page
 title: Build a Mac and iPhone app with Osprey and Swift
-description: Follow Osprey Storage, a disk browser for the Mac and iPhone, from Osprey's exports and the generated C header to Swift's @_cdecl imports and one Xcode target for every Apple SDK.
+description: "Build Osprey Storage, a Mac and iPhone disk browser: Osprey exports in a generated C header, Swift @_cdecl imports, and one Xcode target for every Apple SDK."
 permalink: /docs/mac-and-iphone-apps/
 tags: [macos, ios, swift, applications, interop]
 ---
 
 Osprey Storage is a native disk browser for the Mac and the iPhone. It measures a folder, hidden files included, ranks what takes the space, and opens any folder to rank what is inside. Its logic is Osprey and its platform code is Swift. This tutorial follows the boundary between them.
 
-<figure class="tutorial-video">
-  <video controls preload="metadata" playsinline width="1920" height="1080" poster="/assets/videos/osprey-swift-interop-poster.jpg" style="width:100%;height:auto;border-radius:12px">
-    <source src="/assets/videos/osprey-swift-interop.mp4" type="video/mp4">
-    <track kind="captions" srclang="en" label="English" src="/assets/videos/osprey-swift-interop.en.vtt" default>
-  </video>
-  <figcaption>Every app frame is the real app measuring a staged folder; every line of code is quoted from the repository.</figcaption>
-</figure>
+{% videoCard "swift-interop", "/docs/tutorials/swift-interop/" %}
+
+Prefer to watch? The [video tutorial](/docs/tutorials/swift-interop/) shows the real app and every step below in three minutes, with chapters and a transcript.
 
 The source is in [`examples/macos/`](https://github.com/Nimblesite/osprey/tree/main/examples/macos). You need an Apple silicon Mac with Xcode and the [Osprey toolchain](/docs/installation/).
 

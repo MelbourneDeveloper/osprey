@@ -16,9 +16,14 @@ Osprey uses typed algebraic effects to separate application requests from their 
 - **[Build My First App](/docs/my-first-app/)** — create a native CLI that models JSON as a recursive algebraic data type, reads a JSON file, and safely writes the next state.
 - **[Try the Playground](/playground/)** — run small programs in the browser before setting up a local toolchain.
 
+## Tutorials
+
+- **[Video tutorials](/docs/tutorials/)** — narrated videos of real Osprey apps being built, with chapters, the commands to run each app, and a transcript.
+- **[Osprey and Swift interop on the Mac and iPhone](/docs/tutorials/swift-interop/)** — a three-minute video: Osprey exports in a generated C header, Swift `@_cdecl` imports, an effect handler at the boundary, and one Xcode target for every Apple SDK.
+
 ## Build applications
 
-- **[Build a Mac and iPhone app](/docs/mac-and-iphone-apps/)** — follow Osprey Storage across the boundary: Osprey exports in a generated C header, Swift `@_cdecl` imports, and an effect handler at the edge. Includes a video tutorial.
+- **[Build a Mac and iPhone app](/docs/mac-and-iphone-apps/)** — follow Osprey Storage across the boundary: Osprey exports in a generated C header, Swift `@_cdecl` imports, and an effect handler at the edge. Also a [video tutorial](/docs/tutorials/swift-interop/).
 - **[Build an iOS and Android app](/docs/mobile-apps/)** — handle application requests as native commands for SQLite, GitHub and reactive controls.
 - **[Build a web app](/docs/web-apps/)** — follow Talon Bank from storage and audit handlers to shared web, Android and iOS clients.
 - **[Explore the WebAssembly studio](/wasm/)** — compare the Default and ML flavors in a browser-hosted example.
