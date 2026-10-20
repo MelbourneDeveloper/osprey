@@ -41,7 +41,10 @@ The header is derived from inferred types. Every emitted top-level function with
 | `float` | `double` | `Double` |
 | `bool` | `bool` | `Bool` |
 | `string` | `const char *` | `UnsafePointer<CChar>?` |
+| `Ptr` | `void *` | `UnsafeMutableRawPointer?` |
 | `Unit`, return only | `void` | `Void` |
+
+A `Ptr` is an opaque host handle ([FFI-PTR](0019-ForeignFunctionInterface.md#the-ptr-type-ffi-ptr)): Osprey stores it and passes it back unchanged and never reads through it, so a host can hand Osprey a window or a session and receive it in later imports. The host owns the pointee and its lifetime.
 
 Boolean boundary thunks use Apple's ARM64 zero-extension convention. `Unit` thunks translate the internal unit representation to C `void`. Integers retain their 64-bit Osprey width. See Apple's [ARM64 calling convention](https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms) and LLVM's [parameter attributes](https://llvm.org/docs/LangRef.html#parameter-attributes).
 
@@ -67,6 +70,6 @@ The compiler checks the complete program before generating LLVM IR or invoking a
 
 Dynamic `control` operations, including arms that never resume, are rejected for this C ABI target. A suspended Osprey continuation cannot cross or outlive a synchronous host call. Callable value handlers, block-scoped value handlers, and effects eliminated at compile time remain available when their bodies use supported operations. Exported functions must discharge their own effect requirements.
 
-Process launching and the built-in HTTP/WebSocket operations have no iOS implementation and are rejected at compile time. The Swift host supplies platform networking and services through explicit imports. The runtime includes allocation, strings, collections, JSON, file operations, fibers/channels, ordinary effect handling, and the GPU surface on its host oracle; it carries no Metal adapter, so a device selection reports that no GPU adapter is available ([GPU-BACKEND-DEVICE](../runtime/0034-GPUComputation.md#device-backends--gpu-backend-device)). This does not authorize an effect continuation to cross the C boundary. GPU buffers and pure kernels use the existing CPU execution path; Metal execution is not implemented.
+Process launching and the built-in HTTP/WebSocket operations have no iOS implementation and are rejected at compile time. So is an unqualified `// @link:` or `// @linkdir:` directive: the archive carries no library, and the host links every import ([FFI-LINK-DIRECTIVES](0019-ForeignFunctionInterface.md#link-directives-ffi-link-directives)). The Swift host supplies platform networking and services through explicit imports. The runtime includes allocation, strings, collections, JSON, file operations, fibers/channels, ordinary effect handling, and the GPU surface on its host oracle; it carries no Metal adapter, so a device selection reports that no GPU adapter is available ([GPU-BACKEND-DEVICE](../runtime/0034-GPUComputation.md#device-backends--gpu-backend-device)). This does not authorize an effect continuation to cross the C boundary. GPU buffers and pure kernels use the existing CPU execution path; Metal execution is not implemented.
 
 The compiler must never present an unsupported target feature as a successful static-library build and defer its discovery to the Swift linker. Missing user-supplied host symbols remain ordinary application link errors. Expanding target support requires implementation and passing target tests before removing a rejection.

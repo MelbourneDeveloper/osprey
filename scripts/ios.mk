@@ -30,11 +30,16 @@ ios: _runtime_ios _runtime_ios_sim
 ios-test: ios
 	$(MAKE) _test_ios
 
-## macos: Build the Mac runtime, the compiler and the Swift storage example.
-##        Requires an Apple silicon Mac with Xcode. [IOS-TARGET-MACOS]
+## macos: Build the Mac runtime, the compiler and every macOS example: the
+##        storage report and the three graphics scenes, each a Swift host
+##        linked to the Mac slice. Requires an Apple silicon Mac with Xcode.
+##        [IOS-TARGET-MACOS]
 macos: _runtime_macos
 	cargo build --release -p osprey-cli
-	OSPREY_BIN="$(CURDIR)/$(BIN)" bash examples/macos/build.sh
+	OSPREY_BIN="$(CURDIR)/$(BIN)" bash examples/macos/run.sh --build
+	for scene in kali opal character; do \
+		OSPREY_BIN="$(CURDIR)/$(BIN)" bash examples/graphics/macos/run.sh --build $$scene || exit 1; \
+	done
 
 ## macos-test: The iPhone C ABI fixture, the whole corpus against the same
 ##             goldens and skip manifest, and the storage example, on this Mac.

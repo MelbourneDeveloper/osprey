@@ -1,6 +1,6 @@
 // Implements [IOS-TARGET-MACOS]: Osprey owns the storage report. The host
-// answers each question from the Mac's own storage records, so this module
-// never touches the file system.
+// answers each question by asking macOS, so this module never touches the file
+// system and its tests need no particular disk.
 namespace storage
 
 type Folder =
@@ -12,18 +12,23 @@ type Volume =
     available : int
     important : int
 
+type Listing =
+    entries : List<Folder>
+    blocked : int
+
 type Survey =
     root : string
     volume : Volume
-    indexed : int
+    measured : int
+    unreadable : int
     folders : List<Folder>
     inside : List<Folder>
 
 module Disk
-    (** What the report asks the platform. The Mac handler answers from Foundation's volume keys and the Spotlight index; tests answer from fixed data. *)
+    (** What the report asks the platform. The Mac handler answers from Foundation's volume keys and by measuring the tree, hidden files included; tests answer from fixed data. *)
     export effect Facts
         volume : string => Volume
-        largest : string => List<Folder>
+        largest : string => Listing
 
     top count folders = match folders
         [] => []
@@ -37,13 +42,13 @@ module Disk
 
     insideLargest limit folders = match folders
         [] => []
-        [largest, ..._rest] => top limit (perform Facts.largest largest.path)
+        [largest, ..._rest] => top limit (perform Facts.largest largest.path).entries
 
-    (** Ranks the entries under `root`, then asks for the entries inside the largest one: one index query per level. *)
+    (** Ranks the entries under `root`, then asks for the entries inside the largest one. *)
     export survey root limit =
-        ranked = perform Facts.largest root
-        folders = top limit ranked
-        Survey(root = root, volume = perform Facts.volume root, indexed = sumBytes ranked, folders = folders, inside = insideLargest limit folders)
+        listing = perform Facts.largest root
+        folders = top limit listing.entries
+        Survey(root = root, volume = perform Facts.volume root, measured = sumBytes listing.entries, unreadable = listing.blocked, folders = folders, inside = insideLargest limit folders)
 
     scaled tenths unit larger = match larger
         [] => shown tenths unit
@@ -99,16 +104,19 @@ module Disk
 
     insideSection survey = match survey.folders
         [] => []
-        [largest, ..._rest] => ["", section "Inside ${relative survey.root largest.path}" largest.path largest.bytes survey.inside "Spotlight records it as one item: a file, an app or another package."]
+        [largest, ..._rest] => ["", section "Inside ${relative survey.root largest.path}" largest.path largest.bytes survey.inside "Nothing inside to rank: it is a file, or an empty or unreadable folder."]
 
-    (** The report text. Each share is of its section's indexed total; the bar is twenty cells wide. *)
+    unreadableLines count = match count > 0
+        false => []
+        true => ["Folders that could not be read: ${count}. macOS protects them; grant the host Full Disk Access to count them."]
+
+    (** The report text. Each share is of its section's measured total; the bar is twenty cells wide. *)
     export render survey =
         used = satSub survey.volume.total survey.volume.available
         header = [
             "Storage report for ${survey.root}",
             volumeLine survey.volume,
-            "Spotlight attributes ${formatBytes survey.indexed} here (${percent (survey.indexed, used)}% of used space).",
-            "",
-            section "Largest items" survey.root survey.indexed survey.folders "No Spotlight-indexed items here. Check indexing with `mdutil -s /`.",
+            "Measured ${formatBytes survey.measured} here, hidden files included (${percent (survey.measured, used)}% of used space).",
         ]
-        join (listConcat header (insideSection survey)) "\n"
+        ranking = ["", section "Largest items" survey.root survey.measured survey.folders "Nothing here could be measured: the folder is empty or unreadable."]
+        join (listConcat (listConcat (listConcat header (unreadableLines survey.unreadable)) ranking) (insideSection survey)) "\n"

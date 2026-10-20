@@ -1,9 +1,10 @@
 // The Osprey-facing contract every graphics bridge implements, written down
 // ONCE. `base/base.osp` declares six `extern fn`s and is byte-identical on
 // every platform; this header is the C side of that agreement, shared by the
-// Metal bridge (ospgfx.m) and the Direct3D 12 bridge (ospgfx_d3d12.{h,c}) so
-// that neither can drift from the other on the slot count, the two fixed-point
-// scales, the uniform block or the argument validation.
+// Swift Metal host (macos/, through its bridging header) and the Direct3D 12
+// bridge (ospgfx_d3d12.{h,c}) so that neither can drift from the other on the
+// slot count, the two fixed-point scales, the uniform block or the argument
+// validation.
 //
 // The shader libraries (base.metal, base.hlsl) cannot include this header —
 // both bridges compile their shader from source at run time with no include

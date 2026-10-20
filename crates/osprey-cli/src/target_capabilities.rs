@@ -44,6 +44,20 @@ pub(crate) fn validate(program: &Program, target: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// An app-library target cannot honour a link directive: the archive holds no
+/// library and the host application links every import. Refuse it before any
+/// toolchain work rather than defer its discovery to the host's linker.
+pub(crate) fn validate_links(source: &str, target: &str) -> Result<(), String> {
+    if !crate::toolchain::host_archive_target(target) {
+        return Ok(());
+    }
+    crate::linking::unscoped_link_directive(source).map_or(Ok(()), |feature| {
+        Err(format!(
+            "target `{target}` does not support {feature}; use a supported target or link the library in the host application"
+        ))
+    })
+}
+
 struct Capabilities<'a> {
     target: &'a str,
     position: Option<Position>,

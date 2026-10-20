@@ -1,5 +1,5 @@
 // Implements [IOS-TARGET-MACOS]: the report logic runs natively under a fixed
-// handler, so it is verified without Swift, Spotlight or a particular disk.
+// handler, so it is verified without Swift or a particular disk.
 namespace storagetests
 
 import storage::Disk
@@ -9,14 +9,16 @@ library = "/Users/ada/Library"
 
 folder path bytes = storage::Folder(path = path, bytes = bytes)
 
-homeEntries () = [folder library 450000000000, folder "/Users/ada/Movies" 120000000000, folder "/Users/ada/Downloads" 30000000000, folder "/Users/ada/notes.txt" 4096]
+listing entries blocked = storage::Listing(entries = entries, blocked = blocked)
 
-libraryEntries () = [folder "/Users/ada/Library/Developer" 300000000000, folder "/Users/ada/Library/Containers" 99500000000]
+homeEntries () = [folder library 450000000000, folder "/Users/ada/.android" 120000000000, folder "/Users/ada/Downloads" 30000000000, folder "/Users/ada/notes.txt" 4096]
+
+libraryEntries () = [folder "/Users/ada/Library/Developer" 300000000000, folder "/Users/ada/Library/Caches" 99500000000]
 
 entriesFor path = match path
-    "/Users/ada" => homeEntries ()
-    "/Users/ada/Library" => libraryEntries ()
-    _ => []
+    "/Users/ada" => listing (homeEntries ()) 2
+    "/Users/ada/Library" => listing (libraryEntries ()) 0
+    _ => listing [] 0
 
 ssd = storage::Volume(total = 1000000000000, available = 250000000000, important = 300000000000)
 
@@ -42,10 +44,11 @@ surveyCase () =
             queries := queries + path + ";"
             entriesFor path
     found = recorded (\() => Disk::survey home 2)
-    check "one index query per level" "/Users/ada;/Users/ada/Library;" queries
+    check "one listing per level" "/Users/ada;/Users/ada/Library;" queries
     check "limited ranking" 2 (length found.folders)
     check "drills into the largest" 2 (length found.inside)
-    check "attributes every indexed entry" 600000004096 found.indexed
+    check "measures every entry" 600000004096 found.measured
+    check "keeps the root's unreadable count" 2 found.unreadable
 
 reportCase () =
     fixture = handler Disk::Facts
@@ -54,37 +57,39 @@ reportCase () =
     expected = join [
         "Storage report for /Users/ada",
         "Volume: 1.0 TB total, 750.0 GB used, 250.0 GB free, 300.0 GB available for important data.",
-        "Spotlight attributes 600.0 GB here (80% of used space).",
+        "Measured 600.0 GB here, hidden files included (80% of used space).",
+        "Folders that could not be read: 2. macOS protects them; grant the host Full Disk Access to count them.",
         "",
         "Largest items",
         " 450.0 GB  ███████████████░░░░░  75%  Library",
-        " 120.0 GB  ████░░░░░░░░░░░░░░░░  20%  Movies",
+        " 120.0 GB  ████░░░░░░░░░░░░░░░░  20%  .android",
         "  30.0 GB  █░░░░░░░░░░░░░░░░░░░   5%  Downloads",
         "",
         "Inside Library",
         " 300.0 GB  █████████████░░░░░░░  67%  Developer",
-        "  99.5 GB  ████░░░░░░░░░░░░░░░░  22%  Containers",
+        "  99.5 GB  ████░░░░░░░░░░░░░░░░  22%  Caches",
     ] "\n"
     check "report" expected (fixture (\() => Disk::render (Disk::survey home 3)))
 
 emptyCase () =
-    unindexed = handler Disk::Facts
+    unreadable = handler Disk::Facts
         volume _ => storage::Volume(total = 0 - 1, available = 0 - 1, important = 0 - 1)
-        largest _ => []
-    report = unindexed (\() => Disk::render (Disk::survey "/Volumes/Archive" 5))
+        largest _ => listing [] 0
+    report = unreadable (\() => Disk::render (Disk::survey "/Volumes/Archive" 5))
     checkTrue "missing capacity" (contains report "Volume capacity is unavailable")
-    checkTrue "unindexed root" (contains report "No Spotlight-indexed items here")
+    checkTrue "nothing measured" (contains report "Nothing here could be measured")
+    checkFalse "no unreadable line" (contains report "could not be read")
     checkFalse "no drill-down" (contains report "Inside")
-    bundled = handler Disk::Facts
+    single = handler Disk::Facts
         volume _ => ssd
         largest path => match path
-            "/Applications" => [folder "/Applications/Xcode.app" 4143181824]
-            _ => []
-    apps = bundled (\() => Disk::render (Disk::survey "/Applications" 5))
-    checkTrue "a package is one item" (contains apps "Inside Xcode.app\n  Spotlight records it as one item")
+            "/Users/ada/Movies" => listing [folder "/Users/ada/Movies/trip.mov" 4143181824] 0
+            _ => listing [] 0
+    movies = single (\() => Disk::render (Disk::survey "/Users/ada/Movies" 5))
+    checkTrue "a file has nothing inside" (contains movies "Inside trip.mov\n  Nothing inside to rank")
 
 test "sizes use decimal units with one rounded decimal" formatCase
 test "shares never divide by an unknown volume" shareCase
 test "a survey drills into the largest entry only" surveyCase
-test "the report ranks each entry against its folder" reportCase
+test "hidden entries rank with the rest, and unreadable folders are reported" reportCase
 test "missing data is reported, not invented" emptyCase

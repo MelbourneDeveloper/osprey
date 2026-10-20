@@ -14,11 +14,13 @@ The project links separate device/simulator archives through SDK-specific build 
 
 ## Mac host [IOS-MACOS-HOST]
 
-`--target=macos` compiles the same boundary for a Swift macOS host ([IOS-TARGET-MACOS](../compiler/iOSCodegen.md#the-mac-slice-ios-target-macos)), so Osprey on a Mac calls Swift libraries the way an iPhone app does: Swift wraps an Apple API in a `@_cdecl` function over the scalar types, and Osprey declares it with `extern`.
+`--target=macos` compiles the same boundary for a Swift macOS host ([IOS-TARGET-MACOS](../compiler/iOSCodegen.md#the-mac-slice-ios-target-macos)), so Osprey on a Mac calls Swift libraries the way an iPhone app does: Swift wraps an Apple API in a `@_cdecl` function over the boundary types, and Osprey declares it with `extern`. Every macOS example builds through [`scripts/macos-host.sh`](../../../scripts/macos-host.sh), which compiles the project to `libOspreyApp.a` and `libOspreyApp.h` and links the example's Swift sources through a bridging header.
 
-[`examples/macos/`](../../../examples/macos) reports which folders use the most disk space. Osprey ranks the entries under a folder, drills into the largest and formats the report behind a `Disk::Facts` effect. The Swift host answers that effect from Foundation's volume capacities and the Spotlight index, so no directory is walked. A fixed handler runs the same report logic natively in its domain suite.
+[`examples/macos/`](../../../examples/macos) reports which folders use the most disk space, hidden files included. Osprey ranks the entries under a folder, drills into the largest and formats the report behind a `Disk::Facts` effect. The Swift host answers that effect from Foundation's volume capacities and by walking the folder, because Spotlight indexes neither hidden files nor caches; folders it cannot read are reported. A fixed handler runs the same report logic natively in its domain suite.
 
-`make macos-test` runs the C ABI fixture above natively, then the whole corpus through the Mac slice against the native goldens and [`MOBILE_UNPORTABLE.txt`](../../../tests/MOBILE_UNPORTABLE.txt), the storage domain suite, and the storage host's smoke assertions against the real Mac. The smoke requires Spotlight answers when `mdutil` reports indexing enabled; otherwise it says that the index was not exercised. Hosted CI runs it beside `make ios-test` on the `macos-15` runner.
+[`examples/graphics/`](../../../examples/graphics) runs three real-time scenes this way. Each scene compiles with `--entry-only`, because its host calls only `osprey_main`, which runs the scene's own frame loop; a Swift Metal host defines the six `osp_gfx_*` imports, exchanging the window as a `Ptr`.
+
+`make macos-test` runs the C ABI fixture above natively, then the whole corpus through the Mac slice against the native goldens and [`MOBILE_UNPORTABLE.txt`](../../../tests/MOBILE_UNPORTABLE.txt), the storage domain suite, and the storage host's smoke assertions. The smoke measures a folder with known contents, a hidden `.git`, a hidden `.cache` and an unreadable folder among them. Its prerequisite `make macos` builds every graphics host; `make graphics-smoke` renders each scene, which needs a desktop session and a Metal GPU. Hosted CI runs `make macos-test` beside `make ios-test` on the `macos-15` runner.
 
 ## Verification [IOS-VERIFICATION]
 

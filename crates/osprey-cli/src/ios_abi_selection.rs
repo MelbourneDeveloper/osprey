@@ -89,7 +89,7 @@ fn extern_import(statement: &Stmt, types: &ProgramTypes) -> Result<Option<Import
     };
     let names = parameters.iter().map(|p| p.name.as_str());
     let (params, ret) = c_signature(types, name, names).ok_or_else(|| format!(
-        "extern `{name}` has an unsupported C ABI signature: parameters must be int, float, bool or string; returns may also be Unit"
+        "extern `{name}` has an unsupported C ABI signature: parameters must be int, float, bool, string or Ptr; returns may also be Unit"
     ))?;
     Ok(Some(Import {
         symbol: name.clone(),

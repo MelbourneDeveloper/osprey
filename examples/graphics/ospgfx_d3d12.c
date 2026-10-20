@@ -5,7 +5,7 @@
 // compiled on the machine that wrote it.
 //
 // These six functions are the whole contract with Osprey, and they mean exactly
-// what ospgfx.m's do: values arrive in 4096ths or thousandths, out-of-range
+// what the Swift host's do: values arrive in 4096ths or thousandths, out-of-range
 // slots are ignored, `osp_gfx_draw` returns 1 while the window lives and 0 once
 // it closes, and `osp_gfx_ticks` is milliseconds since the window opened.
 

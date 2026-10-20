@@ -55,7 +55,33 @@ fn field_owner(cg: &mut Codegen, target: &Value, field: &str) -> Result<String> 
             cg.record_layout(owner)
                 .is_some_and(|(_, fields)| fields.iter().any(|(name, _)| name == field))
         })
-        .or_else(|| cg.find_field_owner(field))
+        .map_or_else(|| guessed_field_owner(cg, target, field), Ok)
+}
+
+/// Broken-code quarantine: a receiver whose owner was not tracked (a `perform`
+/// result inside a module function, for one) falls back to choosing a record
+/// by field name. Where several records declare that field the choice ignores
+/// the receiver's inferred record type, so the load used another record's slot
+/// and read the wrong memory without a diagnostic. Fail loudly until the owner
+/// comes from the inferred type; `tests/regressions/modules/
+/// module_perform_record_field` pins the miscompile.
+fn guessed_field_owner(cg: &Codegen, target: &Value, field: &str) -> Result<String> {
+    let owners = cg
+        .prog
+        .ctors
+        .values()
+        .filter(|ctor| ctor.fields.iter().any(|(name, _)| name == field))
+        .count();
+    if owners > 1 {
+        let receiver = target
+            .inferred_type
+            .as_ref()
+            .map_or_else(|| "an untracked receiver".to_string(), ToString::to_string);
+        return Err(CodegenError::unsupported(format!(
+            "quarantined field access `{field}` on {receiver}: {owners} records declare it and the receiver's record was not tracked"
+        )));
+    }
+    cg.find_field_owner(field)
         .ok_or_else(|| CodegenError::invalid(format!("field `{field}` on a non-record")))
 }
 

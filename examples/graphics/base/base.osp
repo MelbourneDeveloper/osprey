@@ -1,10 +1,12 @@
 // The shared host for every Osprey graphics example.
 //
-// Osprey is the host program: it opens a real Cocoa window, reads the clock,
-// and recomputes the scene every frame in its own fixed-point arithmetic. The
-// GPU is the rasteriser: `base.metal` shades every pixel from the parameter
-// slots pushed below ([FFI-LINK-DIRECTIVES], [FFI-PTR] —
-// docs/specs/compiler/0019-ForeignFunctionInterface.md).
+// Osprey runs the scene: it opens a window, reads the clock, and recomputes the
+// scene every frame in its own fixed-point arithmetic. The GPU is the
+// rasteriser: `base.metal` shades every pixel from the parameter slots pushed
+// below. On macOS this file compiles for the Mac slice and a Swift host links it
+// and defines the six `osp_gfx_*` imports ([IOS-TARGET-MACOS], [FFI-PTR]); on
+// Windows the native executable links the Direct3D 12 bridge through the
+// directives below ([FFI-LINK-DIRECTIVES]).
 //
 // The fixed-point trigonometry here exists exactly once. A scene is not a copy
 // of this file: it is a title, the name of a fragment entry in the shared Metal
@@ -14,14 +16,15 @@
 // — so each scene is its own one-file project that names this directory as a
 // second source root. That is the layout that makes sharing possible at all.
 //
-// @link: ospgfx
-// @linkdir: examples/graphics
+// @link(windows): ospgfx
+// @linkdir(windows): examples/graphics
 
 namespace graphics;
 
 module SceneBase {
-    effect ArithmeticFailure {
-        control halt: fn(string) -> int
+    /// Asked once per frame: has arithmetic faulted since the scene opened?
+    effect Fault {
+        stopped: fn() -> bool
     }
 
     extern fn osp_gfx_open(width: int, height: int, scale: int, title: string,
@@ -211,7 +214,7 @@ module SceneBase {
     /// closes.
     fn animate(win, motion, frame) = {
         let pushed = pushMotion(win, motion, osp_gfx_ticks(win), 0)
-        match (pushed == motionCount()) && (osp_gfx_draw(win) == 1) {
+        match (pushed == motionCount()) && (perform Fault.stopped() == false) && (osp_gfx_draw(win) == 1) {
             true => animate(win, motion, (frame + 1) )
             false => frame
         }
@@ -222,33 +225,50 @@ module SceneBase {
         print("${title}: ${frames} frames in ${ms} ms — ${fps} fps at ${designWidth()}x${designHeight()}")
     }
 
-    /// Stop the scene and close its window on the first arithmetic fault.
-    fn withArithmeticPolicy(win, title, work) = {
-        handle ArithmeticFailure {
-            halt message => {
-                print("${title}: ${message}")
-                osp_gfx_close(win)
-            }
+    /// Answer an arithmetic fault with 0, remember it, and stop the scene at the
+    /// end of that frame. A value policy: on an Apple slice the scene runs
+    /// beneath a C call that no continuation may cross [IOS-TARGET-CAPABILITIES].
+    fn withArithmeticPolicy(title, work) = {
+        mut fault = ""
+        handle Fault {
+            stopped => fault != ""
         }
         handle Arith {
-            overflow op lhs rhs _ => perform ArithmeticFailure.halt("integer overflow: ${lhs} ${op} ${rhs}")
-            remainderByZero lhs => perform ArithmeticFailure.halt("integer division or remainder by zero: ${lhs}")
+            overflow op lhs rhs _ => {
+                fault = "integer overflow: ${lhs} ${op} ${rhs}"
+                0
+            }
+            remainderByZero lhs => {
+                fault = "integer division or remainder by zero: ${lhs}"
+                0
+            }
         }
         work()
+        match fault == "" {
+            true => 0
+            false => {
+                print("${title}: ${fault}")
+                1
+            }
+        }
     }
 
-    /// Open a window, push the authored grade, then animate under the fault policy.
+    /// Open a window, push the authored grade, animate under the fault policy,
+    /// then close the window once. The exit status is 0 for a clean run.
     fn run(title, fragment, motion, look) = {
         let win = osp_gfx_open(designWidth(), designHeight(), windowScale(),
             title, shaderPath(), fragment)
-        withArithmeticPolicy(win, title, || => {
+        let faulted = withArithmeticPolicy(title, || => {
             let frames = match pushLook(win, look, lookFirst()) == lookCount() {
                 true => animate(win, motion, 0)
                 false => 0
             }
             report(title, frames, osp_gfx_ticks(win))
-            osp_gfx_close(win)
         })
+        match (osp_gfx_close(win) == 1) && (faulted == 0) {
+            true => 0
+            false => 1
+        }
     }
 
     export fn original() = run("Osprey · Kali", "osp_fragment", originalMotion, originalLook)

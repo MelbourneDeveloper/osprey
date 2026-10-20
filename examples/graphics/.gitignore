@@ -1,4 +1,4 @@
-libospgfx.dylib
+macos/build/
 ospgfx.dll
 libospgfx.dll.a
 ospgfx.lib

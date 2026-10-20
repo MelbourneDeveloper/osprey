@@ -210,6 +210,55 @@ fn namespaced_functions_and_scalar_ios_host_imports_are_preserved() -> std::io::
     Ok(())
 }
 
+/// An archive carries no library, so an app-library target refuses a link
+/// directive instead of dropping it; a directive scoped to a native operating
+/// system does not apply there. [FFI-LINK-DIRECTIVES] [IOS-TARGET-CAPABILITIES]
+#[test]
+fn app_library_targets_refuse_unscoped_link_directives() -> std::io::Result<()> {
+    let linked = "// @link: sqlite3\nextern fn sqlite3_libversion_number() -> int\nprint(sqlite3_libversion_number())\n";
+    let scoped = "// @link(windows): ospgfx\nextern fn host_ready() -> int\nprint(host_ready())\n";
+    for target in ["ios", "ios-sim", "macos", "android-arm64", "android-x64"] {
+        let output = compile(linked, target)?;
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !output.status.success(),
+            "{target} accepted a link directive"
+        );
+        assert!(
+            error.contains(&format!(
+                "target `{target}` does not support link directive `// @link: sqlite3`"
+            )),
+            "{error}"
+        );
+        assert!(
+            output.stdout.is_empty(),
+            "{target} emitted IR for a refused program"
+        );
+        let scoped = compile(scoped, target)?;
+        assert!(
+            scoped.status.success(),
+            "{target}: {}",
+            String::from_utf8_lossy(&scoped.stderr)
+        );
+    }
+    Ok(())
+}
+
+/// The Python host exchanges int, float, bool and string; a handle it cannot
+/// represent fails at compile time instead of in `python -m osprey`.
+#[test]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn python_rejects_pointer_exports() -> std::io::Result<()> {
+    let output = compile("fn keep(window: Ptr) = window\n", "python")?;
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "python accepted a Ptr export");
+    assert!(
+        error.contains("Python export `keep` passes a Ptr"),
+        "{error}"
+    );
+    Ok(())
+}
+
 #[test]
 fn wasm_browser_boundary_rejects_wrong_or_unresolved_signatures() -> std::io::Result<()> {
     for source in [

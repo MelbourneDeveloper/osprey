@@ -153,7 +153,9 @@ pub(super) fn run_check(cli: &Cli, input: &CompilationInput) -> ExitCode {
 /// Capability errors are compilation diagnostics, before LLVM or linking.
 /// [IOS-TARGET-CAPABILITIES] [WASM-TARGET-CAPABILITIES]
 pub(super) fn target_error(cli: &Cli, input: &CompilationInput) -> Option<ExitCode> {
-    if let Err(error) = target_capabilities::validate(input.program(), &cli.target) {
+    if let Err(error) = target_capabilities::validate(input.program(), &cli.target)
+        .and_then(|()| target_capabilities::validate_links(input.source(), &cli.target))
+    {
         eprintln!("{}: {error}", input.display_path());
         return Some(ExitCode::FAILURE);
     }

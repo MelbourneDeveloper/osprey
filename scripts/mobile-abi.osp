@@ -5,12 +5,14 @@
 // Every export here exists to pin one property of the boundary the header
 // cannot state: the width and sign of an integer, that a double survives
 // round-tripping, that a C bool arrives canonical under both bool ABIs, that
-// a UTF-8 string crosses intact in both directions, and that Osprey copies a
-// borrowed host string instead of aliasing it.
+// a UTF-8 string crosses intact in both directions, that Osprey copies a
+// borrowed host string instead of aliasing it, and that an opaque host handle
+// comes back unchanged.
 
 extern fn hostRecord(value: int, ready: bool, label: string) -> Unit
 extern fn hostNegate(value: bool) -> bool
 extern fn hostMeasure(text: string) -> int
+extern fn hostResolve(window: Ptr) -> int
 
 let seed = "persisted ${41}"
 
@@ -43,5 +45,10 @@ fn joinWith(left: string, right: string) -> string = "${left}|${right}"
 fn measured(text) = hostMeasure(toUpperCase(text))
 
 fn emit(value, ready, label) = hostRecord(value, ready, label)
+
+/// A host handle held and returned without being inspected [FFI-PTR]. Identity
+/// is polymorphic, so the annotation is what gives it a C symbol.
+fn passBack(window: Ptr) = window
+fn resolve(window) = hostResolve(window)
 
 hostRecord(41, true, "boot")

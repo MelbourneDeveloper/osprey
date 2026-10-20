@@ -1,7 +1,8 @@
-## graphics: Build the platform graphics bridge and run the animated GPU demo
+## graphics: Build the platform graphics host and run the animated GPU demo
 #            Osprey drives the scene; the GPU shades every pixel. macOS renders
-#            it through Metal, Windows through Direct3D 12 — and the Osprey
-#            sources are the same files on both, which is the entire point.
+#            it through Metal in a Swift host linked to the Mac slice, Windows
+#            through a Direct3D 12 DLL linked to the native executable — and the
+#            Osprey sources are the same files on both, which is the entire point.
 #            SCENE=kali|opal|character selects one of the three scenes; every
 #            one is a one-file project sharing examples/graphics/base/base.osp
 #            and one named fragment entry in the platform shader library.
@@ -12,8 +13,8 @@ SCENE ?= kali
 
 ifeq ($(OS),Windows_NT)
 # Direct3D 12. Built with the same MinGW UCRT64 toolchain that builds the C
-# runtime on Windows, so `// @link: ospgfx` in base/base.osp resolves the import
-# library below exactly as it resolves the dylib on macOS.
+# runtime on Windows, so `// @link(windows): ospgfx` in base/base.osp resolves
+# the import library below.
 #
 # UNVERIFIED. This branch, the two C files it compiles and base.hlsl were all
 # written on a macOS machine with no Windows toolchain and have never been
@@ -63,30 +64,40 @@ graphics: build $(GFX_LIB) _graphics-shader
 endif
 
 else
-GFX_LIB := $(GFX_DIR)/libospgfx.dylib
 GFX_SHADER := $(GFX_DIR)/base.metal
-
-$(GFX_LIB): $(GFX_DIR)/ospgfx.m $(GFX_DIR)/ospgfx_abi.h
-	@echo "==> building Osprey -> macOS graphics bridge"
-	clang -dynamiclib -fobjc-arc -O2 $(GFX_WARN) \
-		-install_name $(CURDIR)/$(GFX_LIB) \
-		-framework Cocoa -framework Metal -framework QuartzCore \
-		-o $(GFX_LIB) $(GFX_DIR)/ospgfx.m
+GFX_SCENES := kali opal character
+GFX_SMOKE_FRAMES ?= 60
 
 # The bridge compiles the shader at run time, so a syntax error in it would
 # otherwise only surface as a window that refuses to open. Check it up front
-# when the Metal toolchain is installed, and skip quietly when it is not.
+# when the Metal toolchain is installed, and skip quietly when it is not. Xcode
+# 26 and later ship `metal` as a stub until the toolchain component downloads,
+# so availability is asked of the compiler itself rather than of `xcrun --find`.
 _graphics-shader:
-	@if xcrun -sdk macosx --find metal >/dev/null 2>&1; then \
+	@if xcrun -sdk macosx metal --version >/dev/null 2>&1; then \
 		echo "==> checking $(GFX_SHADER)"; \
 		xcrun -sdk macosx metal -c $(GFX_SHADER) -o /dev/null; \
 	else \
-		echo "==> skipping shader check (no Metal toolchain)"; \
+		echo "==> skipping shader check (no Metal toolchain; xcodebuild -downloadComponent MetalToolchain installs it)"; \
 	fi
 
-graphics: build $(GFX_LIB) _graphics-shader
+# The scene compiles for the Mac slice and links into the Swift Metal host in
+# $(GFX_DIR)/macos, the way every macOS example joins Osprey and Swift.
+# [IOS-TARGET-MACOS]
+graphics: build _runtime_macos _graphics-shader
 	@echo "==> launching Osprey graphics demo: $(SCENE) (close the window to exit)"
-	./$(BIN) $(GFX_DIR)/$(SCENE) --run
+	OSPREY_BIN="$(CURDIR)/$(BIN)" bash $(GFX_DIR)/macos/run.sh $(SCENE)
+
+## graphics-smoke: Render every scene for GFX_SMOKE_FRAMES frames and require
+##                 each to report them. Needs a desktop session and a Metal GPU.
+graphics-smoke: build _runtime_macos _graphics-shader
+	@for scene in $(GFX_SCENES); do \
+		report=$$(OSPREY_GFX_FRAMES=$(GFX_SMOKE_FRAMES) OSPREY_BIN="$(CURDIR)/$(BIN)" \
+			bash $(GFX_DIR)/macos/run.sh $$scene) || exit 1; \
+		echo "$$report"; \
+		case "$$report" in *": $(GFX_SMOKE_FRAMES) frames in "*) ;; \
+			*) echo "graphics-smoke: $$scene did not draw $(GFX_SMOKE_FRAMES) frames" >&2; exit 1 ;; esac; \
+	done
 endif
 
 ## gpt2: Run GPT-2 (usage: make gpt2 FLAVOR=default|python PROMPT="..." TOKENS=20 BACKEND=gpu|lists)

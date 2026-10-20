@@ -1,12 +1,13 @@
 //! The Osprey-facing C ABI — slot count, two fixed-point scales, uniform block,
 //! six exports — is declared ONCE in `ospgfx_abi.h` and included by both
-//! bridges. The two shader libraries cannot include it (each bridge compiles
+//! bridges: the Swift Metal host imports it through its bridging header, the
+//! Direct3D 12 bridge with `#include`. The two shader libraries cannot include it (each bridge compiles
 //! its shader from source at run time with no include path), so they mirror
 //! the uniform layout by hand. These tests pin the header as the canonical
 //! declaration, the two mirrors against it, and the bridges to including it
 //! rather than restating it: a disagreement compiles cleanly and then shifts
 //! `res` and `time` under every scene on one platform.
-use super::{read_required, repo_root};
+use super::{read_required, repo_root, strip_line_comments};
 use std::path::PathBuf;
 
 const ABI_HEADER: &str = "ospgfx_abi.h";
@@ -23,6 +24,33 @@ const BRIDGE_EXPORTS: [&str; 6] = [
     "osp_gfx_draw",
     "osp_gfx_ticks",
     "osp_gfx_close",
+];
+
+/// The Swift Metal host: a bridging header and the `@_cdecl` definitions.
+const MAC_BRIDGE_HEADER: &str = "macos/Bridge.h";
+const MAC_BRIDGE: &str = "macos/GraphicsBridge.swift";
+
+/// What the Swift host must take from the header rather than spell itself:
+/// the slot store, both validations, the entry default, the tick arithmetic,
+/// both scales and the vertex entry name.
+const HEADER_HELPERS: [&str; 8] = [
+    "osp_gfx_slot_store(",
+    "osp_gfx_extent_ok(",
+    "osp_gfx_clamp_scale(",
+    "osp_gfx_fragment_entry(",
+    "osp_gfx_elapsed_ms(",
+    "OSP_GFX_FIXED_ONE",
+    "OSP_GFX_MILLI_ONE",
+    "OSP_GFX_VERTEX_ENTRY",
+];
+
+/// Values only the header may state; a Swift literal for any of them is a copy.
+const SWIFT_RESTATEMENTS: [&str; 5] = [
+    "4096",
+    "1000.0",
+    "8192",
+    "\"osp_vertex\"",
+    "struct OspGfxUniforms",
 ];
 
 /// Declarations a bridge may no longer carry itself, now that the header does.
@@ -53,7 +81,7 @@ fn number_after(source: &str, needle: &str) -> Option<usize> {
 
 /// The Windows bridge is three files — the shared ABI header's D3D half, the
 /// one-time bring-up and the exported entry points — and it is the union of
-/// them that has to match ospgfx.m, so it is compared as one text.
+/// them that has to match the Swift host, so it is compared as one text.
 fn d3d12_bridge() -> String {
     ["ospgfx_d3d12.h", "ospgfx_d3d12_setup.c", "ospgfx_d3d12.c"]
         .iter()
@@ -101,44 +129,72 @@ fn the_header_is_the_one_declaration_and_both_shader_libraries_mirror_it() {
 
 #[test]
 fn both_bridges_include_the_header_and_restate_none_of_it() {
-    let metal = read_required(&graphics().join("ospgfx.m"));
     let d3d = d3d12_bridge();
-    for (name, bridge) in [("ospgfx.m", &metal), ("the D3D12 bridge", &d3d)] {
+    let swift_header = read_required(&graphics().join(MAC_BRIDGE_HEADER));
+    for (name, includer) in [
+        (MAC_BRIDGE_HEADER, &swift_header),
+        ("the D3D12 bridge", &d3d),
+    ] {
         assert!(
-            bridge.contains(&format!("#include \"{ABI_HEADER}\"")),
+            includer.contains(&format!("#include \"{ABI_HEADER}\"")),
             "{name} must include {ABI_HEADER}"
         );
-        for restated in HEADER_OWNED {
-            assert!(
-                !bridge.contains(restated),
-                "{name} restates `{restated}` instead of taking it from {ABI_HEADER}"
-            );
-        }
+    }
+    for restated in HEADER_OWNED {
+        assert!(
+            !d3d.contains(restated),
+            "the D3D12 bridge restates `{restated}` instead of taking it from {ABI_HEADER}"
+        );
+    }
+    let swift = strip_line_comments(&read_required(&graphics().join(MAC_BRIDGE)));
+    for helper in HEADER_HELPERS {
+        assert!(
+            swift.contains(helper),
+            "{MAC_BRIDGE} must take `{helper}` from {ABI_HEADER}"
+        );
+    }
+    for restated in SWIFT_RESTATEMENTS {
+        assert!(
+            !swift.contains(restated),
+            "{MAC_BRIDGE} restates `{restated}` instead of taking it from {ABI_HEADER}"
+        );
     }
 }
 
 #[test]
 fn both_bridges_present_one_c_abi_to_the_shared_host() {
-    let metal = read_required(&graphics().join("ospgfx.m"));
+    let swift = read_required(&graphics().join(MAC_BRIDGE));
     let d3d = d3d12_bridge();
     // Osprey's `extern fn` declarations are written once and linked against
     // whichever bridge the platform built: the same six symbols, a fragment
     // entry as a parameter, and a diagnostic that names the entry it could not
     // find. A symbol missing from one side is a link error there and nothing
     // at all on the other.
-    for (name, bridge) in [("ospgfx.m", &metal), ("the D3D12 bridge", &d3d)] {
-        for export in BRIDGE_EXPORTS {
-            assert!(
-                bridge.contains(&format!("{export}(")),
-                "{name} must keep exporting {export}"
-            );
-        }
-        for shared in [
-            "const char *fragmentName)",
+    for export in BRIDGE_EXPORTS {
+        assert!(
+            swift.contains(&format!("@_cdecl(\"{export}\")")),
+            "{MAC_BRIDGE} must define {export} with @_cdecl"
+        );
+        assert!(
+            d3d.contains(&format!("{export}(")),
+            "the D3D12 bridge must keep exporting {export}"
+        );
+    }
+    for (name, bridge, shared) in [
+        (MAC_BRIDGE, &swift, "_ fragmentName: UnsafePointer<CChar>?"),
+        (
+            MAC_BRIDGE,
+            &swift,
+            r#""ospgfx: shader needs osp_vertex and \(entry)""#,
+        ),
+        ("the D3D12 bridge", &d3d, "const char *fragmentName)"),
+        (
+            "the D3D12 bridge",
+            &d3d,
             r#""ospgfx: shader needs osp_vertex and %s\n", entry"#,
-        ] {
-            assert!(bridge.contains(shared), "{name} must keep `{shared}`");
-        }
+        ),
+    ] {
+        assert!(bridge.contains(shared), "{name} must keep `{shared}`");
     }
     let d3d_abi = read_required(&graphics().join("ospgfx_d3d12.c"));
     for export in BRIDGE_EXPORTS {

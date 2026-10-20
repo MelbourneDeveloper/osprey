@@ -1,0 +1,40 @@
+(** ML surface pinning a codegen defect: inside a module function, a field read
+    on a record an effect operation returned took another record's layout when
+    two records declare that field name, and read the wrong memory. The golden
+    is the correct output. Codegen quarantines the access until the owner comes
+    from the inferred type ([MODULES-EFFECTS] [TYPE-FIELD-ACCESS-NON-RECORD]). *)
+
+namespace inventory
+
+type Item =
+    name : string
+    bytes : int
+
+type Listing =
+    items : List<Item>
+    skipped : int
+
+type Tally =
+    skipped : int
+    label : string
+    items : List<Item>
+
+module Store
+    export effect Catalog
+        list : string => Listing
+
+    sum items = match items
+        [] => 0
+        [first, ...rest] => satAdd first.bytes (sum rest)
+
+    (** Reads both fields of the operation's result inside the module. *)
+    export tally root =
+        listing = perform Catalog.list root
+        Tally(skipped = listing.skipped, label = root, items = listing.items)
+
+    export total root = sum (perform Catalog.list root).items
+
+fixed = handler Store::Catalog
+    list _ => Listing(items = [Item(name = "a", bytes = 5), Item(name = "b", bytes = 7)], skipped = 3)
+counted = fixed (\() => Store::tally "/disk")
+print "${counted.label}: ${length counted.items} items, ${counted.skipped} skipped, ${fixed (\() => Store::total "/disk")} bytes"

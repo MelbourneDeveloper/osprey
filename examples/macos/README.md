@@ -1,23 +1,24 @@
 # Osprey on the Mac: which folders use your disk
 
-A command-line Mac app that reports which folders take the most disk space. Osprey owns the report. A Swift host answers its questions from records macOS already keeps, Foundation's volume capacities and the sizes in the Spotlight index, so no directory is opened or walked.
+A command-line Mac app that reports which folders take the most disk space, hidden files included. Osprey owns the report. A Swift host answers its questions: volume capacity from Foundation, and folder sizes by measuring the tree.
 
 Output of `examples/macos/run.sh ~ 3`:
 
 ```text
 Storage report for /Users/ada
-Volume: 994.7 GB total, 897.6 GB used, 97.0 GB free, 188.3 GB available for important data.
-Spotlight attributes 95.4 GB here (11% of used space).
+Volume: 994.7 GB total, 958.2 GB used, 36.5 GB free, 189.9 GB available for important data.
+Measured 566.8 GB here, hidden files included (59% of used space).
+Folders that could not be read: 157. macOS protects them; grant the host Full Disk Access to count them.
 
 Largest items
-  71.4 GB  ███████████████░░░░░  75%  Library
-  17.5 GB  ███░░░░░░░░░░░░░░░░░  18%  Documents
-   3.3 GB  ░░░░░░░░░░░░░░░░░░░░   3%  Downloads
+ 245.6 GB  ████████░░░░░░░░░░░░  43%  Documents
+ 151.5 GB  █████░░░░░░░░░░░░░░░  27%  Library
+  83.8 GB  ███░░░░░░░░░░░░░░░░░  15%  .colima
 
-Inside Library
-  44.2 GB  ████████████░░░░░░░░  62%  Application Support
-  24.4 GB  ██████░░░░░░░░░░░░░░  34%  Android
- 957.6 MB  ░░░░░░░░░░░░░░░░░░░░   1%  Python
+Inside Documents
+ 207.2 GB  ████████████████░░░░  84%  Stuff
+  37.0 GB  ███░░░░░░░░░░░░░░░░░  15%  Code
+   1.2 GB  ░░░░░░░░░░░░░░░░░░░░   0%  Desktops
 ```
 
 ## The effect at the boundary
@@ -27,23 +28,25 @@ Inside Library
 ```ospml
 export effect Facts
     volume : string => Volume
-    largest : string => List<Folder>
+    largest : string => Listing
 
 insideLargest limit folders = match folders
     [] => []
-    [largest, ..._rest] => top limit (perform Facts.largest largest.path)
+    [largest, ..._rest] => top limit (perform Facts.largest largest.path).entries
 ```
 
 [`storage/src/main.ospml`](storage/src/main.ospml) answers that effect with C functions the Swift host defines:
 
 ```ospml
 extern storage_scan (root : string) -> int
-extern storage_entry_path (index : int) -> string
+extern storage_unreadable -> int
 
 report (root, limit) =
     handle Disk::Facts
         volume path => Volume(total = storage_volume path "total", available = storage_volume path "available", important = storage_volume path "important")
-        largest folder => entries folder
+        largest folder =>
+            found = entries folder
+            Listing(entries = found, blocked = storage_unreadable ())
     Disk::render (Disk::survey root limit)
 ```
 
@@ -52,27 +55,33 @@ report (root, limit) =
 ## Where the numbers come from
 
 - **Volume capacity:** Foundation's `volumeTotalCapacity`, `volumeAvailableCapacity` and `volumeAvailableCapacityForImportantUsage`. The last includes space macOS can purge on demand, such as caches and local snapshots, which is what System Settings shows as available.
-- **Folder sizes:** the Spotlight index, queried with `MDQuery`. Spotlight already records each indexed item's size, `kMDItemPhysicalSize` (bytes on disk, after APFS compression) when present and `kMDItemFSSize` otherwise. An app or document bundle is one item carrying its whole size, and Spotlight does not index inside packages, so nothing is counted twice. One query sums every indexed item into the folder's children and their children, which also answers the drill-down.
+- **Folder sizes:** a walk of the folder with Foundation's directory enumerator, which lists each directory in bulk. Every file adds its allocated size to the child of the folder that holds it and to that child's child, so one walk also answers the drill-down. Hidden files, caches and package contents count. A hard-linked file counts once, a mounted volume below the folder is not entered, and APFS clones count in full, as in Finder.
 
-macOS has no public API that returns a folder's total size. APFS can keep directory statistics, but `getattrlist` returns `ATTR_DIR_ALLOCSIZE` as 0 for ordinary folders. The Storage pane in System Settings sizes folders through the private SpaceAttribution framework, which apps cannot use. Apple's [2 October 2026 notice](https://developer.apple.com/news/?id=p6zjojqw) tightens Full Disk Access without adding a storage API, so the Spotlight index is the public record to build on.
+macOS keeps no record of folder sizes that an app can read. APFS directory statistics return `ATTR_DIR_ALLOCSIZE` as 0 for ordinary folders, and the Storage pane in System Settings sizes folders through the private SpaceAttribution framework. Spotlight records file sizes but never indexes hidden files or caches: on the machine above it accounted for 17.5 GB of a 236 GB `Documents` folder and 95 GB of the 567 GB home folder, and `.colima` was invisible to it. Measuring is the only complete source, and a home folder of that size takes about a minute and a half.
 
-Spotlight only knows what it indexes. It skips caches such as `~/Library/Caches`, hidden folders, locations excluded in Spotlight's privacy settings, and volumes with indexing off. The report states how much of the volume's used space it could attribute. Check indexing with `mdutil -s /`.
+## Permissions
+
+Hidden files need no permission. "Hidden" is a Finder display convention, and the walk reads them like any other file.
+
+What macOS protects is other apps' data and a few user folders. A folder the walk cannot read is counted in the report's "could not be read" line instead of silently shrinking a total. macOS asks the person automatically the first time an app reads Desktop, Documents or Downloads, or another app's container; a bundled app explains why in its `NSDesktopFolderUsageDescription`, `NSDocumentsFolderUsageDescription` and `NSDownloadsFolderUsageDescription` strings. A command-line host borrows the permissions of the terminal that runs it. An app can also ask for one folder by letting the person choose it in `NSOpenPanel`, which grants that folder's whole tree.
+
+Mail, Messages, Safari and similar data need Full Disk Access, which no API can request. An app can only open the Full Disk Access pane (`x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles`) and ask the person to add it. Apple's [2 October 2026 notice](https://developer.apple.com/news/?id=p6zjojqw) says granting it will soon require even more explicit action.
 
 ## Build and run
 
 Use an Apple silicon Mac with Xcode selected by `xcode-select`. From the repository root:
 
 ```sh
-make macos                          # Mac runtime, compiler and this app
+make macos                          # Mac runtime, compiler and every macOS example
 examples/macos/run.sh               # report on your home folder
 examples/macos/run.sh /Applications 5
 make macos-test                     # C ABI, corpus, domain suite and smoke
 ```
 
-A report on a home folder with several hundred thousand indexed items takes tens of seconds while Spotlight answers. `OSPREY_MACOS_SKIP_BUILD=1` reuses the existing build, and `OSPREY_BIN` selects another compiler.
+`run.sh --smoke` builds a folder with known contents, including a hidden `.git` inside a visible folder, a hidden `.cache` and an unreadable folder, and requires the report to count and name them. `OSPREY_MACOS_SKIP_BUILD=1` reuses the existing build, and `OSPREY_BIN` selects another compiler.
 
 ## One boundary for Mac and iPhone
 
-`osprey storage --compile --target=macos -o build/libOspreyStorage.a` emits the archive and `libOspreyStorage.h`, which [`Bridge.h`](OspreyStorage/Bridge.h) imports into Swift. This is the [iPhone target](../ios) built for the Mac: the same header, scalar types, entry, thunks and target rules. A Swift `@_cdecl` function written for one platform links against the other unchanged; only the Apple API inside it has to exist on both. See [the Mac slice](../../docs/specs/compiler/iOSCodegen.md#the-mac-slice-ios-target-macos) for the contract.
+[`scripts/macos-host.sh`](../../scripts/macos-host.sh) compiles the project with `--target=macos` into `libOspreyApp.a` and `libOspreyApp.h`, which [`Bridge.h`](OspreyStorage/Bridge.h) imports into Swift as the iPhone apps import theirs, then links the Swift sources. The [graphics scenes](../graphics/README.md) build the same way. This is the [iPhone target](../ios) built for the Mac: the same header, scalar types, entry, thunks and target rules. A Swift `@_cdecl` function written for one platform links against the other unchanged; only the Apple API inside it has to exist on both. See [the Mac slice](../../docs/specs/compiler/iOSCodegen.md#the-mac-slice-ios-target-macos) for the contract.
 
 Calls are synchronous on one host thread. Swift strings passed to Osprey are borrowed for the call; Swift copies strings Osprey returns with `String(cString:)`. A string a Swift import returns must stay valid for the rest of the process, so `storage_entry_path` hands over a `strdup` copy that Swift never frees. Calling Swift crosses Osprey's memory-safety boundary.

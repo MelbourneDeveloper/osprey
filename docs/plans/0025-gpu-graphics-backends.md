@@ -17,7 +17,7 @@ What makes this plan worth keeping under the new priority is one file: `ospgfx_a
 ```mermaid
 flowchart TB
   osp["base/base.osp<br/>one host, one clock"] --> abi["ospgfx_abi.h<br/>slots, scales, uniform block, validation"]
-  abi --> mac["ospgfx.m<br/>Metal + Cocoa"]
+  abi --> mac["macos/GraphicsBridge.swift<br/>Swift host: Metal + AppKit"]
   abi --> win["ospgfx_d3d12.{h,c}<br/>D3D12 + Win32"]
   mac --> msl["base.metal<br/>mirrors the uniform block"]
   win --> hlsl["base.hlsl<br/>mirrors the uniform block"]
@@ -39,12 +39,12 @@ Pixel-for-pixel identity across platforms is **not** claimed and must not be. Th
 
 ## What works today
 
-- **The Metal backend.** `ospgfx.m` — Cocoa window + `CAMetalLayer`, the six exported C functions (each bridge declares its own export prototypes; the header holds the data contract they share), `newLibraryWithSource:` at open time. Measured in July 2026 at 103 fps on a 1920×1200 drawable for the scene the `gpu*` host backend rendered at 13 fps; both numbers are historical and live, dated, in plan 0023's "What that costs, measured".
+- **The Metal backend.** A Swift host in `macos/`: the scene compiles for the Mac slice ([IOS-TARGET-MACOS]) with `--entry-only`, and `GraphicsBridge.swift` defines the six imports with `@_cdecl` — AppKit window + `CAMetalLayer`, `makeLibrary(source:)` at open time — taking the data contract from `ospgfx_abi.h` through its bridging header. It replaced the Objective-C `ospgfx.m` dylib in October 2026, when it rendered 90 frames of each scene on a 1920×1200 drawable at 102–119 fps. The July 2026 measurement of 103 fps against 13 fps on the `gpu*` host backend is historical and lives, dated, in plan 0023's "What that costs, measured".
 - **The Osprey host.** `base/base.osp` holds the fixed-point trigonometry, the per-scene oscillator and grade tables and the frame loop, exactly once. `kali/`, `opal/`, `character/` are one-file projects importing `graphics::SceneBase`; each names `../base` as a second source root because Default Osprey cannot import across standalone scripts ([MODULES-MODEL], [MODULES-ENTRYPOINT]).
 - **Authored grade lives in Osprey, not the shader.** An offscreen A/B render at matched uniforms was byte-identical when the grade moved out of the shader; that is the bar stage 5 inherits.
-- **The shared ABI header**, `ospgfx_abi.h`: platform-neutral C11, compiled on macOS (ObjC), on Windows (MinGW/MSVC, unverified) and on Linux by the frame-path test. The bridges' slot store, extent/scale validation and tick arithmetic are its inline helpers; each bridge keeps only the platform-specific wrapper (ObjC property copy-out/copy-in on macOS, a direct pointer on Windows).
+- **The shared ABI header**, `ospgfx_abi.h`: platform-neutral C11, imported into Swift on macOS, compiled on Windows (MinGW/MSVC, unverified) and on Linux by the frame-path test. The bridges' slot store, extent/scale validation and tick arithmetic are its inline helpers; each bridge keeps only the platform-specific wrapper (a store into the scene's uniforms in Swift, a direct pointer on Windows).
 - **The drift guard**: ten tests across `graphics_scenes.rs` (scene structure, Kali grade, fragment entries, bidirectional constant sets, cbuffer guard), `graphics_scenes/abi.rs` (header as canonical declaration, both mirrors, both bridges include-and-restate-nothing, one C ABI, host slot ranges) and `graphics_scenes/frame.rs` (the D3D12 frame functions compiled with clang `-Wall -Wextra -Werror` against the real header and stubbed SDK calls, every injected failure path asserted). An earlier mutation check of the pre-header structure detected 11/11 deliberate mutations; the post-header structure was re-checked on 2026-10-12 against the mutations listed under Landmines.
-- **`make graphics SCENE=…` splits by `$(OS)`**, and both bridge recipes depend on `ospgfx_abi.h`.
+- **`make graphics SCENE=…` splits by `$(OS)`**: macOS builds the scene's Swift host with `scripts/macos-host.sh`; Windows builds the D3D12 DLL, whose recipe depends on `ospgfx_abi.h`. `make graphics-smoke` renders each macOS scene for a fixed frame count.
 
 ## What is written but unverified
 
@@ -109,7 +109,7 @@ Gate: one scene's fragment body written as an Osprey kernel, compiled to the pla
 
 ### Stage 1 — Metal + the invariant
 
-- [x] `ospgfx.m`: Cocoa window, `CAMetalLayer`, the six-symbol flat C ABI.
+- [x] macOS bridge: Cocoa window, `CAMetalLayer`, the six-symbol flat C ABI (first Objective-C, now the Swift host on the Mac slice).
 - [x] `base.metal`: one library, one `Uniforms`, one `osp_vertex`, three named fragment entries selected by name at open time.
 - [x] `base/base.osp` as the single host; three one-file scene projects.
 - [x] Authored grade moved from the shader into Osprey, A/B render byte-identical at matched uniforms.

@@ -25,9 +25,21 @@ both `--run` and `--compile`. Each value is one process argument; no shell parse
 it. Invalid library names or paths therefore fail in the compiler driver rather
 than executing as commands.
 
+A directive may name the operating system whose native executables it links:
+`// @link(windows): ospgfx` and `// @linkdir(windows): examples/graphics` apply
+when the compiler builds on Windows and are ignored elsewhere, so shared source
+can carry one platform's library. `windows`, `macos` and `linux` are recognized.
+
+An app-library target (`ios`, `ios-sim`, `macos`, `android-*`) builds an archive
+whose host links every import, so it rejects an unqualified directive before any
+toolchain work: link the library in the host application and declare its
+functions with `extern` ([IOS-TARGET-CAPABILITIES](iOSCodegen.md#target-capability-checking-ios-target-capabilities)).
+A directive qualified with a native operating system does not apply to those
+targets.
+
 ## The `Ptr` Type [FFI-PTR]
 
-`Ptr` is an opaque C pointer (`i8*`). It may appear in signatures and may be
+`Ptr` is an opaque C pointer (`i8*`). It also crosses the app-library C boundary as `void *` ([IOS-HOST-ABI](iOSCodegen.md#c-function-boundary-ios-host-abi)). It may appear in signatures and may be
 stored or passed. It supports no arithmetic, dereference, or field access.
 
 C out-parameters (`sqlite3_open(path, &db)`) use the runtime's **pointer cells** — themselves plain `extern fn` declarations against the bundled runtime archive, not builtins:
