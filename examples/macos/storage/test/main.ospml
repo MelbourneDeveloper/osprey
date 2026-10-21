@@ -19,17 +19,23 @@ homeEntries () = [
     entry "/Users/ada/notes.txt" 4096 4096 false false,
     entry "/Users/ada/Code" 120000000000 20000000000 false true,
     entry "/Users/ada/.cache" 99000000000 0 true true,
-    guarded "/Users/ada/Documents",
 ]
+
+mail = "/Users/ada/Library/Containers/com.apple.mail"
 
 listingFor path = match path
     "/Users/ada" => storage::Listing(entries = homeEntries (), blocked = 2, measured = true)
     "/Users/ada/Code" => storage::Listing(entries = [entry "/Users/ada/Code/app/.git" 100000000000 0 true true], blocked = 0, measured = true)
+    "/Users/ada/Library/Containers" => storage::Listing(entries = [entry "/Users/ada/Library/Containers/org.example" 2000 2000 false true, guarded mail], blocked = 0, measured = true)
     _ => storage::Listing(entries = [], blocked = 0, measured = false)
 
 ssd = storage::Volume(name = "Macintosh HD", total = 1000000000000, available = 250000000000, important = 300000000000)
 
-browser path hidden stage = storage::Browser(platform = "macos", home = home, root = home, path = path, hidden = hidden, stage = stage, walking = home, items = 0, bytes = 0)
+browser path hidden stage = storage::Browser(platform = "macos", full = false, home = home, root = home, path = path, hidden = hidden, stage = stage, walking = home, items = 0, bytes = 0)
+
+kind name items bytes = storage::PhotoKind(name = name, items = items, bytes = bytes)
+
+pictures status bytes = storage::Photos(status = status, items = 9000, bytes = bytes, cloud = 60000000000, kinds = [kind "videos" 400 30000000000, kind "photos" 8000 8000000000, kind "live" 0 0, kind "screenshots" 600 2000000000])
 
 names ranking = join (range (0, ranking.kept) |> fold [] (\(output, index) => listAppend output (Disk::name "" (listGet ranking.top index ?: entry "" 0 0 false false).path))) ","
 
@@ -39,6 +45,18 @@ screen model =
     handle Disk::Facts
         volume _ => ssd
         listing path => listingFor path
+        photos => storage::Photos(status = "unavailable", items = 0, bytes = 0, cloud = 0, kinds = [])
+    View::render model
+
+// An iPhone app's home holds little; the photo library is measured apart.
+phoneScreen photos = phoneAt "/var/app" photos
+
+phoneAt path photos =
+    model = storage::Browser(platform = "ios", full = false, home = "/var/app", root = "/var/app", path = path, hidden = true, stage = "ready", walking = "/var/app", items = 0, bytes = 0)
+    handle Disk::Facts
+        volume _ => ssd
+        listing _ => storage::Listing(entries = [entry "/var/app/Library" 5000000000 5000000000 false true], blocked = 1, measured = true)
+        photos => photos
     View::render model
 
 formatCase () =
@@ -78,15 +96,22 @@ pathCase () =
     check "unknown file" "doc.fill" (Disk::look (entry "/a/README" 1 1 false false)).symbol
 
 browseCase () =
-    started = Browse::start home "macos"
-    check "an iPhone app's own folders are never guarded" "none" (Json::getOr (Browse::start home "ios").commands "[0].protected[0]" "none")
-    check "first walk" "measure /Users/ada graft=false" (walkOf started.commands)
-    check "the walk never enters a protected folder" "/Users/ada/Documents" (Json::getOr started.commands "[0].protected[1]" "")
-    check "nor another app's data" "/Users/ada/Library/Group Containers" (Json::getOr started.commands "[0].apps[1]" "")
+    started = Browse::start home "macos" false
+    check "the Mac measures the whole disk" "measure / graft=false" (walkOf started.commands)
+    check "the walk never enters another app's data" "/Users/ada/Library/Group Containers" (Json::getOr started.commands "[0].apps[1]" "")
+    check "unless the Mac granted Full Disk Access" "none" (Json::getOr (Browse::start home "macos" true).commands "[0].apps[0]" "none")
+    check "the Mac has no photo library to ask for" "none" (Json::getOr started.commands "[1].kind" "none")
+    phone = Browse::start "/var/app" "ios" false
+    check "an iPhone measures the app's own folder" "measure /var/app graft=false" (walkOf phone.commands)
+    check "whose folders are never guarded" "none" (Json::getOr phone.commands "[0].apps[0]" "none")
+    check "and asks for the photo library" "photos" (Json::getOr phone.commands "[1].kind" "")
+    check "again when allowed later" "[{\"kind\":\"photos\",\"path\":\"/var/app\"}]" (Browse::dispatch phone.model "{\"type\":\"allow\"}").commands
     checkTrue "hidden files shown by default" started.model.hidden
-    ready = (Browse::dispatch started.model "{\"type\":\"measured\",\"path\":\"/Users/ada\"}").model
+    chosen = Browse::dispatch started.model "{\"type\":\"picked\",\"value\":\"/Users/ada\"}"
+    check "a chosen folder starts its own walk" "measure /Users/ada graft=false" (walkOf chosen.commands)
+    ready = (Browse::dispatch chosen.model "{\"type\":\"measured\",\"path\":\"/Users/ada\"}").model
     check "walk finished" "ready" ready.stage
-    stale = Browse::dispatch started.model "{\"type\":\"measured\",\"path\":\"/Volumes/Old\"}"
+    stale = Browse::dispatch chosen.model "{\"type\":\"measured\",\"path\":\"/Volumes/Old\"}"
     check "a stale walk is ignored" "measuring" stale.model.stage
     inside = (Browse::dispatch ready "{\"type\":\"open\",\"value\":\"/Users/ada/Code\"}").model
     check "opens a folder" "/Users/ada/Code" inside.path
@@ -95,38 +120,44 @@ browseCase () =
     check "up stops at the root" home (Browse::dispatch ready "{\"type\":\"up\"}").model.path
     checkFalse "hides hidden files" (Browse::dispatch ready "{\"type\":\"hidden\",\"value\":\"false\"}").model.hidden
     check "asks for a folder" "[{\"kind\":\"pick\",\"path\":\"/Users/ada\"}]" (Browse::dispatch ready "{\"type\":\"choose\"}").commands
+    check "opens the platform's privacy settings" "[{\"kind\":\"settings\",\"path\":\"\"}]" (Browse::dispatch ready "{\"type\":\"settings\"}").commands
     moved = Browse::dispatch ready "{\"type\":\"picked\",\"value\":\"/Volumes/Archive\"}"
     check "measures the chosen folder" "/Volumes/Archive" moved.model.root
     check "and requests its walk" "measure /Volumes/Archive graft=false" (walkOf moved.commands)
-    granted = Browse::dispatch ready "{\"type\":\"picked\",\"value\":\"/Users/ada/Documents\"}"
-    check "a protected folder chosen inside joins the walk" "measure /Users/ada/Documents graft=true" (walkOf granted.commands)
+    granted = Browse::dispatch ready "{\"type\":\"picked\",\"value\":\"${mail}\"}"
+    check "an app's data chosen inside joins the walk" "measure ${mail} graft=true" (walkOf granted.commands)
     check "and keeps the measured folder" home granted.model.root
-    check "and opens the chosen one" "/Users/ada/Documents" granted.model.path
-    check "its walk reports by its own path" "ready" (Browse::dispatch granted.model "{\"type\":\"measured\",\"path\":\"/Users/ada/Documents\"}").model.stage
+    check "and opens the chosen one" mail granted.model.path
+    check "its walk reports by its own path" "ready" (Browse::dispatch granted.model "{\"type\":\"measured\",\"path\":\"${mail}\"}").model.stage
     check "a folder opens in Finder" "[{\"kind\":\"reveal\",\"path\":\"/Users/ada/Code\"}]" (Browse::dispatch ready "{\"type\":\"reveal\",\"value\":\"/Users/ada/Code\"}").commands
     check "but only inside the measured folder" "[]" (Browse::dispatch ready "{\"type\":\"reveal\",\"value\":\"/Users/adam\"}").commands
-    check "a protected folder is chosen in the picker" "[{\"kind\":\"pick\",\"path\":\"/Users/ada/Documents\"}]" (Browse::dispatch ready "{\"type\":\"grant\",\"value\":\"/Users/ada/Documents\"}").commands
-    counted = (Browse::dispatch started.model "{\"type\":\"progress\",\"path\":\"/Users/ada\",\"items\":1200,\"bytes\":5000}").model
+    check "an app's data is chosen in the picker" "[{\"kind\":\"pick\",\"path\":\"${mail}\"}]" (Browse::dispatch ready "{\"type\":\"grant\",\"value\":\"${mail}\"}").commands
+    counted = (Browse::dispatch chosen.model "{\"type\":\"progress\",\"path\":\"/Users/ada\",\"items\":1200,\"bytes\":5000}").model
     check "progress" 1200 counted.items
-    check "progress of a folder since left" 0 (Browse::dispatch started.model "{\"type\":\"progress\",\"path\":\"/Volumes/Old\",\"items\":9,\"bytes\":9}").model.items
+    check "progress of a folder since left" 0 (Browse::dispatch chosen.model "{\"type\":\"progress\",\"path\":\"/Volumes/Old\",\"items\":9,\"bytes\":9}").model.items
     check "round trip" (Browse::encode inside) (Browse::encode (Browse::decode (Browse::encode inside)))
 
 screenCase () =
     shown = screen (browser home true "ready")
     checkTrue "the open folder names the screen" (contains shown "\"kind\":\"navigation\",\"id\":\"/Users/ada\",\"text\":\"Home\"")
-    checkTrue "volume gauge" (contains shown "750.0 GB of 1.0 TB used")
+    checkTrue "purgeable space counts as available, as in Settings" (contains shown "700.0 GB of 1.0 TB used")
+    checkTrue "and is named" (contains shown "300.0 GB available, 50.0 GB of it purgeable")
     checkTrue "hidden folder ranked" (contains shown "\"text\":\".cache\"")
     checkTrue "hidden entries dimmed" (contains shown "\"style\":\"hidden\"")
     checkTrue "unreadable folders explained" (contains shown "2 folders here could not be read")
-    checkFalse "never asks for Full Disk Access" (contains shown "Full Disk Access")
-    checkTrue "protected folders listed apart" (contains shown "Protected by macOS")
-    checkTrue "and chosen to measure" (contains shown "\"event\":{\"type\":\"grant\",\"value\":\"/Users/ada/Documents\"}")
+    checkTrue "and says Full Disk Access counts the rest" (contains shown "need Full Disk Access")
+    checkTrue "offers Full Disk Access" (contains shown "\"text\":\"Allow Full Disk Access…\",\"event\":{\"type\":\"settings\"")
+    plain = browser home true "ready"
+    checkFalse "until it is granted" (contains (screen (plain(full = true))) "Allow Full Disk Access")
+    containers = screen (browser "/Users/ada/Library/Containers" true "ready")
+    checkTrue "other apps' data listed apart" (contains containers "Other apps' data")
+    checkTrue "and chosen to measure" (contains containers "\"event\":{\"type\":\"grant\",\"value\":\"${mail}\"}")
+    checkTrue "an app's data opens in Finder too" (contains containers "\"event\":{\"type\":\"reveal\",\"value\":\"${mail}\"}")
     checkTrue "folders open" (contains shown "\"event\":{\"type\":\"open\",\"value\":\"/Users/ada/Code\"}")
     finder = "\"menu\":[{\"kind\":\"button\",\"symbol\":\"folder\",\"text\":\"Open in Finder\",\"event\":{\"type\":\"reveal\",\"value\":\"/Users/ada/Code\"}}]"
     checkTrue "a folder's context menu opens it in Finder" (contains shown finder)
-    checkTrue "a protected folder's too" (contains shown "\"event\":{\"type\":\"reveal\",\"value\":\"/Users/ada/Documents\"}")
     checkFalse "a file has no Finder item" (contains shown "\"value\":\"/Users/ada/notes.txt\"")
-    phone = screen (storage::Browser(platform = "ios", home = home, root = home, path = home, hidden = true, stage = "ready", walking = home, items = 0, bytes = 0))
+    phone = phoneScreen (pictures "ready" 40000000000)
     checkFalse "an iPhone has no Finder" (contains phone "Open in Finder")
     checkTrue "toggle reflects the setting" (contains shown "\"text\":\"Hidden Files\",\"value\":\"true\"")
     checkFalse "no way up from the root" (contains shown "Enclosing Folder")
@@ -138,13 +169,44 @@ screenCase () =
     checkTrue "path bar starts at Home" (contains deeper "\"kind\":\"pathbar\",\"children\":[{\"kind\":\"button\",\"symbol\":\"house.fill\",\"text\":\"Home\"")
     checkTrue "a folder below Home goes by its name" (contains deeper "\"kind\":\"navigation\",\"id\":\"/Users/ada/Code\",\"text\":\"Code\"")
     checkTrue "way up" (contains deeper "Enclosing Folder")
-    walking = screen (Browse::dispatch (Browse::start home "macos").model "{\"type\":\"progress\",\"path\":\"/Users/ada\",\"items\":1200,\"bytes\":5000}").model
-    checkTrue "progress" (contains walking "1,200 items · 5.0 KB so far")
+    walking = screen (Browse::dispatch (Browse::start home "macos" false).model "{\"type\":\"progress\",\"path\":\"/\",\"items\":1200,\"bytes\":5000}").model
+    checkTrue "progress" (contains walking "Measuring Macintosh HD…")
+    checkTrue "counts so far" (contains walking "1,200 items · 5.0 KB so far")
+    checkTrue "and says macOS asks once for Documents" (contains walking "macOS asks once before the app reads Desktop, Documents")
     checkTrue "failure" (contains (screen (browser home true "failed")) "Cannot measure Home")
     checkTrue "unmeasured folder" (contains (screen (browser "/Users/ada/Downloads" true "ready")) "Not measured yet")
+
+phoneCase () =
+    shown = phoneScreen (pictures "ready" 40000000000)
+    checkTrue "the app's own folder is the phone's storage" (contains shown "\"kind\":\"navigation\",\"id\":\"/var/app\",\"text\":\"Storage\"")
+    checkTrue "what uses the device" (contains shown "On this Macintosh HD")
+    checkTrue "photos measured" (contains shown "\"text\":\"Photos & Videos\",\"symbol\":\"photo.on.rectangle.angled\",\"tint\":\"orange\",\"accent\":\"orange\",\"detail\":\"40.0 GB\"")
+    checkTrue "this app" (contains shown "\"text\":\"Osprey Storage\",\"symbol\":\"app.fill\",\"tint\":\"indigo\",\"accent\":\"indigo\",\"detail\":\"5.0 GB\"")
+    checkTrue "the rest, which iOS keeps from apps" (contains shown "\"text\":\"Other apps & iOS\",\"symbol\":\"square.stack.3d.up.fill\",\"tint\":\"gray\",\"accent\":\"gray\",\"detail\":\"655.0 GB\"")
+    checkTrue "and says where to split it by app" (contains shown "Settings › General › iPhone Storage")
+    checkTrue "a folder in Files can be measured" (contains shown "Measure a Folder in Files…")
+    checkFalse "no bar of a folder that holds little" (contains shown "measured here")
+    checkFalse "nor the app's own files" (contains shown "Largest items")
+    checkTrue "the library by kind, with counts" (contains shown "\"text\":\"Videos · 400\",\"symbol\":\"video.fill\",\"tint\":\"purple\",\"accent\":\"purple\",\"detail\":\"30.0 GB\",\"caption\":\"75%\"")
+    checkTrue "screenshots apart" (contains shown "\"text\":\"Screenshots · 600\"")
+    checkFalse "a kind with nothing is left out" (contains shown "Live Photos")
+    checkTrue "what only iCloud holds" (contains shown "\"text\":\"Only in iCloud\",\"symbol\":\"icloud.fill\",\"tint\":\"gray\",\"accent\":\"gray\",\"detail\":\"60.0 GB\"")
+    checkTrue "and why it takes no space here" (contains shown "9,000 items, hidden ones included")
+    crowded = phoneScreen (pictures "ready" 900000000000)
+    checkTrue "the rest never goes below nothing" (contains crowded "\"text\":\"Other apps & iOS\",\"symbol\":\"square.stack.3d.up.fill\",\"tint\":\"gray\",\"accent\":\"gray\",\"detail\":\"0 B\",\"caption\":\"0%\"")
+    checkFalse "no Full Disk Access on iPhone" (contains shown "Full Disk Access")
+    checkTrue "unreadable folders explained for iOS" (contains (phoneAt "/var/app/Library" (pictures "ready" 0)) "iOS keeps them from the app.")
+    checkFalse "and the device story stays at the top" (contains (phoneAt "/var/app/Library" (pictures "ready" 0)) "Other apps & iOS")
+    denied = phoneScreen (pictures "denied" 0)
+    checkTrue "denied photos lead to Settings" (contains denied "\"detail\":\"Allow in Settings\",\"caption\":\"\",\"value\":\"0\",\"event\":{\"type\":\"settings\"")
+    checkTrue "and count toward the rest" (contains denied "\"detail\":\"695.0 GB\"")
+    checkFalse "with no breakdown" (contains denied "Only in iCloud")
+    checkTrue "unasked photos can be allowed" (contains (phoneScreen (pictures "unasked" 0)) "\"event\":{\"type\":\"allow\"")
+    checkTrue "a partial library says so" (contains (phoneScreen (pictures "limited" 40000000000)) "only some photos")
 
 test "sizes, counts and shares read as Finder writes them" formatCase
 test "ranking keeps the largest entries under the hidden-files setting" rankCase
 test "paths, trails and symbols" pathCase
 test "events move the browser and request host work" browseCase
 test "screens show what the disk holds" screenCase
+test "an iPhone shows what uses it, as far as iOS lets an app see" phoneCase

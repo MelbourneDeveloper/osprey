@@ -42,37 +42,45 @@ enum SmokeCheck {
 
     /// `Projects` holds 10 KB in sight and 300 KB inside a hidden `.git`; a
     /// hidden `.cache` holds 200 KB; `Locked` cannot be read; `Documents`
-    /// holds 40 KB that macOS would ask about.
+    /// holds 40 KB; another app's container holds 30 KB that macOS would ask about.
     private static func browserChecks() -> [(String, Bool)] {
         guard let root = try? Fixture.make() else { return [("fixture", false)] }
         defer { Fixture.remove(root) }
-        let started = envelope(osprey_storage_start(root, "macos"))
+        let opened = envelope(osprey_storage_start(root, "macos", false))
+        let started = dispatch(opened, ["type": "picked", "value": root])
         DiskTree.current = DiskTree.measure(root, guarding: started.guarding) { _, _ in }
         let ready = dispatch(started, ["type": "measured", "path": root])
         let top = entries(storageScan(root))
         let unreadable = storageUnreadable()
-        let documents = root + "/Documents"
-        let granted = dispatch(ready, ["type": "picked", "value": documents])
-        if let walked = DiskTree.measure(documents, guarding: granted.guarding, progress: { _, _ in }) {
-            DiskTree.current?.graft(walked, at: documents)
+        let containers = root + "/Library/Containers"
+        let app = containers + "/com.example.app"
+        let sealed = entries(storageScan(containers))
+        let offered = dispatch(ready, ["type": "open", "value": containers])
+        let granted = dispatch(ready, ["type": "picked", "value": app])
+        if let walked = DiskTree.measure(app, guarding: granted.guarding, progress: { _, _ in }) {
+            DiskTree.current?.graft(walked, at: app)
         }
-        let joined = dispatch(granted, ["type": "measured", "path": documents])
-        let after = entries(storageScan(root))
+        let joined = dispatch(granted, ["type": "measured", "path": app])
+        let after = entries(storageScan(containers))
         let projects = top.first { $0.name == "Projects" }
         let projectBytes = entries(storageScan(root + "/Projects")).reduce(Int64(0)) { $0 + $1.bytes }
-        let documentBytes = entries(storageScan(documents)).reduce(Int64(0)) { $0 + $1.bytes }
+        let appBytes = entries(storageScan(app)).reduce(Int64(0)) { $0 + $1.bytes }
         let sighted = dispatch(ready, ["type": "hidden", "value": "false"])
         let inside = dispatch(ready, ["type": "open", "value": root + "/Projects"])
+        let photos = text(storagePhotosStatus())
         return [
-            ("asks for the walk", started.text.contains("\"commands\":[{\"kind\":\"measure\",\"path\":\"\(root)\",\"graft\":false")),
-            ("guards protected folders", started.guarding.covers(root + "/Documents") && started.guarding.covers(root + "/Library/Containers/com.apple.mail")),
-            ("lists every entry", Set(top.map(\.name)) == ["Projects", ".cache", "notes.txt", "Locked", "Documents"]),
-            ("protected folder left alone", top.first { $0.name == "Documents" }.map { $0.guarded && $0.bytes == 0 } ?? false),
-            ("protected folder offered", ready.text.contains("Protected by macOS") && ready.text.contains("\"type\":\"grant\"")),
-            ("chosen folder joins the walk", after.first { $0.name == "Documents" }.map { !$0.guarded && $0.bytes >= 40_000 } ?? false),
-            ("chosen folder opens", joined.text.contains("\"text\":\"report.pdf\"")),
+            ("the Mac measures the whole disk", opened.text.contains("\"commands\":[{\"kind\":\"measure\",\"path\":\"/\",\"graft\":false")),
+            ("asks for the chosen walk", started.text.contains("\"commands\":[{\"kind\":\"measure\",\"path\":\"\(root)\",\"graft\":false")),
+            ("guards other apps' data only", started.guarding.covers(app) && !started.guarding.covers(root + "/Documents")),
+            ("lists every entry", Set(top.map(\.name)) == ["Projects", ".cache", "notes.txt", "Locked", "Documents", "Library"]),
+            ("Documents counted", top.first { $0.name == "Documents" }.map { !$0.guarded && $0.bytes >= 40_000 } ?? false),
+            ("another app's data left alone", sealed.first { $0.name == "com.example.app" }.map { $0.guarded && $0.bytes == 0 } ?? false),
+            ("another app's data offered", offered.text.contains("Other apps' data") && offered.text.contains("\"type\":\"grant\"")),
+            ("Full Disk Access offered", ready.text.contains("Allow Full Disk Access")),
+            ("chosen folder joins the walk", after.first { $0.name == "com.example.app" }.map { !$0.guarded && $0.bytes >= 30_000 } ?? false),
+            ("chosen folder opens", joined.text.contains("\"text\":\"blob\"")),
             ("hard links keep folder and contents totals equal", projects.map { $0.bytes == projectBytes } ?? false),
-            ("grafted hard links keep folder and contents totals equal", after.first { $0.name == "Documents" }.map { $0.bytes == documentBytes } ?? false),
+            ("grafted hard links keep folder and contents totals equal", after.first { $0.name == "com.example.app" }.map { $0.bytes == appBytes } ?? false),
             ("hidden files inside a folder counted", (projects?.bytes ?? 0) >= 310_000),
             ("hidden files inside a folder can be left out", (projects?.visible ?? 0) >= 10_000 && (projects?.visible ?? 0) < 300_000),
             ("hidden folder flagged", top.first { $0.name == ".cache" }?.hidden == true),
@@ -82,6 +90,7 @@ enum SmokeCheck {
             ("hidden files can be turned off", !sighted.text.contains("\"text\":\".cache\"") && sighted.text.contains("\"text\":\"Projects\"")),
             ("folders open", inside.text.contains("\"text\":\".git\"") && inside.text.contains("Enclosing Folder")),
             ("out-of-range entry", storageEntryBytes(Int64(top.count)) == -1),
+            ("photo library status", ["unavailable", "unasked", "denied", "limited", "ready"].contains(photos)),
         ]
     }
 
@@ -95,7 +104,7 @@ enum SmokeCheck {
         let raw = text(pointer)
         let json = (try? JSONSerialization.jsonObject(with: Data(raw.utf8))) as? [String: Any]
         let walk = (json?["commands"] as? [[String: Any]])?.first
-        let guarding = DiskTree.Guard(protected: Set(walk?["protected"] as? [String] ?? []), apps: Set(walk?["apps"] as? [String] ?? []))
+        let guarding = DiskTree.Guard(apps: Set(walk?["apps"] as? [String] ?? []))
         return Envelope(text: raw, model: json?["model"] as? String ?? "", guarding: guarding)
     }
 
@@ -119,6 +128,7 @@ private enum Fixture {
     static let files: [(String, Int)] = [
         ("Projects/app.swift", 10_000), ("Projects/.git/pack", 300_000), (".cache/blob", 200_000),
         ("notes.txt", 1_000), ("Locked/secret", 50_000), ("Documents/report.pdf", 40_000),
+        ("Library/Containers/com.example.app/blob", 30_000),
     ]
 
     static func make() throws -> String {
@@ -128,7 +138,7 @@ private enum Fixture {
             try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data((0..<size).map { UInt8($0 % 251) }).write(to: file)
         }
-        for (original, link) in [("Projects/app.swift", "Projects/app-link.swift"), ("Documents/report.pdf", "Documents/report-link.pdf")] {
+        for (original, link) in [("Projects/app.swift", "Projects/app-link.swift"), ("Library/Containers/com.example.app/blob", "Library/Containers/com.example.app/blob-link")] {
             try FileManager.default.linkItem(at: root.appendingPathComponent(original), to: root.appendingPathComponent(link))
         }
         try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: root.appendingPathComponent("Locked").path)

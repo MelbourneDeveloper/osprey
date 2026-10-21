@@ -109,14 +109,33 @@ runs:
         sudo ln -sf "$DAP" /usr/bin/lldb-dap
         lldb-dap --version | head -2
 
+    - name: Keep the debugger off the network (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      # Ubuntu's /etc/profile.d/debuginfod.sh, which the ubuntu-24.04 image
+      # ships from 20261018, points DEBUGINFOD_URLS at
+      # debuginfod.ubuntu.com for every login shell, and VS Code reads its
+      # environment from a login shell. lldb-dap then asks that server for
+      # every module it lacks symbols for, starting with the kernel's vdso; on
+      # a runner kernel with no local debug package that lookup made `launch`
+      # take 27 s or more, past the E2E suite's 45 s session-start bound
+      # (actions/runner-images#14545). Nothing here needs symbols from the
+      # network, so no shell and no later step gets the variable.
+      run: |
+        ls /etc/profile.d/debuginfod* 2>/dev/null || true
+        sudo rm -f /etc/profile.d/debuginfod.sh /etc/profile.d/debuginfod.csh
+        echo "DEBUGINFOD_URLS=" >> "$GITHUB_ENV"
+
     - name: Verify lldb-dap can start a debug session
       if: runner.os == 'Linux'
       shell: bash
       # A broken adapter is otherwise invisible until the debugger E2E suite
       # times out eight times over, which reads as an Osprey regression. This
       # runs the same handshake against a three-line C program, so the adapter
-      # is what fails, by name, in seconds.
-      run: python3 "${{ github.action_path }}/lldb-dap-preflight.py" /usr/bin/lldb-dap
+      # is what fails, by name, in seconds. A login shell gives it the
+      # environment VS Code gives the adapter, so a profile script that slows
+      # the adapter down slows this down too.
+      run: bash -lc 'python3 "$0" /usr/bin/lldb-dap' "${{ github.action_path }}/lldb-dap-preflight.py"
 
     - name: Install LLVM and OpenSSL (macOS)
       if: runner.os == 'macOS'

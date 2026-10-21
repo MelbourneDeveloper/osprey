@@ -1,13 +1,14 @@
 import Foundation
 #if os(macOS)
 import AppKit
+#else
+import UIKit
 #endif
 
 private struct StorageCommand: Decodable {
     let kind: String
     let path: String
     var graft: Bool?
-    var protected: [String]?
     var apps: [String]?
 }
 
@@ -38,7 +39,10 @@ final class StorageStore: ObservableObject {
         guard ui == nil, failure == nil else { return }
         let status = osprey_main()
         guard status == 0 else { return fail("Osprey initialization failed: \(status)") }
-        accept(osprey_storage_start(canonical(NSHomeDirectory()), StorageStore.platform))
+        #if os(iOS)
+        deviceModel = UIDevice.current.model
+        #endif
+        accept(osprey_storage_start(canonical(NSHomeDirectory()), StorageStore.platform, fullDiskAccess()))
     }
 
     func send(_ event: [String: Any]) {
@@ -71,6 +75,8 @@ final class StorageStore: ObservableObject {
         case "measure": measure(command)
         case "pick": pick(command.path)
         case "reveal": reveal(command.path)
+        case "photos": PhotoLibrary.measure { [weak self] in self?.send(["type": "photos"]) }
+        case "settings": settings()
         default: fail("Osprey asked for unknown host work: \(command.kind)")
         }
     }
@@ -100,10 +106,21 @@ final class StorageStore: ObservableObject {
         #endif
     }
 
+    /// The privacy settings Osprey points to: Full Disk Access on the Mac, the
+    /// app's own page, with its Photos access, on iPhone.
+    private func settings() {
+        #if os(macOS)
+        let page = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+        if let url = URL(string: page) { NSWorkspace.shared.open(url) }
+        #else
+        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+        #endif
+    }
+
     /// Walks off the main thread; every result goes back to Osprey as an event.
     private func measure(_ command: StorageCommand) {
         let root = command.path, graft = command.graft == true
-        let guarding = DiskTree.Guard(protected: Set(command.protected ?? []), apps: Set(command.apps ?? []))
+        let guarding = DiskTree.Guard(apps: Set(command.apps ?? []))
         walk?.cancel()
         walk = Task.detached(priority: .userInitiated) { [weak self] in
             let tree = DiskTree.measure(root, guarding: guarding) { items, bytes in
