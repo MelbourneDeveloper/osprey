@@ -469,23 +469,6 @@ jobs:
       - name: Restore artifact permissions
         run: chmod +x target/release/osprey
 
-      - name: TEMP debug E2E with lldb-dap logging
-        timeout-minutes: 12
-        shell: bash
-        run: |
-          set +e
-          uname -r
-          echo "step env: ${DEBUGINFOD_URLS-unset}"; bash -lc 'echo "login env: ${DEBUGINFOD_URLS-unset}"'
-          sudo grep -rIl DEBUGINFOD /etc 2>/dev/null; ls ~/.cache/llvm-debuginfod 2>&1 | head -3
-          mkdir -p target/path-bin && cp target/release/osprey target/path-bin/osprey
-          cd vscode-extension
-          export LLDBDAP_LOG="$PWD/lldb-dap.log"
-          PATH="$GITHUB_WORKSPACE/target/path-bin:$PATH" npm run pretest > /dev/null 2>&1
-          OSPREY_TEST_GREP="Test Explorer Debug profile E2E" PATH="$GITHUB_WORKSPACE/target/path-bin:$PATH" \
-            timeout 540 xvfb-run -a ./node_modules/.bin/vscode-test 2>&1 | grep -viE "ChatModel|dbus" | tail -80
-          echo "=== lldb-dap log"; ls -la lldb-dap.log* 2>&1
-          head -c 8000 lldb-dap.log; echo; echo "=== tail"; tail -c 5000 lldb-dap.log
-
       - name: Extension suite with V8 coverage
         run: xvfb-run -a make _test_vscode_extension
 
