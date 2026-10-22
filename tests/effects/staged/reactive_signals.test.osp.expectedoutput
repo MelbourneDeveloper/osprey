@@ -7,5 +7,7 @@ ok 6 - arguments run once while clean computations stay cached
 ok 7 - unknown changes cannot retain a stale snapshot
 ok 8 - cached results retain whole variants across rebuilds
 ok 9 - cached callables retain their captured values across rebuilds
-1..9
-# tests=9 passed=9 failed=0 skipped=0
+refresh arguments: count=3@1 list=count=3@1 kept=count=2@1 count=4@1 count=5@1 count=2@1
+ok 10 - refreshed snapshots keep their layout as call arguments
+1..10
+# tests=10 passed=10 failed=0 skipped=0

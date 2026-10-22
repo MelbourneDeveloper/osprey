@@ -385,3 +385,38 @@ fn a_mixed_handler_dispatcher_continues_by_guaranteed_tail_call() {
         "the dispatcher must re-enter itself with a guaranteed tail call, saw: {reentries:?}"
     );
 }
+
+/// A `match` joining an object literal (`__obj_N`) with a row-typed parameter
+/// (`__row#…`) names one physical block twice. The join must keep an owner,
+/// or field access on the merged value guesses a record by field name: a
+/// hard error here, and another record's slots read silently once a second
+/// record declares the field (#272).
+#[test]
+fn match_join_keeps_one_owner_for_one_row_layout() {
+    let ir = module(
+        "type Region = { region: string, revision: int, json: string }\n\
+         fn describe(next) = \"${next.value} ${next.revision}\"\n\
+         fn pick(cached, flag) = describe(match flag { true => { revision: 1, value: \"a\" } false => cached })\n\
+         fn named(next) = Region { region: \"r\", revision: next.revision, json: next.value }\n\
+         fn relabel(cached, flag) = named(match flag { true => { revision: 2, value: \"b\" } false => cached })\n\
+         print(pick({ revision: 9, value: \"c\" }, false))\n\
+         print(relabel({ revision: 8, value: \"d\" }, true).json)\n",
+    );
+    // Each body writes slot N once building the literal arm and must read it
+    // back through the same row block after the join, never through Region's.
+    for header in [
+        "define internal i8* @pick(i8* %$p0, i1 %$p1)",
+        "define internal i8* @relabel(i8* %$p0, i1 %$p1)",
+    ] {
+        let body = function_body(&ir, header);
+        for slot in ["i32 0, i32 1", "i32 0, i32 2"] {
+            let row = body
+                .lines()
+                .filter(|line| {
+                    line.contains("getelementptr { i64, i64, i8* }") && line.ends_with(slot)
+                })
+                .count();
+            assert_eq!(row, 2, "{header} must write and read row {slot}:\n{body}");
+        }
+    }
+}

@@ -7,10 +7,11 @@
 //! [`Expr::TypeConstructor`] required by [FLAVOR-IR-EQUIV].
 //!
 //! The table holds only constructors declared in the compilation unit being
-//! lowered; an imported constructor is absent and keeps the named form, so it
-//! is never silently mis-lowered.
+//! lowered; an imported constructor is absent here and keeps the call form
+//! until the assembled program is folded by
+//! [`osprey_ast::positional::fold_constructions`].
 
-use osprey_ast::{Expr, FieldAssignment};
+use osprey_ast::Expr;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
@@ -74,18 +75,7 @@ pub(crate) fn construct(name: &str, args: Vec<Expr>) -> Option<Expr> {
     if arity != args.len() {
         return None;
     }
-    Some(Expr::TypeConstructor {
-        name: name.to_owned(),
-        type_args: Vec::new(),
-        fields: args
-            .into_iter()
-            .enumerate()
-            .map(|(slot, value)| FieldAssignment {
-                name: osprey_ast::positional_field_name(slot),
-                value,
-            })
-            .collect(),
-    })
+    Some(osprey_ast::positional::construction(name, args))
 }
 
 #[cfg(test)]

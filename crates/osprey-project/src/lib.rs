@@ -27,7 +27,6 @@ mod resolve;
 mod rewrite;
 mod signature_collect;
 mod source;
-mod span;
 mod state;
 mod state_support;
 mod symbol_rewrite;

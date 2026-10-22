@@ -16,6 +16,21 @@ int64_t json_parse(char *s);
 char *json_get(int64_t handle, char *path);
 int64_t json_length(int64_t handle, char *path);
 int64_t json_free(int64_t handle);
+int64_t json_decode_open(char *text);
+int64_t json_node_kind(int64_t handle, int64_t node);
+int64_t json_node_count(int64_t handle, int64_t node);
+int64_t json_node_child(int64_t handle, int64_t node, int64_t i);
+char *json_node_key(int64_t handle, int64_t node, int64_t i);
+char *json_node_text(int64_t handle, int64_t node);
+int64_t json_node_int(int64_t handle, int64_t node);
+double json_node_float(int64_t handle, int64_t node);
+int64_t json_writer_open(void);
+int64_t json_write_raw(int64_t handle, char *token);
+int64_t json_write_string(int64_t handle, char *s);
+int64_t json_write_int(int64_t handle, int64_t n);
+int64_t json_write_float(int64_t handle, double f);
+char *json_writer_close(int64_t handle);
+const char *osp_io_error(void);
 
 extern long g_checks;
 #define CHECK(c)                                                               \
@@ -37,5 +52,9 @@ int64_t parse_ok(const char *src);
 // everything they must refuse [BUILTIN-JSON-STRING] [BUILTIN-JSON-NUMBER].
 void t_string_grammar_rejects_everything_outside_it(void);
 void t_number_grammar(void);
+
+// The codec half: limits, duplicate members, recorded reasons, the typed
+// decode index and the writer [BUILTIN-JSON-LIMITS] [BUILTIN-JSON-TYPED].
+void t_codec(void);
 
 #endif // OSPREY_JSON_TESTS_SHARED_H

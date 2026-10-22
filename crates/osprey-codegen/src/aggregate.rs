@@ -187,6 +187,7 @@ fn gen_result_ctor(cg: &mut Codegen, name: &str, fields: &[FieldAssignment]) -> 
 
 /// The heap block an update rebuilds: struct spelling, ordered slots, the
 /// discriminant and the allocation meta word.
+#[derive(PartialEq)]
 struct RecordBlock {
     struct_ty: String,
     fields: Vec<(String, LType)>,
@@ -231,6 +232,18 @@ fn record_block(
         tag: Some(0),
         meta,
     })
+}
+
+/// Whether two owners name one physical block — the proof a join needs before
+/// one owner may stand for both. A row's derived layout registers on first
+/// sight, exactly as field access would. Implements [TYPE-RECORD].
+pub(crate) fn same_block(
+    cg: &mut Codegen,
+    left: (&str, Option<&osprey_types::Type>),
+    right: (&str, Option<&osprey_types::Type>),
+) -> bool {
+    let left = record_block(cg, left.0, left.1);
+    left.is_some() && left == record_block(cg, right.0, right.1)
 }
 
 /// The slots of a generic-record instantiation from its inferred record type,

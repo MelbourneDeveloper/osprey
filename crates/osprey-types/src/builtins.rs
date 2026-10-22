@@ -341,6 +341,22 @@ fn json(e: &mut TypeEnv) {
     mono(e, "jsonGet", vec![i(), s()], res(s()));
     mono(e, "jsonLength", vec![i(), s()], i());
     mono(e, "jsonFree", vec![i()], res(i()));
+    // The primitives the built-in Json prelude decodes and encodes through
+    // ([BUILTIN-JSON-TYPED]); `__` keeps them out of everyday names.
+    mono(e, "__jsonDecodeOpen", vec![s()], res(i()));
+    mono(e, "__jsonNodeKind", vec![i(), i()], i());
+    mono(e, "__jsonNodeCount", vec![i(), i()], i());
+    mono(e, "__jsonNodeChild", vec![i(), i(), i()], i());
+    mono(e, "__jsonNodeKey", vec![i(), i(), i()], res(s()));
+    mono(e, "__jsonNodeText", vec![i(), i()], res(s()));
+    mono(e, "__jsonNodeInt", vec![i(), i()], i());
+    mono(e, "__jsonNodeFloat", vec![i(), i()], Type::float());
+    mono(e, "__jsonWriterOpen", vec![], res(i()));
+    mono(e, "__jsonWriteRaw", vec![i(), s()], u());
+    mono(e, "__jsonWriteString", vec![i(), s()], u());
+    mono(e, "__jsonWriteInt", vec![i(), i()], u());
+    mono(e, "__jsonWriteFloat", vec![i(), Type::float()], u());
+    mono(e, "__jsonWriterClose", vec![i()], res(s()));
 }
 
 fn concurrency(e: &mut TypeEnv) {

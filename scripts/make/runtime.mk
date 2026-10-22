@@ -65,6 +65,8 @@ $(NATIVE_RUNTIME_STAMP): $(NATIVE_RUNTIME_INPUTS) $(NATIVE_RUNTIME_CONFIG) Makef
 	  $(CC) $(A) -include runtime/osp_arc_shim.h runtime/string_runtime.c      -o bin/arc/string_runtime.o && \
 	  $(CC) $(A) -include runtime/osp_arc_shim.h runtime/string_runtime_list.c -o bin/arc/string_runtime_list.o && \
 	  $(CC) $(B) -include runtime/osp_arc_shim.h runtime/json_runtime.c        -o bin/arc/json_runtime.o && \
+	  $(CC) $(B) -include runtime/osp_arc_shim.h runtime/json_text.c           -o bin/arc/json_text.o && \
+	  $(CC) $(B) -include runtime/osp_arc_shim.h runtime/json_codec.c          -o bin/arc/json_codec.o && \
 	  $(CC) $(A) -include runtime/osp_arc_shim.h runtime/file_runtime.c        -o bin/arc/file_runtime.o && \
 	  $(CC) -c -fPIC -O2 $(WARN_MAX) -Wpedantic -std=c11 -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime.o && \
 	  $(CC) $(A) runtime/system_runtime.c       -o bin/system_runtime.o && \
@@ -77,6 +79,8 @@ $(NATIVE_RUNTIME_STAMP): $(NATIVE_RUNTIME_INPUTS) $(NATIVE_RUNTIME_CONFIG) Makef
 	  $(CC) $(B) runtime/map_runtime.c          -o bin/map_runtime.o && \
 	  $(CC) $(B) runtime/map_runtime_hamt.c     -o bin/map_runtime_hamt.o && \
 	  $(CC) $(B) runtime/json_runtime.c         -o bin/json_runtime.o && \
+	  $(CC) $(B) runtime/json_text.c            -o bin/json_text.o && \
+	  $(CC) $(B) runtime/json_codec.c           -o bin/json_codec.o && \
 	  $(CC) $(B) runtime/ffi_runtime.c          -o bin/ffi_runtime.o && \
 	  $(CC) $(B) runtime/term_runtime.c         -o bin/term_runtime.o && \
 	  $(CC) $(B) runtime/random_runtime.c       -o bin/random_runtime.o && \

@@ -1,11 +1,15 @@
 //! Position rebasing for collision-free multi-file inference metadata.
 
-use osprey_ast::{
+use crate::{
     EffectOperation, EffectRef, Expr, FieldAssignment, InterpolatedPart, MatchArm, NamedArgument,
     Parameter, Pattern, Position, Program, SignatureItem, SignatureType, Stmt, TypeExpr,
 };
 
-pub(crate) fn offset_program(program: &mut Program, line_offset: u32) {
+/// Shift every recorded position in `program` down by `line_offset` lines, so
+/// programs assembled into one never share an inference site. Project
+/// assembly rebases each file; the built-in prelude rebases itself past any
+/// project ([BUILTIN-JSON-TYPED]).
+pub fn offset_program(program: &mut Program, line_offset: u32) {
     for statement in &mut program.statements {
         offset_stmt(statement, line_offset);
     }

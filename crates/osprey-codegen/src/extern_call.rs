@@ -21,6 +21,8 @@ use osprey_ast::{Expr, NamedArgument};
 enum Ret {
     /// Plain `i64` (status, handle, count, exit code).
     Int,
+    /// Plain `double`.
+    Float,
     /// Plain `i8*` string, taken as-is (`input()` — the caller owns it).
     Str,
     /// `void` — yields Unit.
@@ -52,7 +54,7 @@ struct Sig {
 /// `Result<int>` builtin shares the `< 0 ⇒ Error` convention, every
 /// `Result<string>` the `null ⇒ Error` one.
 fn lookup(name: &str) -> Option<Sig> {
-    use LType::{Ptr, Str, I64};
+    use LType::{Double, Ptr, Str, I64};
     let sig = |cname, params, ret| Sig { cname, params, ret };
     Some(match name {
         // --- cryptographically-secure random + stdin (random_runtime.c) ---
@@ -106,6 +108,21 @@ fn lookup(name: &str) -> Option<Sig> {
         "jsonGet" => sig("json_get", &[I64, Str], Ret::ResultStr(None)),
         "jsonLength" => sig("json_length", &[I64, Str], Ret::Int),
         "jsonFree" => sig("json_free", &[I64], Ret::ResultInt),
+        // --- Json prelude primitives (json_codec.c) [BUILTIN-JSON-TYPED] ---
+        "__jsonDecodeOpen" => sig("json_decode_open", &[Str], Ret::ResultInt),
+        "__jsonNodeKind" => sig("json_node_kind", &[I64, I64], Ret::Int),
+        "__jsonNodeCount" => sig("json_node_count", &[I64, I64], Ret::Int),
+        "__jsonNodeChild" => sig("json_node_child", &[I64, I64, I64], Ret::Int),
+        "__jsonNodeKey" => sig("json_node_key", &[I64, I64, I64], Ret::ResultStr(None)),
+        "__jsonNodeText" => sig("json_node_text", &[I64, I64], Ret::ResultStr(None)),
+        "__jsonNodeInt" => sig("json_node_int", &[I64, I64], Ret::Int),
+        "__jsonNodeFloat" => sig("json_node_float", &[I64, I64], Ret::Float),
+        "__jsonWriterOpen" => sig("json_writer_open", &[], Ret::ResultInt),
+        "__jsonWriteRaw" => sig("json_write_raw", &[I64, Str], Ret::StatusUnit),
+        "__jsonWriteString" => sig("json_write_string", &[I64, Str], Ret::StatusUnit),
+        "__jsonWriteInt" => sig("json_write_int", &[I64, I64], Ret::StatusUnit),
+        "__jsonWriteFloat" => sig("json_write_float", &[I64, Double], Ret::StatusUnit),
+        "__jsonWriterClose" => sig("json_writer_close", &[I64], Ret::ResultStr(None)),
         // --- terminal control (term_runtime.c) [BUILTIN-TERM] ---
         "termRawMode" => sig("term_raw_mode", &[I64], Ret::StatusUnit),
         "termCols" => sig("term_cols", &[], Ret::Int),
@@ -215,6 +232,10 @@ fn emit(cg: &mut Codegen, sig: &Sig, ops: &[String]) -> Result<Value> {
         Ret::Int => Ok(Value::new(
             cg.call("i64", sig.cname, &params, &op_refs),
             LType::I64,
+        )),
+        Ret::Float => Ok(Value::new(
+            cg.call("double", sig.cname, &params, &op_refs),
+            LType::Double,
         )),
         Ret::Str => {
             // Fresh malloc'd C buffer — the caller owns it [GC-ARC-PERCEUS].
