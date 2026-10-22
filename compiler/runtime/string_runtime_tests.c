@@ -16,6 +16,7 @@
  */
 
 #include <assert.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -883,6 +884,75 @@ static void test_float_to_string(void) {
     free(inf_s);
 }
 
+/* The spelling toString(float) has always had, as the plain definition the
+   fast path must reproduce byte for byte: the smallest precision from 10 to
+   17 whose %g spelling reads back as the same double, plus ".0" when that
+   spelling would otherwise look like an integer. */
+static void reference_float_spelling(double d, char *buf, size_t cap) {
+    int n = -1;
+    for (int precision = 10; precision <= 17; precision++) {
+        n = snprintf(buf, cap, "%.*g", precision, d);
+        if (strtod(buf, NULL) == d) break;
+    }
+    if (strpbrk(buf, ".eEni") == NULL) {
+        memcpy(buf + n, ".0", 3);
+    }
+}
+
+static void expect_reference_spelling(double d) {
+    char want[64];
+    reference_float_spelling(d, want, sizeof(want));
+    char *got = osp_float_to_string(d);
+    if (got == NULL || strcmp(got, want) != 0) {
+        fprintf(stderr, "%a: got %s want %s\n", d, got ? got : "(null)", want);
+    }
+    assert(got != NULL && strcmp(got, want) == 0);
+    free(got);
+}
+
+static uint64_t next_bits(uint64_t *state) {
+    *state ^= *state << 13;
+    *state ^= *state >> 7;
+    *state ^= *state << 17;
+    return *state;
+}
+
+static double from_bits(uint64_t bits) {
+    double d;
+    memcpy(&d, &bits, sizeof(d));
+    return d;
+}
+
+/* toString(float) runs for every interpolated float and every float a JSON
+   document encodes, so it must not search every precision in turn -- yet it
+   must keep the exact spelling. This pins the fast path to the reference
+   over every power of two (where the round-trip interval is lopsided), the
+   whole-number boundary, short decimals, subnormals and a million random
+   bit patterns. [BUILTIN-STRING] */
+static void test_float_to_string_matches_reference(void) {
+    for (int e = -1074; e <= 1023; e++) {
+        expect_reference_spelling(ldexp(1.0, e));
+        expect_reference_spelling(-ldexp(1.0, e));
+    }
+    const double edges[] = {0.0, -0.0, 1e10, 1e10 - 1, -(1e10 - 1), 9999999999.5,
+                            1e15, 0.1, 0.2, 0.3, 1.0 / 3.0, 2.5, -7.75, 5e-324,
+                            2.2250738585072014e-308, 1.7976931348623157e308};
+    for (size_t i = 0; i < sizeof(edges) / sizeof(edges[0]); i++) {
+        expect_reference_spelling(edges[i]);
+    }
+    for (int k = -20000; k <= 20000; k++) {
+        expect_reference_spelling(k / 1000.0);
+        expect_reference_spelling((double)k * 1048576.0);
+    }
+    uint64_t state = 0x9E3779B97F4A7C15u;
+    for (int i = 0; i < 1000000; i++) {
+        double d = from_bits(next_bits(&state));
+        if (isfinite(d)) {
+            expect_reference_spelling(d);
+        }
+    }
+}
+
 /* [STRING-INTERPOLATION] the measure/write pair: size matches the write
    exactly, the write NUL-terminates within cap, and hostile caps are safe. */
 static void test_format_measure_write(void) {
@@ -965,6 +1035,7 @@ int main(void) {
     test_cursor_roundtrip_exhaustive();
     test_strlen();
     test_float_to_string();
+    test_float_to_string_matches_reference();
     test_format_measure_write();
     test_internal_helpers();
     printf("✅ all string_runtime tests passed\n");
