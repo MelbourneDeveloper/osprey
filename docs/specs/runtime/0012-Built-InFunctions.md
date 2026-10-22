@@ -661,6 +661,72 @@ malformed input — `Error`, no handle, and nothing retained — because a
 partially built document is not a document. A parse that fails, for either
 reason, frees everything it allocated.
 
+`jsonDecode` reads numbers as values. A number with neither fraction nor
+exponent is an integer and must fit in 64 bits; any other number must be a
+finite double. A number outside those ranges is an `Error` naming its byte,
+never a rounded or clamped value. The handle API keeps such a number as text.
+
+### Typed values — [BUILTIN-JSON-TYPED]
+
+```osprey
+type Json = JsonNull | JsonBool(bool) | JsonInt(int) | JsonFloat(float)
+          | JsonString(string) | JsonArray(List<Json>) | JsonObject(List<JsonMember>)
+type JsonMember = JsonMember(string, Json)
+
+jsonEncode(json: Json) -> Result<string, Error>
+jsonDecode(text: string) -> Result<Json, Error>
+jsonQuote(text: string) -> Result<string, Error>
+jsonField(value: Json, name: string) -> Result<Json, Error>
+jsonIndex(value: Json, index: int) -> Result<Json, Error>
+jsonText(value: Json) -> Result<string, Error>
+jsonInt(value: Json) -> Result<int, Error>
+jsonFloat(value: Json) -> Result<float, Error>
+jsonBool(value: Json) -> Result<bool, Error>
+```
+
+`Json` is an ordinary union with positional payloads, so a program builds a
+document as data and reads one with `match`. Object members keep their order.
+Integers and floats stay distinct in both directions: `jsonDecode` gives `1` as
+`JsonInt` and `1.0` or `1e0` as `JsonFloat`, and `jsonEncode` writes every float
+with a decimal point or exponent, so the text decodes back to a float.
+
+`jsonDecode` accepts exactly the texts `jsonParse` accepts, under
+[BUILTIN-JSON-STRING], [BUILTIN-JSON-NUMBER] and [BUILTIN-JSON-LIMITS], and
+holds no handle once it returns.
+
+`jsonEncode` writes compact RFC 8259 text into one buffer and returns it as one
+string. It escapes `"`, `\` and U+0001–U+001F with the shortest escape (`\n`,
+`\t`, … or `\u00XX`) and writes all other characters as UTF-8. A float that is
+NaN or infinite, or a string that is not valid UTF-8, has no JSON spelling and
+is an `Error`. `jsonQuote(text)` is `jsonEncode(JsonString(text))`.
+
+`jsonField` returns the first member with the given name. `jsonIndex` returns
+an array element. `jsonText`, `jsonInt`, `jsonFloat` and `jsonBool` return a
+scalar's value; `jsonFloat` also accepts `JsonInt` and widens it. Each accessor
+returns `Error` with a message naming the accessor and the reason, such as
+`jsonField: no member email` or `jsonIndex: not an array`.
+
+These declarations are Osprey source that the compiler attaches to a program
+that names any of them. A program that names none compiles exactly as written.
+A program that declares a type or constructor with one of these names keeps its
+own declarations and gets none of these. A program that declares a function
+with one of these names keeps its own function in place of that one only.
+
+### Limits and failure reasons — [BUILTIN-JSON-LIMITS]
+
+Containers nest at most 128 levels. A deeper document is rejected before the
+parser recurses, so hostile input cannot exhaust the stack. An object that
+repeats a member name is rejected whole: lookups would otherwise depend on
+which duplicate a reader keeps. Names compare after unescaping, so `"ab"` and
+`"a\u0062"` are the same name. Neither parser imposes a byte limit on the
+text.
+
+A rejection's `Error` message names the operation, the byte offset where the
+text stopped being JSON, and the reason:
+`jsonDecode: byte 3: expected ',' or ']' in array`. A repeated name is
+reported at its object's opening brace. A text that is absent entirely reports
+`document: no text`.
+
 ## Terminal Functions — [BUILTIN-TERM]
 
 ```osprey
