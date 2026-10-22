@@ -1,11 +1,11 @@
-// JSON document handles: the jsonParse/jsonGet surface, the node index the
+// JSON document handles: the jsonParse/jsonGet surface, the accessors the
 // built-in Json prelude decodes through, and the single-buffer writer it
-// encodes through. Every handle is a slot in a lock-guarded table, so a
-// stale, forged or double-freed handle is a refusal, never a dereference.
-// Implements [BUILTIN-JSON], [BUILTIN-JSON-TYPED].
+// encodes through. Every handle is a slot in a table, so a stale, forged or
+// double-freed handle is a refusal, never a dereference. Implements
+// [BUILTIN-JSON], [BUILTIN-JSON-TYPED].
 //
 // Path syntax (jsonGet/jsonLength): "a.b[0].c". Keys containing '.' or '['
-// are not addressable by path; the typed decoder walks node ids instead.
+// are not addressable by path; the typed decoder walks slots instead.
 
 #ifndef __wasm__
 #include <pthread.h>
@@ -13,7 +13,6 @@
 #include "io_error.h"
 #include "json_internal.h"
 
-#include <errno.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -24,36 +23,30 @@ char *osp_float_to_string(double d);
 
 #define MAX_JSON_HANDLES 1024
 
-// One node of a document's breadth-first index. Breadth-first order keeps a
-// container's children contiguous, so child `i` of node `n` is `first + i`.
-typedef struct {
-  const JVal *v;
-  size_t first;
-  union {
-    int64_t i;
-    double f;
-  } number; // a number's value, read once while indexing
-} JNode;
+static bool valid_handle(int64_t handle, int64_t capacity) {
+  return handle >= 1 && handle < capacity;
+}
 
-typedef struct {
-  JVal *root;
-  JNode *nodes;
-  size_t count;
-} JDoc;
+// Claim the first free slot of `table` for `item`; -1 when it is full.
+static int64_t claim_slot(void **table, int64_t capacity, void *item) {
+  for (int64_t i = 1; i < capacity; i++) {
+    if (!table[i]) {
+      table[i] = item;
+      return i;
+    }
+  }
+  return -1;
+}
 
-typedef struct {
-  JsonBuf buf;
-  const char *why;
-  bool after_value; // the next value needs a ',' in front of it
-} JWriter;
+// ---- handle API ------------------------------------------------------------
+//
+// jsonParse documents are shared: any fiber may read or free any handle, so
+// the table is lock-guarded. wasm32-wasip1 runs one thread -- the fiber
+// runtime is not in its archive -- and the WASI SDK that CI pins ships no
+// pthread mutex, so the lock compiles away there. [WASM-TARGET]
 
 static JDoc *g_json_docs[MAX_JSON_HANDLES];
-static JWriter *g_json_writers[MAX_JSON_HANDLES];
 
-// Every fiber shares the handle tables, so each access holds this lock.
-// wasm32-wasip1 runs one thread — the fiber runtime is not in its archive —
-// and the WASI SDK that CI pins ships no pthread mutex, so a JSON program
-// could not link there. The lock compiles away on that target. [WASM-TARGET]
 #ifdef __wasm__
 static void json_table_lock(void) {}
 static void json_table_unlock(void) {}
@@ -63,155 +56,115 @@ static void json_table_lock(void) { pthread_mutex_lock(&g_json_mutex); }
 static void json_table_unlock(void) { pthread_mutex_unlock(&g_json_mutex); }
 #endif
 
-static bool valid_handle(int64_t handle) {
-  return handle >= 1 && handle < MAX_JSON_HANDLES;
+static const char *text_at(const JDoc *doc, size_t offset) {
+  return doc->text.data + offset;
 }
 
-// Claim the first free slot for `item`; -1 when the table is full. Callers
-// hold the lock.
-static int64_t claim_slot(void **table, void *item) {
-  for (int64_t i = 1; i < MAX_JSON_HANDLES; i++) {
-    if (!table[i]) {
-      table[i] = item;
-      return i;
+static const JNode *child_at(const JDoc *doc, const JNode *n, size_t i) {
+  return &doc->nodes[doc->slots[n->at + i]];
+}
+
+// The member of object `n` named by the `len` bytes at `name`, or NULL.
+static const JNode *member(const JDoc *doc, const JNode *n, const char *name,
+                           size_t len) {
+  for (size_t i = 0; n->type == J_OBJ && i < n->count; i++) {
+    const JNode *m = child_at(doc, n, i);
+    const char *key = text_at(doc, m->key);
+    if (strncmp(key, name, len) == 0 && key[len] == '\0') {
+      return m;
     }
   }
-  return -1;
+  return NULL;
 }
 
-static void doc_free(JDoc *doc) {
-  json_tree_free(doc->root);
-  free(doc->nodes);
-  free(doc);
+// `[digits]` at `*p`, consumed; the element it names, or NULL.
+static const JNode *element(const JDoc *doc, const JNode *n, const char **p) {
+  const char *s = *p + 1;
+  size_t index = 0;
+  const char *digits = s;
+  while (*s >= '0' && *s <= '9' && index <= SIZE_MAX / 10 - 9) {
+    index = index * 10 + (size_t)(*s - '0');
+    s++;
+  }
+  *p = s + 1;
+  bool well_formed = s != digits && *s == ']';
+  return well_formed && n->type == J_ARR && index < n->count
+             ? child_at(doc, n, index)
+             : NULL;
 }
 
-// ---- path navigation -------------------------------------------------------
-
-static const JVal *navigate(const JVal *cur, const char *path) {
+static const JNode *navigate(const JDoc *doc, const char *path) {
+  const JNode *cur = json_slot(doc, 0);
   const char *p = path;
   while (cur && *p) {
     if (*p == '.') {
       p++;
-      continue;
-    }
-    if (*p == '[') {
-      p++;
-      long idx = 0;
-      bool any = false;
-      while (*p >= '0' && *p <= '9') {
-        idx = idx * 10 + (*p - '0');
-        p++;
-        any = true;
-      }
-      if (!any || *p != ']') {
-        return NULL;
-      }
-      p++;
-      if (cur->type != J_ARR || idx < 0 || (size_t)idx >= cur->count) {
-        return NULL;
-      }
-      cur = cur->items[idx];
+    } else if (*p == '[') {
+      cur = element(doc, cur, &p);
     } else {
       const char *start = p;
-      while (*p && *p != '.' && *p != '[') {
-        p++;
-      }
-      size_t klen = (size_t)(p - start);
-      if (cur->type != J_OBJ) {
-        return NULL;
-      }
-      const JVal *next = NULL;
-      for (size_t i = 0; i < cur->nmemb; i++) {
-        if (strlen(cur->keys[i]) == klen &&
-            strncmp(cur->keys[i], start, klen) == 0) {
-          next = cur->vals[i];
-          break;
-        }
-      }
-      if (!next) {
-        return NULL;
-      }
-      cur = next;
+      p += strcspn(p, ".[");
+      cur = member(doc, cur, start, (size_t)(p - start));
     }
   }
   return cur;
 }
 
-
-static const JVal *lookup(int64_t handle, const char *path) {
-  if (!valid_handle(handle) || !g_json_docs[handle]) {
-    return NULL;
-  }
-  return navigate(g_json_docs[handle]->root, path);
+// The document and node at `path`, or NULL. Callers hold the lock.
+static const JNode *lookup(int64_t handle, const char *path, JDoc **doc) {
+  *doc = valid_handle(handle, MAX_JSON_HANDLES) ? g_json_docs[handle] : NULL;
+  return *doc ? navigate(*doc, path ? path : "") : NULL;
 }
-
-// ---- handle API ------------------------------------------------------------
 
 int64_t json_parse(char *s) {
   int64_t status = JSON_ERR_MALFORMED;
-  JVal *root = json_parse_tree(s, "jsonParse", &status);
-  JDoc *doc = root ? calloc(1, sizeof(JDoc)) : NULL;
+  JDoc *doc = json_parse_doc(s, "jsonParse", false, &status);
   if (!doc) {
-    if (root) {
-      json_tree_free(root);
-      osp_io_error_text("jsonParse", "document", "out of memory");
-    }
     return status;
   }
-  doc->root = root;
   json_table_lock();
-  int64_t handle = claim_slot((void **)g_json_docs, doc);
+  int64_t handle = claim_slot((void **)g_json_docs, MAX_JSON_HANDLES, doc);
   json_table_unlock();
   if (handle < 0) {
-    doc_free(doc);
+    json_doc_free(doc);
     osp_io_error_text("jsonParse", "document", "too many open documents");
     return JSON_ERR_TABLE_FULL;
   }
   return handle;
 }
 
+static const char *scalar_text(const JDoc *doc, const JNode *n) {
+  switch (n->type) {
+  case J_STR:
+  case J_NUM: return text_at(doc, n->at);
+  case J_BOOL: return n->flag ? "true" : "false";
+  case J_NULL: return "null";
+  default: return NULL; // arrays/objects are not scalars
+  }
+}
+
 char *json_get(int64_t handle, char *path) {
   json_table_lock();
-  const JVal *v = lookup(handle, path ? path : "");
-  char *out = NULL;
-  if (v) {
-    switch (v->type) {
-    case J_STR:
-    case J_NUM:
-      out = strdup(v->str);
-      break;
-    case J_BOOL:
-      out = strdup(v->bval ? "true" : "false");
-      break;
-    case J_NULL:
-      out = strdup("null");
-      break;
-    default:
-      out = NULL; // arrays/objects are not scalars
-      break;
-    }
-  }
+  JDoc *doc = NULL;
+  const JNode *n = lookup(handle, path, &doc);
+  const char *text = n ? scalar_text(doc, n) : NULL;
+  char *out = text ? strdup(text) : NULL;
   json_table_unlock();
   return out;
 }
 
 int64_t json_length(int64_t handle, char *path) {
   json_table_lock();
-  const JVal *v = lookup(handle, path ? path : "");
-  int64_t len = -1;
-  if (v) {
-    if (v->type == J_ARR) {
-      len = (int64_t)v->count;
-    } else if (v->type == J_OBJ) {
-      len = (int64_t)v->nmemb;
-    }
-  }
+  JDoc *doc = NULL;
+  const JNode *n = lookup(handle, path, &doc);
+  bool counted = n && (n->type == J_ARR || n->type == J_OBJ);
+  int64_t len = counted ? (int64_t)n->count : -1;
   json_table_unlock();
   return len;
 }
 
 int64_t json_free(int64_t handle) {
-  if (!valid_handle(handle)) {
+  if (!valid_handle(handle, MAX_JSON_HANDLES)) {
     return -1;
   }
   json_table_lock();
@@ -221,180 +174,125 @@ int64_t json_free(int64_t handle) {
   if (!doc) {
     return -1;
   }
-  doc_free(doc);
+  json_doc_free(doc);
   return 0;
 }
 
-// ---- typed decode index ----------------------------------------------------
+// ---- typed decode ----------------------------------------------------------
+//
+// jsonDecode opens a document, walks it once and closes it, and the walk
+// calls no program code and performs no effect -- so it never leaves the
+// thread that opened the document, and no other thread can name it. The
+// table is therefore thread-local and every accessor is lock-free: the walk
+// asks one or two questions per value, and a mutex on each would cost more
+// than the answer [BUILTIN-JSON-TYPED].
 
-static size_t child_count(const JVal *v) {
-  return v->type == J_ARR ? v->count : v->type == J_OBJ ? v->nmemb : 0;
-}
+#define MAX_DECODE_HANDLES 64
 
-static const JVal *child_at(const JVal *v, size_t i) {
-  return v->type == J_ARR ? v->items[i] : v->vals[i];
-}
+static _Thread_local JDoc *t_decodes[MAX_DECODE_HANDLES];
 
-static bool is_integer_text(const char *text) {
-  return strpbrk(text, ".eE") == NULL;
-}
-
-// Read a number into its node: an integer lexeme must fit int64 and a
-// fractional/exponent one must be a finite double, so the Json type holds it
-// without rounding. The lexeme already passed the RFC 8259 grammar
-// [BUILTIN-JSON-NUMBER].
-static const char *read_number(JNode *n) {
-  errno = 0;
-  if (is_integer_text(n->v->str)) {
-    n->number.i = strtoll(n->v->str, NULL, 10);
-    return errno == ERANGE ? "integer outside the 64-bit range" : NULL;
-  }
-  n->number.f = strtod(n->v->str, NULL);
-  return isfinite(n->number.f) ? NULL : "number outside the float range";
-}
-
-// Lay the tree out breadth-first and check every number on the way, so the
-// prelude's walk cannot meet a value it has no variant for.
-static const char *index_nodes(JDoc *doc) {
-  size_t cap = 16;
-  doc->nodes = malloc(cap * sizeof(JNode));
-  doc->count = doc->nodes ? 1 : 0;
-  if (!doc->nodes) {
-    return "out of memory";
-  }
-  doc->nodes[0].v = doc->root;
-  for (size_t at = 0; at < doc->count; at++) {
-    const JVal *v = doc->nodes[at].v;
-    const char *bad = v->type == J_NUM ? read_number(&doc->nodes[at]) : NULL;
-    size_t kids = child_count(v);
-    if (bad) {
-      return bad;
-    }
-    if (doc->count + kids > cap) {
-      cap = (doc->count + kids) * 2;
-      JNode *grown = realloc(doc->nodes, cap * sizeof(JNode));
-      if (!grown) {
-        return "out of memory";
-      }
-      doc->nodes = grown;
-    }
-    doc->nodes[at].first = doc->count;
-    for (size_t i = 0; i < kids; i++) {
-      doc->nodes[doc->count++].v = child_at(v, i);
-    }
-  }
-  return NULL;
-}
-
-// Parse and index in one step, so a document the Json type cannot hold is a
-// jsonDecode failure with its reason, never a handle the walk trips over.
 int64_t json_decode_open(char *text) {
   int64_t status = JSON_ERR_MALFORMED;
-  JVal *root = json_parse_tree(text, "jsonDecode", &status);
-  if (!root) {
+  JDoc *doc = json_parse_doc(text, "jsonDecode", true, &status);
+  if (!doc) {
     return status;
   }
-  JDoc *doc = calloc(1, sizeof(JDoc));
-  const char *why = !doc ? "out of memory" : (doc->root = root, index_nodes(doc));
-  if (why) {
-    doc ? doc_free(doc) : json_tree_free(root);
-    osp_io_error_text("jsonDecode", "document", why);
-    return JSON_ERR_MALFORMED;
-  }
-  json_table_lock();
-  int64_t handle = claim_slot((void **)g_json_docs, doc);
-  json_table_unlock();
+  int64_t handle = claim_slot((void **)t_decodes, MAX_DECODE_HANDLES, doc);
   if (handle < 0) {
-    doc_free(doc);
+    json_doc_free(doc);
     osp_io_error_text("jsonDecode", "document", "too many open documents");
     return JSON_ERR_TABLE_FULL;
   }
   return handle;
 }
 
-// The indexed node, or NULL for a handle without an index or an id outside
-// it. Callers hold the lock.
-static const JNode *node_at(int64_t handle, int64_t node) {
-  JDoc *doc = valid_handle(handle) ? g_json_docs[handle] : NULL;
-  bool indexed = doc && doc->nodes && node >= 0;
-  return indexed && (size_t)node < doc->count ? &doc->nodes[node] : NULL;
+int64_t json_decode_close(int64_t handle) {
+  JDoc *doc = valid_handle(handle, MAX_DECODE_HANDLES) ? t_decodes[handle]
+                                                       : NULL;
+  if (!doc) {
+    osp_io_error_text("jsonDecode", "document", "invalid document handle");
+    return -1;
+  }
+  t_decodes[handle] = NULL;
+  json_doc_free(doc);
+  return 0;
+}
+
+// The node at `slot` of an open decode, or NULL.
+static const JNode *decoded(int64_t handle, int64_t slot, const JDoc **doc) {
+  *doc = valid_handle(handle, MAX_DECODE_HANDLES) ? t_decodes[handle] : NULL;
+  return *doc && slot >= 0 ? json_slot(*doc, (size_t)slot) : NULL;
 }
 
 // The kind codes the prelude matches on. Booleans carry their value in the
-// kind, and numbers their int/float classification, so one call per node
-// decides its variant [BUILTIN-JSON-TYPED].
+// kind, and numbers their int/float classification, so one call per value
+// decides its variant.
 enum { K_NULL, K_FALSE, K_TRUE, K_INT, K_FLOAT, K_STRING, K_ARRAY, K_OBJECT };
 
-static int64_t kind_of(const JVal *v) {
-  switch (v->type) {
+static int64_t kind_of(const JNode *n) {
+  switch (n->type) {
   case J_NULL: return K_NULL;
-  case J_BOOL: return v->bval ? K_TRUE : K_FALSE;
-  case J_NUM: return is_integer_text(v->str) ? K_INT : K_FLOAT;
+  case J_BOOL: return n->flag ? K_TRUE : K_FALSE;
+  case J_NUM: return n->flag ? K_INT : K_FLOAT;
   case J_STR: return K_STRING;
   case J_ARR: return K_ARRAY;
   default: return K_OBJECT;
   }
 }
 
-int64_t json_node_kind(int64_t handle, int64_t node) {
-  json_table_lock();
-  const JNode *n = node_at(handle, node);
-  int64_t kind = n ? kind_of(n->v) : -1;
-  json_table_unlock();
-  return kind;
+int64_t json_node_kind(int64_t handle, int64_t slot) {
+  const JDoc *doc = NULL;
+  const JNode *n = decoded(handle, slot, &doc);
+  return n ? kind_of(n) : -1;
 }
 
-int64_t json_node_count(int64_t handle, int64_t node) {
-  json_table_lock();
-  const JNode *n = node_at(handle, node);
-  int64_t count = n ? (int64_t)child_count(n->v) : -1;
-  json_table_unlock();
-  return count;
+static bool is_container(const JNode *n) {
+  return n && (n->type == J_ARR || n->type == J_OBJ);
 }
 
-int64_t json_node_child(int64_t handle, int64_t node, int64_t i) {
-  json_table_lock();
-  const JNode *n = node_at(handle, node);
-  bool inside = n && i >= 0 && (size_t)i < child_count(n->v);
-  int64_t child = inside ? (int64_t)(n->first + (size_t)i) : -1;
-  json_table_unlock();
-  return child;
+// A container's children are the slots [first, end), so the prelude ranges
+// over them directly; anything else has the empty range.
+int64_t json_node_first(int64_t handle, int64_t slot) {
+  const JDoc *doc = NULL;
+  const JNode *n = decoded(handle, slot, &doc);
+  return is_container(n) ? (int64_t)n->at : 0;
 }
 
-char *json_node_key(int64_t handle, int64_t node, int64_t i) {
-  json_table_lock();
-  const JNode *n = node_at(handle, node);
-  bool member = n && n->v->type == J_OBJ && i >= 0 && (size_t)i < n->v->nmemb;
-  char *key = member ? strdup(n->v->keys[i]) : NULL;
-  json_table_unlock();
-  return key;
+int64_t json_node_end(int64_t handle, int64_t slot) {
+  const JDoc *doc = NULL;
+  const JNode *n = decoded(handle, slot, &doc);
+  return is_container(n) ? (int64_t)(n->at + n->count) : 0;
 }
 
-// A string's decoded value.
-char *json_node_text(int64_t handle, int64_t node) {
-  json_table_lock();
-  const JNode *n = node_at(handle, node);
-  char *out = n && n->v->type == J_STR ? strdup(n->v->str) : NULL;
-  json_table_unlock();
-  return out;
+// A fresh copy the caller owns; "" when the question has no answer.
+static char *owned(const char *text) { return strdup(text ? text : ""); }
+
+// The member name of an object's child; "" for any other slot.
+char *json_node_key(int64_t handle, int64_t slot) {
+  const JDoc *doc = NULL;
+  const JNode *n = decoded(handle, slot, &doc);
+  return owned(n && n->key != JSON_NO_KEY ? text_at(doc, n->key) : NULL);
 }
 
-// An integer node's value; 0 for any other node.
-int64_t json_node_int(int64_t handle, int64_t node) {
-  json_table_lock();
-  const JNode *n = node_at(handle, node);
-  int64_t value = n && kind_of(n->v) == K_INT ? n->number.i : 0;
-  json_table_unlock();
-  return value;
+// A string's value; "" for any other slot.
+char *json_node_text(int64_t handle, int64_t slot) {
+  const JDoc *doc = NULL;
+  const JNode *n = decoded(handle, slot, &doc);
+  return owned(n && n->type == J_STR ? text_at(doc, n->at) : NULL);
 }
 
-// A float node's value; 0.0 for any other node.
-double json_node_float(int64_t handle, int64_t node) {
-  json_table_lock();
-  const JNode *n = node_at(handle, node);
-  double value = n && kind_of(n->v) == K_FLOAT ? n->number.f : 0.0;
-  json_table_unlock();
-  return value;
+// An integer's value; 0 for any other slot.
+int64_t json_node_int(int64_t handle, int64_t slot) {
+  const JDoc *doc = NULL;
+  const JNode *n = decoded(handle, slot, &doc);
+  return n && kind_of(n) == K_INT ? n->number.i : 0;
+}
+
+// A float's value; 0.0 for any other slot.
+double json_node_float(int64_t handle, int64_t slot) {
+  const JDoc *doc = NULL;
+  const JNode *n = decoded(handle, slot, &doc);
+  return n && kind_of(n) == K_FLOAT ? n->number.f : 0.0;
 }
 
 // ---- single-buffer writer --------------------------------------------------
@@ -405,29 +303,36 @@ double json_node_float(int64_t handle, int64_t node) {
 // value gets its ',', and `[`, `{` and `:` reset that, so the walk is a plain
 // traversal. Failure is sticky: the first refusal is kept, later writes are
 // no-ops, and close reports it -- so the walk needs no per-token checks.
+//
+// Like a decode, an encode walk never leaves its thread, so writers live in
+// a lock-free thread-local table.
+
+typedef struct {
+  JsonBuf buf;
+  const char *why;
+  bool after_value; // the next value needs a ',' in front of it
+} JWriter;
+
+#define MAX_WRITER_HANDLES 64
+
+static _Thread_local JWriter *t_writers[MAX_WRITER_HANDLES];
 
 int64_t json_writer_open(void) {
   JWriter *w = calloc(1, sizeof(JWriter));
-  if (!w) {
-    osp_io_error_text("jsonEncode", "value", "out of memory");
-    return -1;
-  }
-  json_table_lock();
-  int64_t handle = claim_slot((void **)g_json_writers, w);
-  json_table_unlock();
+  int64_t handle =
+      w ? claim_slot((void **)t_writers, MAX_WRITER_HANDLES, w) : -1;
   if (handle < 0) {
     free(w);
-    osp_io_error_text("jsonEncode", "value", "too many open writers");
+    osp_io_error_text("jsonEncode", "value",
+                      w ? "too many open writers" : "out of memory");
   }
   return handle;
 }
 
-// The live writer behind `handle`, or NULL. Writers belong to the one walk
-// that opened them, so appends run outside the lock.
+// The live writer behind `handle`, or NULL.
 static JWriter *writer_at(int64_t handle) {
-  json_table_lock();
-  JWriter *w = valid_handle(handle) ? g_json_writers[handle] : NULL;
-  json_table_unlock();
+  JWriter *w = valid_handle(handle, MAX_WRITER_HANDLES) ? t_writers[handle]
+                                                        : NULL;
   return w && !w->why ? w : NULL;
 }
 
@@ -490,12 +395,11 @@ int64_t json_write_float(int64_t handle, double f) {
 }
 
 char *json_writer_close(int64_t handle) {
-  json_table_lock();
-  JWriter *w = valid_handle(handle) ? g_json_writers[handle] : NULL;
+  JWriter *w = valid_handle(handle, MAX_WRITER_HANDLES) ? t_writers[handle]
+                                                        : NULL;
   if (w) {
-    g_json_writers[handle] = NULL;
+    t_writers[handle] = NULL;
   }
-  json_table_unlock();
   const char *why = !w ? "invalid writer handle"
                     : w->why ? w->why
                     : !w->buf.data && !json_buf_append(&w->buf, "", 0)

@@ -18,9 +18,10 @@ int64_t json_length(int64_t handle, char *path);
 int64_t json_free(int64_t handle);
 int64_t json_decode_open(char *text);
 int64_t json_node_kind(int64_t handle, int64_t node);
-int64_t json_node_count(int64_t handle, int64_t node);
-int64_t json_node_child(int64_t handle, int64_t node, int64_t i);
-char *json_node_key(int64_t handle, int64_t node, int64_t i);
+int64_t json_decode_close(int64_t handle);
+int64_t json_node_first(int64_t handle, int64_t node);
+int64_t json_node_end(int64_t handle, int64_t node);
+char *json_node_key(int64_t handle, int64_t node);
 char *json_node_text(int64_t handle, int64_t node);
 int64_t json_node_int(int64_t handle, int64_t node);
 double json_node_float(int64_t handle, int64_t node);
@@ -54,7 +55,7 @@ void t_string_grammar_rejects_everything_outside_it(void);
 void t_number_grammar(void);
 
 // The codec half: limits, duplicate members, recorded reasons, the typed
-// decode index and the writer [BUILTIN-JSON-LIMITS] [BUILTIN-JSON-TYPED].
+// decode slots and the writer [BUILTIN-JSON-LIMITS] [BUILTIN-JSON-TYPED].
 void t_codec(void);
 
 #endif // OSPREY_JSON_TESTS_SHARED_H

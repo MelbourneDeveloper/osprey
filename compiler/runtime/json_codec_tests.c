@@ -1,5 +1,5 @@
 // The JSON codec: nesting and duplicate-member limits, the reasons a
-// rejection records, the breadth-first decode index and the single-buffer
+// rejection records, the decode slots and the single-buffer
 // writer [BUILTIN-JSON-LIMITS] [BUILTIN-JSON-TYPED]. Third translation unit of
 // the json suite; see json_tests_shared.h.
 #include <math.h>
@@ -85,46 +85,62 @@ static void t_reasons(void) {
   expect_reason("jsonParse: document: no text");
 }
 
-// Breadth-first: the root, then its members in order, then theirs.
-static void t_decode_index(void) {
+// Slot 0 is the root, and each container's children are one run of slots
+// [first, end), laid down as the container closes: here `a`'s three
+// elements, then `b`'s one member, then the root's four members.
+static void t_decode_slots(void) {
   int64_t plain = json_parse("[1]");
-  CHECK(json_node_kind(plain, 0) == -1); // a jsonParse handle has no index
+  CHECK(json_node_kind(plain, 0) == -1); // a jsonParse handle is not a decode
   CHECK(json_free(plain) == 0);
   int64_t h = json_decode_open(
       "{\"a\":[1,-2.5e1,\"x\\n\"],\"b\":{\"c\":null},\"t\":true,\"f\":false}");
-  CHECK(h > 0 && json_node_kind(h, 0) == K_OBJECT && json_node_count(h, 0) == 4);
-  const int64_t kinds[] = {K_OBJECT, K_ARRAY, K_OBJECT, K_TRUE, K_FALSE,
-                           K_INT,    K_FLOAT, K_STRING, K_NULL};
-  for (int64_t n = 0; n < 9; n++) {
-    CHECK(json_node_kind(h, n) == kinds[n]);
+  CHECK(h > 0 && json_node_first(h, 0) == 5 && json_node_end(h, 0) == 9);
+  const int64_t kinds[] = {K_OBJECT, K_INT,   K_FLOAT, K_STRING, K_NULL,
+                           K_ARRAY,  K_OBJECT, K_TRUE,  K_FALSE};
+  const char *keys[] = {"", "", "", "", "c", "a", "b", "t", "f"};
+  for (int64_t slot = 0; slot < 9; slot++) {
+    CHECK(json_node_kind(h, slot) == kinds[slot]);
+    expect_text(json_node_key(h, slot), keys[slot]);
   }
-  const char *keys[] = {"a", "b", "t", "f"};
-  for (int64_t i = 0; i < 4; i++) {
-    expect_text(json_node_key(h, 0, i), keys[i]);
-    CHECK(json_node_child(h, 0, i) == i + 1);
-  }
-  CHECK(json_node_child(h, 1, 0) == 5 && json_node_child(h, 1, 2) == 7);
-  CHECK(json_node_child(h, 2, 0) == 8);
-  expect_text(json_node_key(h, 2, 0), "c");
-  CHECK(json_node_int(h, 5) == 1 && json_node_float(h, 6) == -25.0);
-  expect_text(json_node_text(h, 7), "x\n");
-  // Numbers are values, not text; each accessor answers only its own kind.
-  CHECK(json_node_text(h, 5) == NULL && json_node_text(h, 6) == NULL);
-  CHECK(json_node_int(h, 6) == 0 && json_node_float(h, 5) == 0.0);
-  CHECK(json_node_int(h, 99) == 0 && json_node_float(h, -1) == 0.0);
+  CHECK(json_node_first(h, 5) == 1 && json_node_end(h, 5) == 4);
+  CHECK(json_node_first(h, 6) == 4 && json_node_end(h, 6) == 5);
+  CHECK(json_node_int(h, 1) == 1 && json_node_float(h, 2) == -25.0);
+  expect_text(json_node_text(h, 3), "x\n");
+  // Each accessor answers only its own kind, and anything else is empty.
+  expect_text(json_node_text(h, 1), "");
+  CHECK(json_node_int(h, 2) == 0 && json_node_float(h, 1) == 0.0);
+  CHECK(json_node_first(h, 1) == 0 && json_node_end(h, 1) == 0);
   // Every out-of-range question is a refusal, never a read.
-  CHECK(json_node_child(h, 0, 4) == -1 && json_node_child(h, 0, -1) == -1);
-  CHECK(json_node_child(h, 5, 0) == -1 && json_node_count(h, 5) == 0);
-  CHECK(json_node_key(h, 1, 0) == NULL && json_node_key(h, 0, 9) == NULL);
-  CHECK(json_node_text(h, 1) == NULL && json_node_text(h, 3) == NULL);
   CHECK(json_node_kind(h, 9) == -1 && json_node_kind(h, -1) == -1);
-  CHECK(json_free(h) == 0);
-  CHECK(json_node_kind(h, 0) == -1 && json_node_count(h, 0) == -1);
+  CHECK(json_node_int(h, 99) == 0 && json_node_float(h, -1) == 0.0);
+  expect_text(json_node_key(h, 9), "");
+  expect_text(json_node_text(h, -1), "");
+  CHECK(json_node_end(h, 9) == 0 && json_node_kind(0, 0) == -1);
+  CHECK(json_decode_close(h) == 0);
+  CHECK(json_node_kind(h, 0) == -1 && json_node_end(h, 0) == 0);
+  CHECK(json_decode_close(h) == -1); // closed twice
+  expect_reason("jsonDecode: document: invalid document handle");
+  CHECK(json_decode_close(0) == -1 && json_decode_close(64) == -1);
   // Malformed text is a jsonDecode failure with the parser's reason.
   CHECK(json_decode_open("[1,") == ERR_MALFORMED);
   expect_reason("jsonDecode: byte 3: unexpected end of text");
   CHECK(json_decode_open("{} x") == ERR_TRAILING);
   CHECK(json_decode_open(NULL) == ERR_NULL);
+}
+
+// A decode table belongs to its thread and holds a bounded number of open
+// documents; a full one refuses rather than overwriting.
+static void t_decode_capacity(void) {
+  int64_t open[63];
+  for (int i = 0; i < 63; i++) {
+    open[i] = json_decode_open("[]");
+    CHECK(open[i] == i + 1);
+  }
+  CHECK(json_decode_open("[]") == ERR_TABLE_FULL);
+  expect_reason("jsonDecode: document: too many open documents");
+  for (int i = 0; i < 63; i++) {
+    CHECK(json_decode_close(open[i]) == 0);
+  }
 }
 
 static void expect_unrepresentable(const char *text, const char *why) {
@@ -135,20 +151,26 @@ static void expect_unrepresentable(const char *text, const char *why) {
 }
 
 static void t_decode_numbers(void) {
-  int64_t h = json_decode_open("[9223372036854775807,-9223372036854775808,-0,1e3,1.0]");
-  CHECK(h > 0 && json_node_count(h, 0) == 5);
-  const int64_t kinds[] = {K_INT, K_INT, K_INT, K_FLOAT, K_FLOAT};
-  for (int64_t i = 0; i < 5; i++) {
+  int64_t h = json_decode_open(
+      "[9223372036854775807,-9223372036854775808,-0,1e3,1.0,"
+      "123456789012345678,-999999999999999999]");
+  CHECK(h > 0 && json_node_first(h, 0) == 1 && json_node_end(h, 0) == 8);
+  const int64_t kinds[] = {K_INT, K_INT, K_INT, K_FLOAT, K_FLOAT, K_INT, K_INT};
+  for (int64_t i = 0; i < 7; i++) {
     CHECK(json_node_kind(h, i + 1) == kinds[i]);
   }
   CHECK(json_node_int(h, 1) == INT64_MAX && json_node_int(h, 2) == INT64_MIN);
   CHECK(json_node_int(h, 3) == 0 && json_node_float(h, 4) == 1000.0);
   CHECK(json_node_float(h, 5) == 1.0);
-  CHECK(json_free(h) == 0);
-  expect_unrepresentable("[9223372036854775808]", "jsonDecode: document: integer outside the 64-bit range");
-  expect_unrepresentable("{\"n\":-9223372036854775809}", "integer outside the 64-bit range");
-  expect_unrepresentable("[1e999]", "number outside the float range");
-  expect_unrepresentable("-1e400", "number outside the float range");
+  CHECK(json_node_int(h, 6) == 123456789012345678);
+  CHECK(json_node_int(h, 7) == -999999999999999999);
+  CHECK(json_decode_close(h) == 0);
+  expect_unrepresentable("[9223372036854775808]",
+                         "jsonDecode: byte 1: integer outside the 64-bit range");
+  expect_unrepresentable("{\"n\":-9223372036854775809}",
+                         "byte 5: integer outside the 64-bit range");
+  expect_unrepresentable("[1e999]", "byte 1: number outside the float range");
+  expect_unrepresentable("-1e400", "byte 0: number outside the float range");
 }
 
 static void t_writer(void) {
@@ -217,7 +239,8 @@ void t_codec(void) {
   t_depth_limit();
   t_duplicate_members();
   t_reasons();
-  t_decode_index();
+  t_decode_slots();
+  t_decode_capacity();
   t_decode_numbers();
   t_writer();
   t_writer_refusals();

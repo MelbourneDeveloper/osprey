@@ -195,90 +195,79 @@ size_t json_utf8_scalar_length(const char *p) {
                                                                           : 0;
 }
 
-static bool copy_utf8_sequence(Cursor *c, char *buf, size_t *n) {
-  size_t len = json_utf8_scalar_length(c->p);
-  if (len == 0) {
-    return false;
-  }
-  memcpy(buf, c->p, len);
-  *n = len;
-  c->p += len;
-  return true;
-}
-
 // RFC 8259 requires U+0000..U+001F to be escaped inside a string. Taking a raw
 // one literally makes this parser disagree with every other reader about where
 // the string ends [BUILTIN-JSON-STRING].
 #define JSON_LAST_CONTROL_CHAR 0x1F
 
-// Free the half-built buffer and mark the document malformed. Returns NULL so
-// each rejection inside the decode loop is a single statement and none of them
-// can drift out of step with the others.
-static char *string_rejected(Cursor *c, char *out, const char *why) {
-  free(out);
+static bool string_rejected(Cursor *c, const char *why) {
   json_reject(c, why);
-  return NULL;
+  return false;
 }
 
-// Decode the one character at the cursor into `buf`/`*n`, advancing past it.
-// False when the input is not a well-formed JSON string character.
-static bool decode_string_char(Cursor *c, char *buf, size_t *n) {
-  if ((unsigned char)*c->p <= JSON_LAST_CONTROL_CHAR) {
+// Printable ASCII other than the quote and the backslash stands for itself.
+static bool plain_ascii(unsigned char byte) {
+  return byte > JSON_LAST_CONTROL_CHAR && byte < UTF8_CONTINUATION_MARK &&
+         byte != '"' && byte != '\\';
+}
+
+// Consume the run of bytes at the cursor that need no decoding -- plain ASCII
+// and well-formed UTF-8 -- and append it whole, so a string without escapes
+// costs one append. Stops on the quote, a backslash, a control character,
+// malformed UTF-8 or the end of the text.
+static bool copy_run(Cursor *c, JsonBuf *out) {
+  const char *start = c->p;
+  for (;;) {
+    unsigned char byte = (unsigned char)*c->p;
+    size_t width = plain_ascii(byte) ? 1
+                   : byte >= UTF8_CONTINUATION_MARK
+                       ? json_utf8_scalar_length(c->p)
+                       : 0;
+    if (width == 0) {
+      break;
+    }
+    c->p += width;
+  }
+  return json_buf_append(out, start, (size_t)(c->p - start));
+}
+
+// Decode the escape at the cursor onto `out`. False for anything else that
+// stopped a run: a raw control character, malformed UTF-8, or an escape
+// outside the RFC 8259 alphabet.
+static bool decode_escape(Cursor *c, JsonBuf *out) {
+  if (*c->p != '\\') {
     return false;
   }
-  if ((unsigned char)*c->p >= UTF8_CONTINUATION_MARK) {
-    return copy_utf8_sequence(c, buf, n);
-  }
-  if (*c->p != '\\') {
-    buf[0] = *c->p;
-    c->p++;
-    return true;
-  }
   c->p++;
-  bool ok = *c->p == 'u' ? decode_unicode_escape(c, buf, n)
+  char buf[4];
+  size_t n = 1;
+  bool ok = *c->p == 'u' ? decode_unicode_escape(c, buf, &n)
                          : simple_escape(*c->p, buf);
   c->p++;
-  return ok;
+  return ok && json_buf_append(out, buf, n);
 }
 
-// Parses a JSON string literal (cursor positioned at the opening quote) into a
-// freshly allocated, decoded, NUL-terminated C string.
-char *json_parse_string_raw(Cursor *c) {
+bool json_decode_string(Cursor *c, JsonBuf *out) {
   if (*c->p != '"') {
-    json_reject(c, "expected a string");
-    return NULL;
+    return string_rejected(c, "expected a string");
   }
   c->p++;
-  size_t cap = 16;
-  size_t len = 0;
-  char *out = malloc(cap);
-  if (!out) {
-    json_reject(c, "out of memory");
-    return NULL;
-  }
-  while (*c->p && *c->p != '"') {
-    char buf[4];
-    size_t n = 1;
-    if (!decode_string_char(c, buf, &n)) {
-      return string_rejected(c, out, "invalid character or escape in string");
+  for (;;) {
+    if (!copy_run(c, out)) {
+      return string_rejected(c, "out of memory");
     }
-    if (len + n + 1 > cap) {
-      cap = (len + n + 1) * 2;
-      char *nb = realloc(out, cap);
-      if (!nb) {
-        return string_rejected(c, out, "out of memory");
-      }
-      out = nb;
+    if (*c->p == '"') {
+      c->p++;
+      return json_buf_append(out, "", 1) ||
+             string_rejected(c, "out of memory");
     }
-    memcpy(out + len, buf, n);
-    len += n;
+    if (*c->p == '\0') {
+      return string_rejected(c, "unterminated string");
+    }
+    if (!decode_escape(c, out)) {
+      return string_rejected(c, "invalid character or escape in string");
+    }
   }
-  if (*c->p != '"') {
-    return string_rejected(c, out, "unterminated string");
-  }
-  c->p++;
-  out[len] = '\0';
-  return out;
 }
 
 // ---- writing ----------------------------------------------------------------

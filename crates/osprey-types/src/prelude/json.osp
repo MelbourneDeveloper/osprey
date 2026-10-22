@@ -114,31 +114,26 @@ fn __jsonWriteMember(writer, member) = match member {
     }
 }
 
-fn __jsonRelease(document, json) = match jsonFree(document) {
+fn __jsonRelease(document, json) = match __jsonDecodeClose(document) {
     Error { message } => Error { message: message }
     _ => Success { value: json }
 }
 
-fn __jsonNode(document, node) = match __jsonNodeKind(document, node) {
+// One value of an open document, by slot; the root is slot 0. Each value
+// costs one or two runtime questions, and a container's children are the
+// slot range [first, end), so the walk does no arithmetic of its own.
+fn __jsonNode(document, slot) = match __jsonNodeKind(document, slot) {
     0 => JsonNull
     1 => JsonBool(false)
     2 => JsonBool(true)
-    3 => JsonInt(__jsonNodeInt(document, node))
-    4 => JsonFloat(__jsonNodeFloat(document, node))
-    5 => JsonString(__jsonNodeText(document, node) ?: "")
-    6 => JsonArray(__jsonItems(document, node))
-    _ => JsonObject(__jsonMembers(document, node))
+    3 => JsonInt(__jsonNodeInt(document, slot))
+    4 => JsonFloat(__jsonNodeFloat(document, slot))
+    5 => JsonString(__jsonNodeText(document, slot))
+    6 => JsonArray(__jsonChildren(document, slot) |> map(fn(child) => __jsonNode(document, child)) |> toList)
+    _ => JsonObject(__jsonChildren(document, slot) |> map(fn(child) => JsonMember(__jsonNodeKey(document, child), __jsonNode(document, child))) |> toList)
 }
 
-fn __jsonItems(document, node) =
-    range(0, __jsonNodeCount(document, node))
-        |> map(fn(index) => __jsonNode(document, __jsonNodeChild(document, node, index)))
-        |> toList
-
-fn __jsonMembers(document, node) =
-    range(0, __jsonNodeCount(document, node))
-        |> map(fn(index) => JsonMember(__jsonNodeKey(document, node, index) ?: "", __jsonNode(document, __jsonNodeChild(document, node, index))))
-        |> toList
+fn __jsonChildren(document, slot) = range(__jsonNodeFirst(document, slot), __jsonNodeEnd(document, slot))
 
 // The position of the first member named `name`, or -1. A fold over the
 // positions, so the lookup does no arithmetic of its own and raises no
