@@ -28,37 +28,25 @@ pub fn construction(name: &str, arguments: Vec<Expr>) -> Expr {
     }
 }
 
-/// Every positionally-declared constructor in `statements`, with its arity.
+/// Every positionally-declared constructor among the top-level type
+/// declarations in `statements`, with its arity.
 #[must_use]
 pub fn declared_arities(statements: &[Stmt]) -> BTreeMap<String, usize> {
-    let mut arities = BTreeMap::new();
-    collect_arities(statements, &mut arities);
-    arities
-}
-
-fn collect_arities(statements: &[Stmt], arities: &mut BTreeMap<String, usize>) {
-    for statement in statements {
-        match statement {
-            Stmt::Type { variants, .. } => arities.extend(
-                variants
-                    .iter()
-                    .filter(|variant| {
-                        variant
-                            .fields
-                            .first()
-                            .is_some_and(|field| is_positional_field(&field.name))
-                    })
-                    .map(|variant| (variant.name.clone(), variant.fields.len())),
-            ),
-            Stmt::Namespace { body, .. } => collect_arities(body, arities),
-            Stmt::Module { body, .. } => {
-                for item in body {
-                    collect_arities(std::slice::from_ref(&item.declaration), arities);
-                }
-            }
-            _ => {}
-        }
-    }
+    statements
+        .iter()
+        .filter_map(|statement| match statement {
+            Stmt::Type { variants, .. } => Some(variants),
+            _ => None,
+        })
+        .flatten()
+        .filter(|variant| {
+            variant
+                .fields
+                .first()
+                .is_some_and(|field| is_positional_field(&field.name))
+        })
+        .map(|variant| (variant.name.clone(), variant.fields.len()))
+        .collect()
 }
 
 /// Rewrite every saturated call of a constructor in `arities` into its
@@ -166,5 +154,46 @@ mod tests {
             Some(("Box", vec!["0"])),
             "arguments of any call fold"
         );
+    }
+
+    fn variant(name: &str, fields: &[&str]) -> crate::TypeVariant {
+        crate::TypeVariant {
+            name: name.to_owned(),
+            fields: fields
+                .iter()
+                .map(|field| crate::TypeField {
+                    name: (*field).to_owned(),
+                    ty: "int".to_owned(),
+                    constraint: None,
+                })
+                .collect(),
+        }
+    }
+
+    /// Only payloads declared by position fold; a named-field variant keeps
+    /// its record construction and a fieldless one has nothing to fold.
+    #[test]
+    fn arities_come_from_positional_variants_only() {
+        let declared = Stmt::Type {
+            name: "Shape".to_owned(),
+            type_params: Vec::new(),
+            variants: vec![
+                variant("Pair", &["0", "1"]),
+                variant("Named", &["x"]),
+                variant("Empty", &[]),
+            ],
+            alias: None,
+            validation_func: None,
+            opaque: false,
+            doc: None,
+            position: None,
+        };
+        let other = Stmt::Expr {
+            value: Expr::Integer(0),
+            doc: None,
+            position: None,
+        };
+        let arities = declared_arities(&[declared, other]);
+        assert_eq!(arities, BTreeMap::from([("Pair".to_owned(), 2)]));
     }
 }
