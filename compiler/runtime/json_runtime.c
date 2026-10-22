@@ -328,10 +328,12 @@ static bool repeats_a_name(Parser *ps, size_t base, bool *failed) {
 // Two members with one name make every lookup a guess about which one the
 // author meant -- first-wins here, last-wins in most other readers -- and
 // hostile input exploits exactly that disagreement. A document that repeats a
-// name is rejected whole [BUILTIN-JSON-LIMITS].
-static size_t close_object(Parser *ps, size_t id, size_t base) {
+// name is rejected whole, at the object's opening brace [BUILTIN-JSON-LIMITS].
+static size_t close_object(Parser *ps, size_t id, size_t base,
+                           const char *open) {
   bool oom = false;
   if (ps->npending - base > 1 && repeats_a_name(ps, base, &oom)) {
+    ps->c.p = open;
     json_reject(&ps->c, "duplicate member name");
     return JSON_NO_NODE;
   }
@@ -360,6 +362,7 @@ static size_t parse_member(Parser *ps) {
 }
 
 static size_t parse_object(Parser *ps) {
+  const char *open = ps->c.p;
   ps->c.p++; // consume '{'
   size_t id = new_node(ps, J_OBJ);
   size_t base = ps->npending;
@@ -373,7 +376,7 @@ static size_t parse_object(Parser *ps) {
     more = member != JSON_NO_NODE && push_pending(ps, member) &&
            another(&ps->c, '}', "expected ',' or '}' in object");
   }
-  return ps->c.ok ? close_object(ps, id, base) : JSON_NO_NODE;
+  return ps->c.ok ? close_object(ps, id, base, open) : JSON_NO_NODE;
 }
 
 #define JSON_STRINGIFY(x) #x

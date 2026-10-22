@@ -37,8 +37,6 @@ typedef struct {
     int exponent;
 } Digits;
 
-typedef unsigned __int128 Wide;
-
 /* floor(|d| * 10^(16 - exponent)), seventeen digits, and what it dropped. */
 typedef struct {
     uint64_t truncated;
@@ -50,6 +48,14 @@ static const uint64_t POW10[] = {1ull, 10ull, 100ull, 1000ull, 10000ull, 100000u
     1000000ull, 10000000ull, 100000000ull, 1000000000ull, 10000000000ull,
     100000000000ull, 1000000000000ull, 10000000000000ull, 100000000000000ull,
     1000000000000000ull, 10000000000000000ull, 100000000000000000ull};
+
+/* Exact digits need native 128-bit integers. wasm32's sysroot ships no
+ * compiler-rt, so there the shifts would not link; it spells from
+ * snprintf's seventeen digits instead, which is exact too, only slower.
+ * OSP_FLOAT_SPELLING_PORTABLE selects that path anywhere, so the C suite
+ * proves it byte for byte on the host as well. */
+#if defined(__SIZEOF_INT128__) && !defined(__wasm__) && !defined(OSP_FLOAT_SPELLING_PORTABLE)
+typedef unsigned __int128 Wide;
 
 #define POW5_U64_LIMIT 27
 #define MAX_EXACT_SCALE 32
@@ -97,6 +103,14 @@ static int exact_digits(uint64_t bits, Exact *out) {
     }
     return 0;
 }
+
+#else
+static int exact_digits(uint64_t bits, Exact *out) {
+    (void)bits;
+    (void)out;
+    return 0;
+}
+#endif
 
 /* `x` correctly rounded to `precision` digits, exact ties to even. */
 static void exactly_rounded(const Exact *x, int precision, Digits *out) {

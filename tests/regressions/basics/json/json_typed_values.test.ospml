@@ -1,0 +1,192 @@
+(** The built-in Json value: build documents as data, encode them in one pass,
+    decode text back into the same union, and read it with the typed accessors.
+    Implements [BUILTIN-JSON-TYPED], [BUILTIN-JSON-LIMITS], [BUILTIN-JSON-NUMBER],
+    [BUILTIN-JSON-STRING]. *)
+
+(** The reason a fallible step failed, or "ok". *)
+reason result =
+    match result
+        Success => "ok"
+        Error message => message
+
+(** Encoded text, or the refusal. *)
+encoded json =
+    match jsonEncode json
+        Success value => value
+        Error message => "refused: ${message}"
+
+(** Decode and encode again: the canonical spelling of any accepted text. *)
+canonical text =
+    match jsonDecode text
+        Success value => encoded value
+        Error message => "rejected: ${message}"
+
+(** `depth` nested empty arrays. *)
+nested depth =
+    open = repeat "[" depth ?: ""
+    close = repeat "]" depth ?: ""
+    "${open}${close}"
+
+(** One character by code point; Osprey literals spell only \n \r \t \e. *)
+char code = fromCodePoint code ?: "?"
+
+(** Names a value's variant, so a decode's classification is visible. *)
+kind json =
+    match json
+        JsonNull => "null"
+        JsonBool _ => "bool"
+        JsonInt _ => "int"
+        JsonFloat _ => "float"
+        JsonString _ => "string"
+        JsonArray _ => "array"
+        JsonObject _ => "object"
+
+(** The variant of the first element of an array document. *)
+firstKind text = kind (jsonIndex (jsonDecode text ?: JsonNull) 0 ?: JsonNull)
+
+(** Every integer anywhere in a document, summed by a recursive match. *)
+sumInts json =
+    match json
+        JsonInt number => number
+        JsonArray items => fold (range 0 (length items)) 0 (\(sum, index) => satAdd sum (sumInts (listGet items index ?: JsonNull)))
+        JsonObject members => fold (range 0 (length members)) 0 (\(sum, index) => satAdd sum (sumMember (listGet members index ?: JsonMember "" JsonNull)))
+        _ => 0
+
+(** One member's share of `sumInts`. *)
+sumMember member =
+    match member
+        JsonMember _ value => sumInts value
+
+(** A user record turned into Json: application data, not hand-built text. *)
+type Order =
+    id : int
+    customer : string
+    total : float
+    paid : bool
+    lines : List string
+
+(** The Json document for one order. *)
+orderJson order = JsonObject [
+    JsonMember "id" (JsonInt order.id),
+    JsonMember "customer" (JsonString order.customer),
+    JsonMember "total" (JsonFloat order.total),
+    JsonMember "paid" (JsonBool order.paid),
+    JsonMember "lines" (JsonArray (range 0 (length order.lines) |> map (\index => JsonString (listGet order.lines index ?: "")) |> toList)),
+]
+
+(** An order read back from Json, with every field checked by type. *)
+orderFrom json = Order(
+    id = jsonInt (jsonField json "id" ?: JsonNull) ?: -1,
+    customer = jsonText (jsonField json "customer" ?: JsonNull) ?: "?",
+    total = jsonFloat (jsonField json "total" ?: JsonNull) ?: -1.0,
+    paid = jsonBool (jsonField json "paid" ?: JsonNull) ?: false,
+    lines = [])
+
+encodingIsCompactAndOrdered () =
+    document = JsonObject [
+        JsonMember "name" (JsonString "osprey"),
+        JsonMember "tags" (JsonArray [JsonString "fast", JsonString "typed"]),
+        JsonMember "version" (JsonInt 3),
+        JsonMember "ratio" (JsonFloat 0.25),
+        JsonMember "whole" (JsonFloat 2.0),
+        JsonMember "nested" (JsonObject [JsonMember "empty" (JsonArray []), JsonMember "none" (JsonObject [])]),
+        JsonMember "flags" (JsonArray [JsonBool true, JsonBool false, JsonNull]),
+    ]
+    text = encoded document
+    print "encoded: ${text}"
+    checkAll "members keep their order, floats keep their point" [
+        text == "{\"name\":\"osprey\",\"tags\":[\"fast\",\"typed\"],\"version\":3,\"ratio\":0.25,\"whole\":2.0,\"nested\":{\"empty\":[],\"none\":{}},\"flags\":[true,false,null]}",
+        encoded JsonNull == "null", encoded (JsonInt (-9223372036854775807)) == "-9223372036854775807",
+        encoded (JsonFloat (parseFloat "1e300" ?: 0.0)) == "1e+300", encoded (JsonFloat (-0.5)) == "-0.5",
+        encoded (JsonArray []) == "[]", encoded (JsonObject []) == "{}",
+        encoded (JsonArray [JsonArray [JsonArray []]]) == "[[[]]]",
+    ]
+
+stringsEscapeExactly () =
+    awkward = "quote\" back\\ slash/ tab\t nl\n cr\r esc\e del${char 127} é 😀"
+    quoted = jsonQuote awkward ?: "refused"
+    print "quoted: ${quoted}"
+    checkAll "RFC 8259 escapes, shortest form, UTF-8 kept raw" [
+        quoted == "\"quote\\\" back\\\\ slash/ tab\\t nl\\n cr\\r esc\\u001b del${char 127} é 😀\"",
+        (jsonQuote "" ?: "x") == "\"\"",
+        (jsonQuote "${char 1}${char 31}${char 8}${char 12}" ?: "x") == "\"\\u0001\\u001f\\b\\f\"",
+        canonical quoted == quoted,
+        (jsonText (jsonDecode quoted ?: JsonNull) ?: "x") == awkward,
+        (jsonText (jsonDecode "\"\\u00e9\\ud83d\\ude00\\/\"" ?: JsonNull) ?: "x") == "é😀/",
+    ]
+
+numbersKeepTheirKind () = checkAll "integers and floats stay distinct both ways" [
+    firstKind "[1]" == "int", firstKind "[1.0]" == "float", firstKind "[1e2]" == "float",
+    firstKind "[-0]" == "int", firstKind "[0.5e-3]" == "float",
+    (jsonInt (jsonDecode "9223372036854775807" ?: JsonNull) ?: 0) == 9223372036854775807,
+    (jsonInt (jsonDecode "-9223372036854775808" ?: JsonNull) ?: 0) == satSub (-9223372036854775807) 1,
+    (jsonFloat (jsonDecode "1e2" ?: JsonNull) ?: 0.0) == 100.0,
+    (jsonFloat (jsonDecode "7" ?: JsonNull) ?: 0.0) == 7.0,
+    (jsonInt (jsonDecode "7.0" ?: JsonNull) ?: 0) == 0,
+    canonical "[1,1.0,1e2,-0,123456789012345678]" == "[1,1.0,100.0,0,123456789012345678]",
+    canonical "[0.1,2.5e-8,1.7976931348623157e308]" == "[0.1,2.5e-08,1.7976931348623157e+308]",
+    reason (jsonDecode "[9223372036854775808]") == "jsonDecode: byte 1: integer outside the 64-bit range",
+    reason (jsonDecode "{\"n\":-9223372036854775809}") == "jsonDecode: byte 5: integer outside the 64-bit range",
+    reason (jsonDecode "1e999") == "jsonDecode: byte 0: number outside the float range",
+    reason (jsonEncode (JsonFloat (sqrt (-1.0)))) == "jsonEncode: value: float is not finite",
+    reason (jsonEncode (JsonArray [JsonInt 1, JsonFloat (exp 1000.0)])) == "jsonEncode: value: float is not finite",
+]
+
+malformedTextSaysWhere () = checkAll "every rejection names its byte and its reason" [
+    reason (jsonDecode "") == "jsonDecode: byte 0: unexpected end of text",
+    reason (jsonDecode "[1,") == "jsonDecode: byte 3: unexpected end of text",
+    reason (jsonDecode "[1 2]") == "jsonDecode: byte 3: expected ',' or ']' in array",
+    reason (jsonDecode "{\"a\" 1}") == "jsonDecode: byte 5: expected ':' after a member name",
+    reason (jsonDecode "{\"a\":1,\"a\":2}") == "jsonDecode: byte 0: duplicate member name",
+    reason (jsonDecode "{\"ab\":1,\"a\\u0062\":2}") == "jsonDecode: byte 0: duplicate member name",
+    reason (jsonDecode "[{\"x\":{\"k\":1,\"j\":2,\"k\":3}}]") == "jsonDecode: byte 6: duplicate member name",
+    reason (jsonDecode "\"open") == "jsonDecode: byte 5: unterminated string",
+    reason (jsonDecode "\"\\q\"") == "jsonDecode: byte 3: invalid character or escape in string",
+    reason (jsonDecode "01") == "jsonDecode: byte 1: trailing text after the value",
+    reason (jsonDecode "[1] x") == "jsonDecode: byte 4: trailing text after the value",
+    reason (jsonDecode "nul") == "jsonDecode: byte 0: unexpected character",
+    reason (jsonDecode (nested 128)) == "ok",
+    reason (jsonDecode (nested 129)) == "jsonDecode: byte 128: nesting deeper than 128 levels",
+]
+
+accessorsAreTyped () =
+    document = jsonDecode "{\"user\":{\"name\":\"Ada\",\"age\":36,\"admin\":true,\"scores\":[9.5,7,null]}}" ?: JsonNull
+    user = jsonField document "user" ?: JsonNull
+    scores = jsonField user "scores" ?: JsonNull
+    checkAll "each accessor answers its own kind and explains the rest" [
+        (jsonText (jsonField user "name" ?: JsonNull) ?: "?") == "Ada",
+        (jsonInt (jsonField user "age" ?: JsonNull) ?: 0) == 36,
+        jsonBool (jsonField user "admin" ?: JsonNull) ?: false,
+        (jsonFloat (jsonIndex scores 0 ?: JsonNull) ?: 0.0) == 9.5,
+        (jsonFloat (jsonIndex scores 1 ?: JsonNull) ?: 0.0) == 7.0,
+        kind (jsonIndex scores 2 ?: JsonInt 0) == "null",
+        reason (jsonField user "email") == "jsonField: no member email",
+        reason (jsonField scores "name") == "jsonField: not an object",
+        reason (jsonIndex scores 3) == "jsonIndex: no element 3",
+        reason (jsonIndex scores (-1)) == "jsonIndex: no element -1",
+        reason (jsonIndex user 0) == "jsonIndex: not an array",
+        reason (jsonText (jsonField user "age" ?: JsonNull)) == "jsonText: not a string",
+        reason (jsonInt (jsonIndex scores 0 ?: JsonNull)) == "jsonInt: not an integer",
+        reason (jsonFloat (jsonField user "name" ?: JsonNull)) == "jsonFloat: not a number",
+        reason (jsonBool JsonNull) == "jsonBool: not a boolean",
+        sumInts document == 43,
+    ]
+
+recordsRoundTrip () =
+    order = Order(id = 42, customer = "Grace \"G\" Hopper", total = 19.99, paid = true, lines = ["cable", "adapter"])
+    text = encoded (orderJson order)
+    back = orderFrom (jsonDecode text ?: JsonNull)
+    print "order: ${text}"
+    checkAll "a record survives encode then decode" [
+        text == "{\"id\":42,\"customer\":\"Grace \\\"G\\\" Hopper\",\"total\":19.99,\"paid\":true,\"lines\":[\"cable\",\"adapter\"]}",
+        back.id == 42, back.customer == "Grace \"G\" Hopper", back.total == 19.99, back.paid,
+        canonical text == text,
+        canonical " { \"a\" : [ 1 , { } ] , \"b\" : \"\" } " == "{\"a\":[1,{}],\"b\":\"\"}",
+    ]
+
+test "encoding is compact and ordered" encodingIsCompactAndOrdered
+test "strings escape exactly" stringsEscapeExactly
+test "numbers keep their kind" numbersKeepTheirKind
+test "malformed text says where" malformedTextSaysWhere
+test "accessors are typed" accessorsAreTyped
+test "records round trip" recordsRoundTrip

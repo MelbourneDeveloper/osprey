@@ -48,8 +48,17 @@ static void t_depth_limit(void) {
 
 static void t_duplicate_members(void) {
   CHECK(json_parse("{\"a\":1,\"a\":2}") == ERR_MALFORMED);
-  expect_reason("duplicate member name");
+  expect_reason("jsonParse: byte 0: duplicate member name");
+  // The reason points at the object that repeats a name, however deep.
   CHECK(json_parse("[{\"x\":{\"k\":1,\"j\":2,\"k\":3}}]") == ERR_MALFORMED);
+  expect_reason("jsonParse: byte 6: duplicate member name");
+  // A large object sorts its names to find the repeat; same answer.
+  CHECK(json_parse("{\"a\":1,\"b\":2,\"c\":3,\"d\":4,\"e\":5,\"f\":6,"
+                   "\"g\":7,\"h\":8,\"i\":9,\"b\":10}") == ERR_MALFORMED);
+  expect_reason("jsonParse: byte 0: duplicate member name");
+  int64_t wide = json_parse("{\"a\":1,\"b\":2,\"c\":3,\"d\":4,\"e\":5,\"f\":6,"
+                            "\"g\":7,\"h\":8,\"i\":9,\"j\":10}");
+  CHECK(wide > 0 && json_length(wide, "") == 10 && json_free(wide) == 0);
   // Distinct names, including ones that differ only past a shared prefix or
   // by an escape that decodes to a different scalar, all stay.
   int64_t h = json_parse("{\"ab\":1,\"a\":2,\"b\":3,\"a\\u0062c\":4}");
