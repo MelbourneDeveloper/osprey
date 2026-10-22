@@ -425,11 +425,14 @@ fn list_pattern_match_binds_head_tail_and_fixed_lengths() {
 #[test]
 fn result_match_success_and_error_arms() {
     // Result discrimination: branch on the i8 disc, bind Success value /
-    // Error message (pattern.rs gen_result_match, emit_result_arm).
+    // Error message (pattern.rs gen_result_match, emit_result_arm). The
+    // Result is a bound value, so it exists; a `listGet` matched directly is
+    // fused instead (`matching_a_list_lookup_allocates_no_result`).
     let ir = module(
         "fn main() -> Unit = {\n\
                let xs = listAppend(List(), 10)\n\
-               match listGet(xs, 0) {\n\
+               let found = listGet(xs, 0)\n\
+               match found {\n\
                  Success { value } => print(\"v=${value}\")\n\
                  Error { message } => print(\"e=${message}\")\n\
                }\n\

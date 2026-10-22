@@ -24,6 +24,9 @@ use structural::gen_structural_match;
 use union::{gen_union_match, union_owner};
 
 pub(crate) fn gen_match(cg: &mut Codegen, value: &Expr, arms: &[MatchArm]) -> Result<Value> {
+    if let Some(fused) = result::gen_list_get_match(cg, value, arms)? {
+        return Ok(fused);
+    }
     let disc = gen_expr(cg, value)?;
     if arms.iter().any(|a| is_result_arm(&a.pattern))
         && (disc.result_inner.is_some()

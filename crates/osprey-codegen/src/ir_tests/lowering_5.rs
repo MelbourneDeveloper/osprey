@@ -420,3 +420,42 @@ fn match_join_keeps_one_owner_for_one_row_layout() {
         }
     }
 }
+
+/// A Result that a match takes apart on the spot is never built: matching a
+/// `listGet` branches on the bounds check, reads the element only in bounds,
+/// and binds the reason as a constant. A member scan is a loop of these, so a
+/// box per step made every JSON field lookup allocate once per member.
+#[test]
+fn matching_a_list_lookup_allocates_no_result() {
+    let ir = module(
+        "fn pick(items, index) = match listGet(items, index) {\n\
+             Success { value } => value\n\
+             Error { message } => length(message)\n\
+         }\n\
+         fn named(items, index) = match listGet(items, index) {\n\
+             Success { value } => value\n\
+             Error => \"none\"\n\
+         }\n\
+         print(toString(pick([1, 2, 3], 1)))\n\
+         print(named([\"a\"], 4))\n",
+    );
+    for header in [
+        "define internal i64 @pick(i8* %$p0, i64 %$p1)",
+        "define internal i8* @named(i8* %$p0, i64 %$p1)",
+    ] {
+        let body = function_body(&ir, header);
+        assert!(
+            !body.contains("@osp_alloc"),
+            "{header} boxed a Result:\n{body}"
+        );
+        let bounds = body.find("@osprey_list_in_bounds").unwrap_or(usize::MAX);
+        let read = body.find("@osprey_list_get").unwrap_or(0);
+        let branch = body[bounds.min(body.len())..]
+            .find("br i1")
+            .map(|at| at + bounds);
+        assert!(
+            branch.is_some_and(|at| at < read),
+            "{header} reads before the bounds branch:\n{body}"
+        );
+    }
+}
