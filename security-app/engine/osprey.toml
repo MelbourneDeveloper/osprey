@@ -1,5 +1,0 @@
-[project]
-name = "vigil-engine"
-source_roots = ["src"]
-default_namespace = "vigil"
-entry = "src/main.osp"

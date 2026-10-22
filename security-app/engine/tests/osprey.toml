@@ -1,5 +1,0 @@
-[project]
-name = "vigil-engine-tests"
-source_roots = ["../src/rules.osp", "."]
-default_namespace = "vigil"
-entry = "rules.test.osp"
