@@ -1,0 +1,4 @@
+ok 1 - reserved words name operations in all three positions
+ok 2 - a call spine is curried only when its head is bound
+1..2
+# tests=2 passed=2 failed=0 skipped=0

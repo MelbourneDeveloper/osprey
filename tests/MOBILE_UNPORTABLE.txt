@@ -27,6 +27,8 @@
 #     portable scalar C representation.
 tests/effects/multiplicity/multiplicity.test.osp a continuation for `Charge.charge` (a suspended continuation cannot cross or outlive a synchronous host call)
 tests/effects/multiplicity/multiplicity.test.ospml a continuation for `Charge.charge` (a suspended continuation cannot cross or outlive a synchronous host call)
+tests/effects/resume/answer_transform.test.osp a continuation for `ControlAsk.value` (a suspended continuation cannot cross or outlive a synchronous host call)
+tests/effects/resume/answer_transform.test.ospml a continuation for `ControlAsk.value` (a suspended continuation cannot cross or outlive a synchronous host call)
 tests/effects/resume/resume_abort_early_exit.test.osp a continuation for `Stop.check` (a suspended continuation cannot cross or outlive a synchronous host call)
 tests/effects/resume/resume_abort_early_exit.test.ospml a continuation for `Stop.check` (a suspended continuation cannot cross or outlive a synchronous host call)
 tests/effects/resume/resume_error_policies.test.osp a continuation for `ResumeFallback.recover` (a suspended continuation cannot cross or outlive a synchronous host call)
@@ -39,6 +41,8 @@ tests/effects/resume/resume_unit_markers.test.osp a continuation for `Trace.mark
 tests/effects/resume/resume_unit_markers.test.ospml a continuation for `Trace.mark` (a suspended continuation cannot cross or outlive a synchronous host call)
 tests/effects/resume/resume_value_rewrite.test.osp a continuation for `Supply.next` (a suspended continuation cannot cross or outlive a synchronous host call)
 tests/effects/resume/resume_value_rewrite.test.ospml a continuation for `Supply.next` (a suspended continuation cannot cross or outlive a synchronous host call)
+tests/effects/scope/finalizers_masks_instances.test.osp a continuation for `Stop.halt` (a suspended continuation cannot cross or outlive a synchronous host call)
+tests/effects/scope/finalizers_masks_instances.test.ospml a continuation for `Stop.halt` (a suspended continuation cannot cross or outlive a synchronous host call)
 tests/modules/ml_layout_depth.test.osp a continuation for `depth::Trunk::Branch::Bud::Sap.draw` (a suspended continuation cannot cross or outlive a synchronous host call)
 tests/modules/ml_layout_depth.test.ospml a continuation for `depth::Trunk::Branch::Bud::Sap.draw` (a suspended continuation cannot cross or outlive a synchronous host call)
 tests/modules/module_effects_rows.test.osp a continuation for `pipeline::Source::Feed.next` (a suspended continuation cannot cross or outlive a synchronous host call)

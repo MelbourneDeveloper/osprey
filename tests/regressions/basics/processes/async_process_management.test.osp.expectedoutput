@@ -25,5 +25,8 @@ Note: Process output appears via C runtime callbacks during execution
 [EXIT] Process 5 exited with code: 0
 [EXIT] Process 6 exited with code: 1
 ok 1 - async processes report successful and failing exits
-1..1
-# tests=1 passed=1 failed=0 skipped=0
+[EXIT] Process 7 exited with code: 0
+[EXIT] Process 8 exited with code: 0
+ok 2 - process handles only increase and released handles await to -1
+1..2
+# tests=2 passed=2 failed=0 skipped=0

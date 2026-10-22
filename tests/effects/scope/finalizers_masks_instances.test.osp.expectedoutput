@@ -1,0 +1,5 @@
+ok 1 - a finalizer runs exactly once when its activation ends
+ok 2 - mask skips exactly one enclosing activation
+ok 3 - an instance is a capability only its own handlers answer
+1..3
+# tests=3 passed=3 failed=0 skipped=0

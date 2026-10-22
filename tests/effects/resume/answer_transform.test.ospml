@@ -1,0 +1,148 @@
+// Return clauses transform a handled body's normal completion and never a
+// control arm's own answer; handler values are first-class and each factory
+// call owns its captured state. [EFFECTS-HANDLER-ARMS] [EFFECTS-RESUME]
+// [EFFECTS-HANDLER-VALUE] [EFFECTS-HANDLER-VALUE-STATE]
+
+(** Supply one integer and continue once. *)
+effect ValueAsk
+    (** Answer the next integer. *)
+    value : Unit => int
+
+(** Supply one integer through the captured remainder. *)
+effect ControlAsk
+    (** Answer the next integer, or abandon the remainder. *)
+    control value : Unit => int
+
+(** Label one stage of a nested composition. *)
+effect Tag
+    (** Answer the label for this stage. *)
+    label : Unit => string
+
+(** One value request plus one. *)
+valueWork () = wrapAdd (perform ValueAsk.value ()) 1
+
+(** One control request plus one. *)
+controlWork () = wrapAdd (perform ControlAsk.value ()) 1
+
+(** Two control requests weighted by position, so their order is visible. *)
+twoAsks () = wrapAdd (perform ControlAsk.value ()) (wrapMul (perform ControlAsk.value ()) 10)
+
+(** Two value requests weighted by position. *)
+twoValues () = wrapAdd (perform ValueAsk.value ()) (wrapMul (perform ValueAsk.value ()) 10)
+
+prefix = "done="
+
+(** A value handler whose return clause turns the int body into text. *)
+replace = handler ValueAsk
+    value => 41
+    return n => "${prefix}${n}"
+
+(** A value handler with no return clause answers the body's own int. *)
+plain = handler ValueAsk
+    value => 41
+
+(** A control arm that resumes and decorates the already transformed answer. *)
+around = handler ControlAsk
+    value => "${resume 41}!"
+    return n => "${prefix}${n}"
+
+(** A control arm that abandons the remainder; its answer skips the return clause. *)
+stop = handler ControlAsk
+    value => "stopped"
+    return n => "${prefix}${n}"
+
+(** Each suspension wraps its own branch answer, innermost first. *)
+bracket = handler ControlAsk
+    value => "[${resume 4}]"
+    return n => "${prefix}${n}"
+
+(** Resume only when open; a closed gate abandons the remainder. *)
+gate open = handler ControlAsk
+    value =>
+        match open
+            true => resume 5
+            false => "closed"
+    return n => "open ${n}"
+
+(** The return clause may itself produce a Result. *)
+checkedDouble seed = handler ValueAsk
+    value => seed
+    return n => checkedMul n 2
+
+(** Each factory call owns a fresh count; reusing one handler shares it. *)
+tally label =
+    mut asks = 0
+    handler ValueAsk
+        value =>
+            asks := wrapAdd asks 1
+            asks
+        return n => "${label}:${n}/${asks}"
+
+(** The inner handler doubles its body's completion. *)
+doubler = handler ValueAsk
+    value => 20
+    return n => wrapMul n 2
+
+(** The outer handler parenthesises whatever its body completes with. *)
+labeller = handler Tag
+    label => "stage"
+    return s => "(${s})"
+
+(** An outer Tag request around an inner, fully handled ValueAsk region. *)
+labelled () = "${perform Tag.label ()}:${doubler valueWork}"
+
+(** After an inner region finishes, the next request reaches the outer handler. *)
+innerThenOuter () = wrapAdd (doubler valueWork) (perform ValueAsk.value ())
+
+(** Building a handler inside a region installs nothing. *)
+buildsButNeverInstalls () =
+    _ignored = handler ValueAsk
+        value => 999
+    valueWork ()
+
+(** Handler values are ordinary arguments. *)
+applyBoth first second work = "${first work}|${second work}"
+
+(** Normal completion passes through the return clause, identity when absent. *)
+returnClauseCase () =
+    checkAll "a return clause converts normal completion" [
+        replace valueWork == "done=42", plain valueWork == 42,
+        replace twoValues == "done=451", plain twoValues == 451,
+        (checkedDouble 20 valueWork ?: -1) == 42,
+        (checkedDouble 4611686018427387904 valueWork ?: -1) == -1
+    ]
+
+(** A resumed branch answer is already transformed; an abandoned one never is. *)
+controlAnswerCase () =
+    opened = gate true
+    closed = gate false
+    checkAll "a control arm's answer bypasses the return clause" [
+        around controlWork == "done=42!", stop controlWork == "stopped",
+        bracket twoAsks == "[[done=44]]", opened controlWork == "open 6",
+        closed controlWork == "closed", closed twoAsks == "closed",
+        opened twoAsks == "open 55"
+    ]
+
+(** Repeated applications share a factory's cells; separate factories do not. *)
+factoryStateCase () =
+    first = tally "a"
+    second = tally "b"
+    checkAll "factory handlers own their state" [
+        first twoValues == "a:21/2", first twoValues == "a:43/4",
+        second twoValues == "b:21/2", first valueWork == "a:6/5",
+        second valueWork == "b:4/3"
+    ]
+
+(** Inner answers are transformed before an outer region sees them. *)
+compositionCase () =
+    checkAll "nested handlers transform inner answers first" [
+        labeller labelled == "(stage:42)", doubler valueWork == 42,
+        doubler twoValues == 440, plain innerThenOuter == 83,
+        applyBoth replace (tally "c") twoValues == "done=451|c:21/2",
+        plain buildsButNeverInstalls == 42
+    ]
+
+test "a return clause converts the body's normal completion" returnClauseCase
+test "control arms answer without the return clause" controlAnswerCase
+test "handler factories share state per call and isolate it across calls" factoryStateCase
+test "nested handlers compose answers innermost first" compositionCase

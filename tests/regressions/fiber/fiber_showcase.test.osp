@@ -184,3 +184,26 @@ test("fiber primitives compose into deterministic values", fn() => exactArithmet
     jobHigh.id == 3,
     jobHigh.weight == 9
 ])))
+
+/// Joins two strings inside a fiber body.
+fn joined(a, b) = "${a}${b}"
+
+/// A completed fiber answers the same value to every await, each await of a
+/// managed result is independently owned, and a non-positive sleep returns at
+/// once. [CONCURRENCY-SPAWN-AWAIT] [CONCURRENCY-SLEEP]
+fn reusableAwaitCase() = {
+    let number = spawn satAdd(40, 2)
+    let words = spawn joined("os", "prey")
+    let parts = spawn listAppend([1, 2], 3)
+    sleep(0)
+    sleep(-5)
+    let firstList = await(parts)
+    checkAll("a completed fiber answers every await alike", [
+        await(number) == 42, await(number) == 42, await(number) == await(number),
+        await(words) == "osprey", await(words) == "osprey",
+        listLength(firstList) == 3, listLength(await(parts)) == 3,
+        (listGet(await(parts), 2) ?: 0) == 3, (listGet(firstList, 0) ?: 0) == 1,
+        fiberDone(number) == 1, fiberDone(parts) == 1
+    ])
+}
+test("a completed fiber answers every await with the same value", reusableAwaitCase)

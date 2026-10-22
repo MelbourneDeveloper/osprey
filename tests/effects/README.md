@@ -28,7 +28,7 @@ print("${continueWith(work)} ${stop(work)}")
 
 `control` on the declaration selects continuation behavior. `resume(value)` supplies the operation result and runs the remaining work; its return is the completed handler answer. Returning without resuming abandons that work. Adding or removing an unreachable `resume` never changes an operation's mode.
 
-A `return value => expression` clause transforms normal completion. A control arm's answer bypasses that clause. See the [resume suites](resume/README.md) and [answer-transform examples](../../examples/handlers/README.md#transforming-the-answer).
+A `return value => expression` clause transforms normal completion. A control arm's answer bypasses that clause. See the [resume suites](resume/README.md) and [answer-transform examples](../../examples/handlers/README.md#transforming-the-answer). The [scope suites](scope/README.md) pin finalizers, `mask` and named instances, which are specified but not yet implemented.
 
 ## Scope and checking
 

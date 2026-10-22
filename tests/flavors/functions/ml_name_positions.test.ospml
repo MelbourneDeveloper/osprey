@@ -1,0 +1,99 @@
+// Where a name stands decides what it means. Operation names are their own
+// namespace, so channel words, concurrency words and operation modifiers still
+// name operations in a declaration, after `perform Effect.`, and at an arm
+// head. A call spine is curried only when its head is lexically bound.
+// [FLAVOR-ML-EFFECT-OP-NAME] [FLAVOR-ML-EFFECT-ANNOTATIONS]
+// [FLAVOR-ML-CALL-SATURATED]
+
+(** Every operation is named with a word the flavor reserves elsewhere. *)
+effect Words
+    (** A channel word as an operation name. *)
+    send : string => Unit
+    (** The receiving channel word. *)
+    recv : Unit => string
+    (** The selection word. *)
+    select : Unit => int
+    (** A multiplicity word followed by `:` is a name, not a modifier. *)
+    abort : string => int
+    (** The default multiplicity word. *)
+    once : Unit => int
+    (** The reusable multiplicity word. *)
+    many : int => int
+    (** The replay word. *)
+    replayable : Unit => bool
+    (** The mode word itself. *)
+    control : Unit => string
+    (** The word that otherwise builds a callable handler. *)
+    handler : Unit => int
+    (** The word that otherwise starts a fiber. *)
+    spawn : Unit => int
+    (** The word that otherwise joins a fiber. *)
+    await : Unit => int
+    (** The word that otherwise yields to the scheduler. *)
+    yield : int => int
+
+(** Perform every operation once, in order, through the dot position. *)
+conversation () =
+    perform Words.send "hello"
+    heard = perform Words.recv ()
+    picked = perform Words.select ()
+    stopped = perform Words.abort "late"
+    first = perform Words.once ()
+    again = perform Words.many 4
+    replays = perform Words.replayable ()
+    mode = perform Words.control ()
+    built = perform Words.handler ()
+    spawned = perform Words.spawn ()
+    awaited = perform Words.await ()
+    yielded = perform Words.yield 6
+    "${heard}|${picked}|${stopped}|${first}|${again}|${replays}|${mode}|${built}|${spawned}|${awaited}|${yielded}"
+
+(** Each arm head is the operation's own name; the sent text is recorded. *)
+operationNameCase () =
+    mut sent = ""
+    words = handler Words
+        send text =>
+            sent := text
+        recv => "heard"
+        select => 2
+        abort reason => length reason
+        once => 1
+        many n => wrapMul n 2
+        replayable => true
+        control => "value"
+        handler => 7
+        spawn => 8
+        await => 9
+        yield n => wrapAdd n 1
+    said = words conversation
+    checkAll "reserved words name operations in all three positions" [
+        said == "heard|2|4|1|8|true|value|7|8|9|7",
+        sent == "hello",
+        startsWith said "heard|", endsWith said "|7"
+    ]
+
+(** `contains` is a parameter here, so this spine is curried through it. *)
+viaParameter contains = contains "alpha" "ph"
+
+(** A user definition's spine stays curried and partially applies. *)
+prefixWith p s = "${p}${s}"
+
+(** Bound heads curry; builtin heads fold their saturated spine to one call,
+    even in the same file as a parameter that borrows a builtin's name. *)
+spineCase () =
+    longer = \a => \b => length a > length b
+    same = \a => \b => a == b
+    hello = prefixWith "hello "
+    checkAll "a call spine is curried only when its head is bound" [
+        viaParameter longer, !(viaParameter same),
+        contains "alpha" "ph", !(contains "alpha" "zz"),
+        (substring "osprey" 1 4 ?: "") == "spr",
+        (padStart "7" 3 "0" ?: "") == "007",
+        join ["a", "b", "c"] "-" == "a-b-c",
+        hello "world" == "hello world", hello "" == "hello ",
+        prefixWith "a" "b" == "ab",
+        startsWith (prefixWith "os" "prey") "osp"
+    ]
+
+test "reserved words name operations in all three positions" operationNameCase
+test "a call spine is curried only when its head is bound" spineCase

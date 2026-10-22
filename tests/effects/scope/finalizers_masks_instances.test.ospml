@@ -1,0 +1,136 @@
+// Handler lifetime and scope selection: a finalizer runs exactly once when its
+// activation ends, after the return clause and inner to outer; `mask` skips
+// one enclosing activation; an `instance` is a capability only its own
+// handlers answer. [EFFECTS-FINALIZATION] [MULTI-COST-ABORT] [EFFECTS-MASK]
+// [EFFECTS-INSTANCE]
+
+(** Look up one integer by key. *)
+effect Store
+    (** Answer the integer stored under a key. *)
+    get : string => int
+
+(** Record one step of a lifetime trail. *)
+effect Log
+    (** Append a note to the trail. *)
+    note : string => Unit
+
+(** Stop the remaining work. *)
+effect Stop
+    (** Abandon the remainder; never resumes. *)
+    control halt : Unit => int
+
+(** Run work under a recorder and answer its result beside the whole trail. *)
+recording work =
+    mut trail = ""
+    recorder = handler Log
+        note text =>
+            trail := "${trail}${text};"
+    answer = recorder work
+    "${answer}=>${trail}"
+
+(** A value handler whose return clause and finalizer both report. *)
+guarded label = handler Store
+    get key => length key
+    return n => "${label}:${n}"
+    finally => perform Log.note "${label} closed"
+
+(** One lookup plus one. *)
+lookup () = wrapAdd (perform Store.get "abc") 1
+
+(** Note the body, then look up. *)
+noted () =
+    perform Log.note "body"
+    lookup ()
+
+(** A guarded region inside another guarded region. *)
+outerOfInner () = guarded "outer" (\() => length (guarded "inner" noted))
+
+(** Abandoning the remainder still closes the activation, once. *)
+stopper = handler Stop
+    halt => "halted"
+    return _ => "finished"
+    finally => perform Log.note "stopper closed"
+
+(** Work that is abandoned between its two notes. *)
+halting () =
+    perform Log.note "before"
+    _never = perform Stop.halt ()
+    perform Log.note "after"
+    0
+
+(** Finalizers run after normal completion, inner to outer, and on abandonment. *)
+finalizerCase () =
+    reused = guarded "a"
+    checkAll "a finalizer runs exactly once when its activation ends" [
+        recording (\() => guarded "a" noted) == "a:4=>body;a closed;",
+        recording outerOfInner == "outer:7=>body;inner closed;outer closed;",
+        recording (\() => stopper halting) == "halted=>before;stopper closed;",
+        recording (\() => "${reused lookup}/${reused lookup}") == "a:4/a:4=>a closed;a closed;"
+    ]
+
+(** The outermost of three nested Store activations. *)
+hundred = handler Store
+    get _ => 100
+
+(** The middle Store activation. *)
+ten = handler Store
+    get _ => 10
+
+(** The innermost Store activation. *)
+one = handler Store
+    get _ => 1
+
+(** A Store activation installed inside a masked body. *)
+five = handler Store
+    get _ => 5
+
+(** Three nested Store activations answering 100, 10 and 1, innermost last. *)
+layered work = hundred (\() => ten (\() => one work))
+
+(** Skip the innermost Store activation. *)
+maskedOnce () =
+    mask Store
+        perform Store.get "k"
+
+(** Skip the two innermost Store activations. *)
+maskedTwice () =
+    mask Store
+        mask Store
+            perform Store.get "k"
+
+(** A handler installed inside a masked body still answers that body. *)
+maskedWithOwn () =
+    mask Store
+        five (\() => perform Store.get "k")
+
+(** mask skips one activation per level and keeps handlers installed inside it. *)
+maskCase () =
+    checkAll "mask skips exactly one enclosing activation" [
+        layered (\() => perform Store.get "k") == 1,
+        layered maskedOnce == 10, layered maskedTwice == 100,
+        layered maskedWithOwn == 5,
+        layered (\() => wrapAdd (perform Store.get "k") (maskedOnce ())) == 11
+    ]
+
+(** Named capabilities are answered only by their own handlers. *)
+instanceCase () =
+    left = instance Store
+    right = instance Store
+    leftAnswers = handler left
+        get _ => 1
+    rightAnswers = handler right
+        get _ => 2
+    defaultAnswers = handler Store
+        get _ => 50
+    both = \() => wrapAdd (perform left.get "a") (wrapMul (perform right.get "b") 10)
+    mixed = \() => wrapAdd (perform Store.get "x") (perform left.get "y")
+    checkAll "an instance is a capability only its own handlers answer" [
+        leftAnswers (\() => rightAnswers both) == 21,
+        rightAnswers (\() => leftAnswers both) == 21,
+        defaultAnswers (\() => leftAnswers mixed) == 51,
+        leftAnswers (\() => defaultAnswers mixed) == 51
+    ]
+
+test "a finalizer runs exactly once when its activation ends" finalizerCase
+test "mask skips exactly one enclosing activation" maskCase
+test "an instance is a capability only its own handlers answer" instanceCase

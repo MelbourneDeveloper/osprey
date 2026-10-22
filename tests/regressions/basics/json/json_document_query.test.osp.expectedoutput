@@ -6,5 +6,9 @@ types: null, boolean, number, string, array, object
 deeply nested string = devon@osprey.dev
 ok 1 - recursive JSON traversal preserves the nested value
 ok 2 - built-in JSON functions parse, query and release a document
-1..2
-# tests=2 passed=2 failed=0 skipped=0
+ok 3 - JSON numbers follow RFC 8259 and keep their source text
+ok 4 - JSON strings decode RFC 8259 escapes and refuse everything else
+ok 5 - a JSON document parses whole or is refused whole
+ok 6 - JSON paths, lengths and handles follow the document
+1..6
+# tests=6 passed=6 failed=0 skipped=0

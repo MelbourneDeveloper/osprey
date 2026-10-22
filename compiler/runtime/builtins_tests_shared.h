@@ -1,6 +1,6 @@
-// Shared between the two translation units of the builtins suite: the
-// behaviour half (builtins_runtime_tests.c) and the entropy-source half
-// (random_entropy_tests.c).
+// Shared between the translation units of the builtins suite: the behaviour
+// half (builtins_runtime_tests.c), the entropy-source half
+// (random_entropy_tests.c) and the real-terminal half (term_tty_tests.c).
 //
 // They are one BINARY -- gcov measures random_runtime.c across the whole suite
 // -- but two objects, because the `getrandom`/`fopen` interposers the entropy
@@ -29,5 +29,9 @@ extern long g_checks;
 // The entropy half: what `osp_random_bytes` writes, and what it does when the
 // OS source cannot supply it [BUILTIN-RANDOM].
 void t_entropy_source(void);
+
+// The real-terminal half: raw mode, window size and exit-time restoration
+// against a pseudo-terminal [BUILTIN-TERM].
+void t_term_tty(void);
 
 #endif // OSPREY_BUILTINS_TESTS_SHARED_H

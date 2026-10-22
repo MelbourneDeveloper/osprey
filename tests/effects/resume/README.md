@@ -16,6 +16,7 @@ The suites cover:
 - same-effect inner-handler shadowing and outer restoration;
 - outer effects that remain available across resume;
 - a handler transforming the completed continuation answer;
+- return clauses that convert normal completion while an abandoning or resuming control arm's own answer bypasses them, and handler factories whose captured state is shared per call and isolated across calls (`answer_transform`);
 - 32 sequential suspensions settling exactly once;
 - integer, string, boolean and `Unit` operations in one handler;
 - string continuation answers, asserted to release under ARC — formerly the
