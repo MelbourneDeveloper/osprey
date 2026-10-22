@@ -147,6 +147,11 @@
         "title": "Show Test Documentation",
         "category": "Osprey",
         "icon": "$(book)"
+      },
+      {
+        "command": "osprey.profiler.inspectVariable",
+        "title": "Osprey: Inspect Variable in Profiler",
+        "icon": "$(graph)"
       }
     ],
     "menus": {
@@ -203,6 +208,20 @@
         {
           "command": "osprey.showTestDocumentation",
           "group": "osprey@1"
+        }
+      ],
+      "debug/variables/context": [
+        {
+          "command": "osprey.profiler.inspectVariable",
+          "when": "debugType == osprey",
+          "group": "inline@10"
+        }
+      ],
+      "debug/watch/context": [
+        {
+          "command": "osprey.profiler.inspectVariable",
+          "when": "debugType == osprey",
+          "group": "inline@10"
         }
       ]
     },
@@ -362,13 +381,23 @@
           "type": "boolean",
           "default": true,
           "description": "After profiling, show inline per-line heat annotations (NN.N% \u00b7 M samples) and overview-ruler marks in the profiled source files."
+        },
+        "osprey.profiler.palette": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "description": "Override profiler colors: critical, hot, warm, memory, memoryHot, memoryWarm, memoryCool, leak, success."
         }
       }
     }
   },
   "dependencies": {
     "@nimblesite/shipwright-vscode": "^0.5.4",
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^9.0.1",
+    "@nimblesite/lsp-profiler-ui": "file:../../SharpLsp/lspkit/packages/lsp-profiler-ui"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",

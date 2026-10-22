@@ -101,7 +101,7 @@ buildsButNeverInstalls () =
     valueWork ()
 
 (** Handler values are ordinary arguments. *)
-applyBoth first second work = "${first work}|${second work}"
+applyBoth (first, second, work) = "${first work}|${second work}"
 
 (** Normal completion passes through the return clause, identity when absent. *)
 returnClauseCase () =
@@ -138,7 +138,7 @@ compositionCase () =
     checkAll "nested handlers transform inner answers first" [
         labeller labelled == "(stage:42)", doubler valueWork == 42,
         doubler twoValues == 440, plain innerThenOuter == 83,
-        applyBoth replace (tally "c") twoValues == "done=451|c:21/2",
+        applyBoth (replace, tally "c", twoValues) == "done=451|c:21/2",
         plain buildsButNeverInstalls == 42
     ]
 

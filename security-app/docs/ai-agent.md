@@ -1,6 +1,6 @@
 # Optional NIMBLESITE.ai investigation agent [AGENT-INTEGRATION]
 
-**Status: proposed integration contract.** AI is disabled by default and never required for spyware detection, protection rules, evidence explanations, investigation, recovery, export or managed policy. When enabled, the agent uses NIMBLESITE.ai and a user-selected supported model. Native UI uses the [Osprey framework](ui-framework.md); NIMBLESITE's Flutter SDK is not an application dependency.
+**Status: native optional client implemented; production deployment and scoped device-agent contract remain incomplete.** AI is disabled by default and never required for spyware detection, protection rules, evidence explanations, investigation, recovery, export or managed policy. When enabled, the agent uses NIMBLESITE.ai and a user-selected supported model. Native UI uses the [Osprey framework](ui-framework.md); NIMBLESITE's Flutter SDK is not an application dependency.
 
 ## User and administrator controls [AGENT-CHOICE]
 
@@ -14,7 +14,7 @@ A model switch starts a new conversation unless the person explicitly agrees to 
 
 [NIMBLESITE's model contract](https://www.nimblesite.ai/docs/models/) describes provider/model configuration and live discovery. [Its end-user authentication contract](https://www.nimblesite.ai/docs/multi-tenancy/) provides IdP JWT access and warns against shipping operator keys. [Tool documentation](https://www.nimblesite.ai/docs/tools/) defines client-side calls with typed arguments/results and a server-issued contract hash. Use Swift URLSession transport over that HTTP contract; Osprey owns agent state, disclosure policy, tool authorization and results interpretation.
 
-The authenticated OpenAPI schema must be retrieved, pinned and checked before implementation; public retrieval returned 403 during research. Operator examples using `/api/v1/chat/{config_id}` and an API key are not the distributed-client authentication design. Exact end-user paths, streaming/cancellation semantics and error shapes must come from the deployed schema. No live tenant configuration or billable request has been made for this research.
+The local vendor SDK OpenAPI snapshot has been inspected and its digest recorded in research; public retrieval remained unavailable. The authenticated deployment schema must still be compared with this contract before production activation. Operator examples using `/api/v1/chat/{config_id}` and an API key are not the distributed-client authentication design. Exact end-user paths, streaming/cancellation semantics and error shapes must come from the deployed schema. No live tenant configuration or billable request has been made for this research.
 
 Provision tenant/config/IdP settings through a separate operator tool. The app uses short-lived end-user tokens stored with Keychain protection and normal expiry/revocation. A conversation ID is a reference, not authorization. Test cross-user, cross-tenant and wrong-config access. Ordinary scanning requires none of these credentials.
 
@@ -57,3 +57,22 @@ A proposed response is a typed explanation plus evidence references, uncertainty
 [OWASP prompt-injection guidance](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) and [excessive-agency guidance](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/) inform fixtures for malicious filenames, plist values, logs, advisory text and pasted documents. Prove these cannot override tool scope, disclose secrets, approve remediation or hide collection gaps. Delimiters and a system prompt are not the security boundary.
 
 Required tests cover AI-off zero AI traffic; deterministic finding equivalence with AI on/off; user model isolation; provider-change consent; denied disclosure; token expiry/revocation; cross-user access; schema/contract mismatch; hallucinated evidence; replayed tools; exhausted credit; ambiguous network errors; interrupted streams; cancellation; and bounded tool loops. A signed-in user must be able to disable AI and continue a local scan immediately.
+
+## Implemented client and deployment contract [AGENT-CLIENT]
+
+The Mac and iOS assistant is disabled by default and never invoked by a scan. Enable it explicitly, import a deployment configuration catalog, select a model configuration, enter an end-user JWT and approve the exact question. Each request starts a fresh conversation; changing model, editing the question or changing identity invalidates approval. Tokens stay in memory and are cleared on disable or leaving the view. The client does not yet perform IdP sign-in or refresh tokens.
+
+The catalog is a JSON array of objects with these fields. It contains no secrets:
+
+| Field | Type and meaning |
+| --- | --- |
+| `name` | Human-readable configuration label |
+| `provider`, `model` | Operator-supplied exact configuration labels; not independently verified by this client |
+| `configID` | UUID of a separately provisioned NIMBLESITE agent config for that model |
+| `contractHash` | 64 hexadecimal characters copied from that config's `tool_contract_sha256`; never a hash invented by the client |
+
+Provisioning is an operator action: register the application's asymmetric IdP with the tenant, provision the approved model configurations, obtain their contract hashes and distribute a reviewed catalog. The client sends the end-user JWT as `Authorization: Bearer`; it never accepts `X-API-Key`. The vendor remains responsible for validating signature, issuer, audience, expiry and tenant scope. Do not put a signing key or tenant operator credential in a catalog or binary.
+
+The implemented request is `POST https://api.nimblesite.ai/api/v1/end-user/chat/{config_id}` with only user-authored `message` and `tool_manifest_sha256`. The supported response has a UUID `conversation_id`, textual `response`, and empty `tool_calls`. Nonempty tools are rejected without execution. HTTP redirects, persistent cookies and disk cache are disabled; request text is limited to 16 KB and response bytes to 1 MB. Cancel terminates the local request and does not promise reversal of server processing or billing.
+
+This is a one-turn explanatory assistant, not the complete scoped investigation agent described above. No automated device claims, evidence tool results or action authority are implemented. Replies are rendered as unverified plain text. The source contract, privacy notice and catalog trust path still require a real tenant integration test, model verification, authenticated catalog distribution, sign-in UX and remote data lifecycle validation before production deployment. No live billable request was made during this implementation.

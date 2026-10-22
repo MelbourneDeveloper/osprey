@@ -2,9 +2,20 @@
 // shell around flame-html. Click-to-source messages from the canvas/table are
 // parsed by the pure `parseSelectMessage` and revealed via `revealSource`.
 
+import { bindPanelPalette } from "@nimblesite/lsp-profiler-ui/out/src/palette-vscode";
+import { bindDebugSelection } from "@nimblesite/lsp-profiler-ui/out/src/debug-selection";
+import { handleSourceNavigation, revealProfileSource as revealSource } from "@nimblesite/lsp-profiler-ui/out/src/profiler-webview";
 import * as path from "path";
 import * as vscode from "vscode";
-import { buildFlameHtml, makeNonce } from "./flame-html";
+import { buildFlamegraphHtml, openNativeTraceViewer, openSpeedscopeImport } from "@nimblesite/lsp-profiler-ui/out/src/profiler-flamegraph-html";
+import { installIds } from "@nimblesite/lsp-profiler-ui/out/src/ids";
+import { configurePalette, resolvePalette } from "@nimblesite/lsp-profiler-ui/out/src/palette";
+import { nativeProfileResult } from "./native-profile";
+
+import { OSPREY_PALETTE } from "./palette";
+installIds({ idPrefix: "osprey", brand: "Osprey", configSection: "osprey", debugType: "osprey" });
+configurePalette(() => resolvePalette(OSPREY_PALETTE,
+  vscode.workspace.getConfiguration("osprey").get("profiler.palette")));
 import type { FlameModel } from "./flame-model";
 import type { ProfileSummary } from "./summary";
 
@@ -29,22 +40,20 @@ export function parseSelectMessage(
   return valid ? select : undefined;
 }
 
-/** Open the clicked frame's source beside the panel, centered on its line. */
-export async function revealSource(message: SelectMessage): Promise<void> {
-  const document = await vscode.workspace.openTextDocument(message.file);
-  const editor = await vscode.window.showTextDocument(
-    document,
-    vscode.ViewColumn.One,
-  );
-  const line = Math.min(Math.max(message.line - 1, 0), document.lineCount - 1);
-  const range = new vscode.Range(line, 0, line, 0);
-  editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
-  editor.selection = new vscode.Selection(line, 0, line, 0);
-}
+export { revealSource };
 
 /** The webview message handler (exported so it is directly testable). */
 export async function handlePanelMessage(message: unknown): Promise<void> {
-  const select = parseSelectMessage(message);
+  if (typeof message === "object" && message !== null && handleSourceNavigation(message as { type: string })) return;
+  const candidate = message as { type?: string; file?: string } | undefined;
+  if (candidate?.type === "openCpuProfile" && candidate.file) {
+    await openNativeTraceViewer(candidate.file, candidate.file); return;
+  }
+  if (candidate?.type === "openSpeedscope" && candidate.file) {
+    await openSpeedscopeImport(candidate.file); return;
+  }
+  const select = parseSelectMessage(candidate?.type === "navigateToSource"
+    ? { ...candidate, type: "select" } : message);
   if (select === undefined) {
     return;
   }
@@ -64,6 +73,8 @@ function createPanel(title: string): vscode.WebviewPanel {
     vscode.ViewColumn.Beside,
     { enableScripts: true },
   );
+  bindDebugSelection(created);
+  bindPanelPalette(created);
   created.onDidDispose(() => {
     panel = undefined;
   });
@@ -78,6 +89,7 @@ export function showFlamePanel(
   model: FlameModel,
   summary: ProfileSummary,
   sourcePath: string,
+  artifacts?: { speedscope: string; cpuprofile: string },
 ): vscode.WebviewPanel {
   const title = `Profile: ${path.basename(sourcePath)}`;
   if (panel === undefined) {
@@ -86,11 +98,6 @@ export function showFlamePanel(
     panel.title = title;
     panel.reveal(vscode.ViewColumn.Beside, true);
   }
-  panel.webview.html = buildFlameHtml({
-    nonce: makeNonce(),
-    title: path.basename(sourcePath),
-    model,
-    summary,
-  });
+  panel.webview.html = buildFlamegraphHtml(nativeProfileResult(model, summary, artifacts));
   return panel;
 }

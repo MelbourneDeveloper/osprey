@@ -1,0 +1,11 @@
+namespace vigil;
+import vigil::Rules
+
+fn field(doc, index, key) = jsonGet(doc, "[${index}].${key}") ?: "unknown"
+fn assess(doc, index) = Rules::classify(field(doc, index, "area"), field(doc, index, "signing"), field(doc, index, "sandbox"), field(doc, index, "hidden") == "true", field(doc, index, "disabled") == "true")
+fn describe(code) = "${code}\t${Rules::explanation(code)}\t${Rules::source(code)}"
+fn reply(doc) = join(range(0, jsonLength(doc, "")) |> map(fn(index) => describe(assess(doc, index))) |> toList(), "\n")
+fn main() = match jsonParse(input()) {
+    Success { value } => print(reply(value))
+    Error => print("ERROR: invalid evidence JSON")
+}

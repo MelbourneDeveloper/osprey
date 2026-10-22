@@ -5,9 +5,9 @@ struct Overview: View {
     var snapshot = false
     @Environment(\.colorScheme) private var scheme
     @ReducedMotion private var reduced: Bool
-    @State private var selected: Finding? = findings.first
+    @State private var selected: StudioFinding? = findings.first
     @State private var query = ""
-    private var filtered: [Finding] {
+    private var filtered: [StudioFinding] {
         findings.filter { query.isEmpty || "\($0.title) \($0.app)".localizedCaseInsensitiveContains(query) }
     }
     var body: some View {
@@ -63,15 +63,15 @@ struct Overview: View {
             if filtered.isEmpty { ContentUnavailableView.search(text: query) }
         }
     }
-    private func findingButton(_ finding: Finding) -> some View {
+    private func findingButton(_ finding: StudioFinding) -> some View {
         Button { selected = finding } label: {
-            FindingRow(finding: finding, selected: selected?.id == finding.id)
+            StudioFindingRow(finding: finding, selected: selected?.id == finding.id)
         }.buttonStyle(.plain).accessibilityAddTraits(selected?.id == finding.id ? .isSelected : [])
     }
     private var inspector: some View {
         Surface {
             if let finding = selected {
-                FindingInspector(finding: finding)
+                StudioFindingInspector(finding: finding)
             } else {
                 Text("Select a finding to inspect its evidence.").foregroundStyle(Ink.secondary.color(scheme))
             }
@@ -87,9 +87,9 @@ struct Overview: View {
     }
 }
 
-struct FindingRow: View {
+struct StudioFindingRow: View {
     @Environment(\.colorScheme) private var scheme
-    let finding: Finding
+    let finding: StudioFinding
     let selected: Bool
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -108,9 +108,9 @@ struct FindingRow: View {
     }
 }
 
-struct FindingInspector: View {
+struct StudioFindingInspector: View {
     @Environment(\.colorScheme) private var scheme
-    let finding: Finding
+    let finding: StudioFinding
     @State private var showingExplanation = false
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {

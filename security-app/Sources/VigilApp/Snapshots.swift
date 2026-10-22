@@ -3,13 +3,15 @@ import AppKit
 import SwiftUI
 import VigilDesign
 
-// Offline design review; no device observations or screen capture permissions.
+// Offscreen native view rendering; investigation uses the locally saved snapshot.
 @MainActor func renderSnapshotsIfRequested() {
     guard let index = CommandLine.arguments.firstIndex(of: "--render"),
           CommandLine.arguments.indices.contains(index + 1) else { return }
     let directory = URL(fileURLWithPath: CommandLine.arguments[index + 1])
     do {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try render(InvestigationView(store: InvestigationStore()), name: "investigation", directory: directory, width: 1360, dark: true)
+        try render(AgentView(), name: "assistant-off", directory: directory, width: 1000, dark: false)
         try render(Overview(snapshot: true), name: "overview-light", directory: directory, width: 1100, dark: false)
         try render(Overview(snapshot: true), name: "overview-dark", directory: directory, width: 1100, dark: true)
         try render(Overview(snapshot: true), name: "overview-compact", directory: directory, width: 390, dark: false)
@@ -26,6 +28,10 @@ import VigilDesign
         .environment(\.colorScheme, scheme).environment(\.vigilReduceMotion, true)
     let host = NSHostingView(rootView: content)
     host.frame = NSRect(x: 0, y: 0, width: width, height: width < 500 ? 1700 : 1000)
+    let window = NSWindow(contentRect: host.frame, styleMask: .borderless, backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false; window.contentView = host
+    defer { window.close() }
+    RunLoop.current.run(until: Date().addingTimeInterval(0.2))
     host.layoutSubtreeIfNeeded()
     try saveSnapshot(host, to: directory.appendingPathComponent("\(name).png"))
 }

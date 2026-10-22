@@ -1381,3 +1381,5 @@ fn unknown_declared_effect_is_rejected() {
 }
 
 mod gpu;
+
+mod curried_callbacks;

@@ -46,6 +46,11 @@ use osprey_syntax::{parse_program_with_flavor, Flavor};
 const ML_ONLY_STEMS: &[&str] = &[
     // The pure `Verdict` testing model is ML-only by design [TESTING-VERDICT].
     "verdict.test",
+    // A program that declares its own `Verdict` [TESTING-VERDICT-DECLARED].
+    "verdict_declared.test",
+    // Reserved words as operation names: Default reserves them in every
+    // position, ML frees them in operation positions [FLAVOR-ML-EFFECT-OP-NAME].
+    "ml_name_positions.test",
 ];
 
 /// Whether `path`'s stem is an allowlisted ML-only surface.

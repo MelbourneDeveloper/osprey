@@ -1,6 +1,7 @@
 # Implementation, extraction and release plan
 
-**Status: research/design phase.** This plan builds a professional native anti-spyware product in a separate repository. The application must not ship as an Osprey demonstration. Contracts are in the [product specification](specification.md), [native framework](ui-framework.md) and [optional agent](ai-agent.md); [research](research.md) owns primary-source evidence. No implementation milestone below is complete merely because its document exists.
+See [implementation status](implementation-status.md) for delivered behavior, verification and outstanding work. The complete contract below remains the acceptance target.
+**Status: implementation started; production gates remain open.** This plan builds a professional native anti-spyware product in a separate repository. The application must not ship as an Osprey demonstration. Contracts are in the [product specification](specification.md), [native framework](ui-framework.md) and [optional agent](ai-agent.md); [research](research.md) owns primary-source evidence. No implementation milestone below is complete merely because its document exists.
 
 ## Ownership and repository extraction [DELIVERY-EXTRACTION]
 
@@ -89,7 +90,7 @@ Use test-first domain/native work. Required scenario classes include legitimate 
 
 Measure UI latency, scan duration, CPU, memory, energy, disk writes and event loss against fixed small/large fixtures. Set documented release budgets from the first prototype measurements, then enforce them against release builds. A bounded-memory soak includes at least 24 hours of synthetic activity, repeated scans/navigation/edits, cancellation, sleep/resume and service restarts; extend duration in business pilots. This is a proposed minimum validation exercise, not a claim of safety after 24 hours.
 
-No compiler-wide benchmark run or existing test execution is needed for this documentation phase. Implementation will run the relevant Osprey domain/corpus, native framework and platform suites; product CI gets its own explicit gates. Never bypass existing compiler CI or treat signing/build success as application acceptance.
+Application implementation runs its own Osprey rules, native collector/domain and Mac/iOS build suites; product CI gets its own explicit gates. Never bypass existing compiler CI or treat signing/build success as application acceptance.
 
 ## Future Android adapter [DELIVERY-ANDROID]
 
@@ -98,3 +99,9 @@ No compiler-wide benchmark run or existing test execution is needed for this doc
 - [ ] Research Android permissions, package visibility, VPN exclusivity and Play distribution separately; test actual device capabilities and label differences.
 
 Android is a portability proof and later product target. It does not introduce a nonnative Apple UI layer or delay Mac/iOS release.
+
+## Current delivery checkpoint — 22 October 2026
+
+Completed implementation slices: native default investigation workspace, Osprey review/explanation policy, private evidence snapshots and retention, finding lifecycle and suppression, selected-file baseline comparison, manual socket observation, permission guidance, receipt parsing, KEV research download/import and optional end-user NIMBLESITE client. These slices are detailed in [implementation status](implementation-status.md); they do not close the broader gates above.
+
+Next code work remains the reusable Osprey UI/application framework and consumer migration, trustworthy advisory applicability and rule/feed distribution, complete persistence/audit/migration semantics, approved protection providers and the full agent tool/disclosure workflow. Do not replace these with gallery pages, fake data, permissive provider shells or unchecked “complete” boxes. External release evidence includes signed extension approval/install/recovery, authenticated deployed agent tests, physical iOS tests and independent security validation.

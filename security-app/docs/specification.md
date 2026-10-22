@@ -1,6 +1,7 @@
 # Product and security specification [SECURITY-PRODUCT]
 
-**Status: proposed contract, not implemented.** [Research](research.md) owns source evidence and platform constraints. [The framework](ui-framework.md) owns application composition; [the agent contract](ai-agent.md) owns optional AI. Initial implementation targets a directly distributed native Mac app and a constrained native iOS companion.
+See [implementation status](implementation-status.md) for delivered behavior, verification and outstanding work. The complete contract below remains the acceptance target.
+**Status: acceptance contract; partially implemented as recorded in the implementation status.** [Research](research.md) owns source evidence and platform constraints. [The framework](ui-framework.md) owns application composition; [the agent contract](ai-agent.md) owns optional AI. Initial implementation targets a directly distributed native Mac app and a constrained native iOS companion.
 
 ## Anti-spyware mission and threat model [SECURITY-SPYWARE]
 
@@ -113,3 +114,13 @@ No telemetry or document uploads by default. Threat-feed retrieval, software upd
 Each collector/rule needs positive, benign-negative, denied-access, malformed-input, partial-result and stale-result fixtures before its implementation. Use synthetic local artifacts, not live malware. Cross-check deterministic Osprey findings under the supported backends; verify native ABI and platform permission behavior on current supported devices. Examples that must remain informational include `.git`, a legitimate updater launch agent, a developer's unsigned tool, a normal background sync and a non-sandboxed signed application.
 
 Release requires validated evidence for all nine capability rows, including explicit unsupported states, zero nonconsensual writes, action rollback tests, malformed feed/IPC resilience and the memory/lifecycle gate in [the plan](plan.md). Measure false positives on a labeled benign/attack-fixture corpus and publish the corpus scope and rates; do not invent detection efficacy from unit-test pass counts.
+
+## Implemented investigation acceptance [SECURITY-INVESTIGATION-BUILD]
+
+The current build adds a review queue, snapshot history, selected-file integrity, explicit socket observation, permission-review guidance, receipt provenance, CISA catalog research and an optional one-turn NIMBLESITE client. These are acceptance-tested development features, not completion of the production anti-spyware contract. [Implementation status](implementation-status.md) is the feature-level record.
+
+A suppression needs a nonblank reason and expires within 90 days (the UI offers seven days). Reopening preserves the stable rule/asset identity. Changes in evidence invalidate suppression. A relevant known-clear follow-up can resolve that rule; missing records, partial collection and unknown signing cannot. Recurrence reopens the original finding. Detailed snapshot retention is bounded by both 30 records and 30 days (at most 8 MB each); finding storage is capped at 10,000 records/8 MB and 90 days. The current private JSON stores are schema-limited development persistence, not the full versioned database/migration contract.
+
+A selected-file baseline is explicitly an observation baseline. Hash only local regular files up to 32 MB, reject a final-component symlink, compare descriptor identity/size/mtime/ctime around reads and check cancellation while hashing. This does not prove a trusted origin, prevent every adversarial filesystem race, or implement system-file repair. The Mac UI persists a baseline only after a separate user action.
+
+Socket observations keep numeric endpoints and provisional PID attribution only. Permission rows are guidance with unknown grant status. Imported advisory files are unverified; HTTPS downloads identify the official CISA mirror but do not meet the independent signed-feed distribution contract. Catalog lookup never marks an installed package vulnerable without a verified identity/version mapping.

@@ -1,6 +1,7 @@
 // Native debugger launch, source mapping, and primitive locals:
 // [DEBUGGER-BUILD] [DEBUGGER-SOURCE-MAP] [DEBUGGER-EDITOR-LAUNCH]
 // [DEBUGGER-DBG-DECLARE].
+import { registerDebugTailTests } from "./debug-workflows";
 import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
@@ -19,12 +20,10 @@ import {
   assertWatch,
   clearDebugBreakpoints,
   continueExecution,
-  getScopes,
   readFrameVariables,
   setSourceBreakpoints,
   stepIn,
   stepOut,
-  stepOver,
   waitForDebugSessionEnd,
   waitForDebugSessionStart,
   waitForStop,
@@ -470,121 +469,5 @@ suite("Osprey Debugger E2E Workflows", function () {
     await continueExecution(session, back.threadId);
     await waitForDebugSessionEnd(LAUNCH_TIMEOUT_MS, session.id);
   });
-
-  test("step over executes a call without descending into it", async function () {
-    this.timeout(TEST_TIMEOUT_MS);
-
-    // Stop at the first square(5) call site in main.
-    const { session, stop } = await launchToFirstStop([3]);
-    assertCurrentLine(stop.stack, 3, source);
-
-    // Step OVER the call: we stay in main and advance to line 4 (not into square).
-    await stepOver(session, stop.threadId);
-    const afterFirst = await waitForStop(session, LAUNCH_TIMEOUT_MS);
-    assert.ok(hasFrame(afterFirst, "main"), "step over stayed in main");
-    assertCurrentLine(afterFirst.stack, 4, source);
-
-    // Step OVER again to line 5.
-    await stepOver(session, afterFirst.threadId);
-    const afterSecond = await waitForStop(session, LAUNCH_TIMEOUT_MS);
-    assertCurrentLine(afterSecond.stack, 5, source);
-
-    await continueExecution(session, afterSecond.threadId);
-    await waitForDebugSessionEnd(LAUNCH_TIMEOUT_MS, session.id);
-  });
-
-  test("multiple breakpoints across functions are each hit in order", async function () {
-    this.timeout(TEST_TIMEOUT_MS);
-
-    // Breakpoints in BOTH functions; continue walks through every hit.
-    const { session, stop } = await launchToFirstStop([1, 2]);
-
-    // First hit: square(5).
-    assertCurrentLine(stop.stack, 1, source);
-    await assertLocalVariable(
-      session,
-      stop.stack.stackFrames[0].id,
-      "n",
-      /\b5\b/,
-    );
-
-    // Second hit: square(7).
-    await continueExecution(session, stop.threadId);
-    const secondHit = await waitForStop(session, LAUNCH_TIMEOUT_MS);
-    assertCurrentLine(secondHit.stack, 1, source);
-    await assertLocalVariable(
-      session,
-      secondHit.stack.stackFrames[0].id,
-      "n",
-      /\b7\b/,
-    );
-
-    // Third hit: addThree(second) where second == 49.
-    await continueExecution(session, secondHit.threadId);
-    const thirdHit = await waitForStop(session, LAUNCH_TIMEOUT_MS);
-    assertCurrentLine(thirdHit.stack, 2, source);
-    assert.ok(hasFrame(thirdHit, "addThree"), "third stop is in addThree");
-    await assertLocalVariable(
-      session,
-      thirdHit.stack.stackFrames[0].id,
-      "n",
-      /\b49\b/,
-    );
-
-    await continueExecution(session, thirdHit.threadId);
-    await waitForDebugSessionEnd(LAUNCH_TIMEOUT_MS, session.id);
-  });
-
-  test("scopes and locals expose the program's computed values", async function () {
-    this.timeout(TEST_TIMEOUT_MS);
-
-    // Stop on the final print, by which point every let is assigned and live.
-    const { session, stop } = await launchToFirstStop([6]);
-    assertCurrentLine(stop.stack, 6, source);
-    const frameId = stop.stack.stackFrames[0].id;
-
-    const { scopes } = await getScopes(session, frameId);
-    assert.ok(
-      scopes.some((scope) => scope.variablesReference > 0),
-      "the frame exposes at least one inspectable scope",
-    );
-
-    const names = (await readFrameVariables(session, frameId)).map(
-      (v) => v.name,
-    );
-    assert.ok(
-      names.includes("first") &&
-        names.includes("second") &&
-        names.includes("third"),
-      `locals expose the top-level lets; saw ${names.join(", ")}`,
-    );
-
-    // square(5)=25, square(7)=49, addThree(49)=52.
-    await assertLocalVariable(session, frameId, "first", /\b25\b/);
-    await assertLocalVariable(session, frameId, "second", /\b49\b/);
-    await assertLocalVariable(session, frameId, "third", /\b52\b/);
-
-    await continueExecution(session, stop.threadId);
-    await waitForDebugSessionEnd(LAUNCH_TIMEOUT_MS, session.id);
-  });
-
-  test("stopOnEntry pauses before user code, then resumes to completion", async function () {
-    this.timeout(TEST_TIMEOUT_MS);
-
-    // No breakpoints: the only reason we stop is stopOnEntry.
-    const { session, stop } = await launchToFirstStop([], {
-      stopOnEntry: true,
-    });
-    assert.ok(
-      stop.stack.stackFrames.length > 0,
-      "stopOnEntry paused with a live stack",
-    );
-
-    await continueExecution(session, stop.threadId);
-    await waitForDebugSessionEnd(LAUNCH_TIMEOUT_MS, session.id);
-    assert.ok(
-      fs.existsSync(debugOutput),
-      "the debug launch compiled a native binary for the adapter",
-    );
-  });
+  registerDebugTailTests(launchToFirstStop, () => source, () => debugOutput, hasFrame, TEST_TIMEOUT_MS, LAUNCH_TIMEOUT_MS);
 });

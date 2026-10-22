@@ -1,3 +1,5 @@
+const os = require("node:os");
+const path = require("node:path");
 const { defineConfig } = require("@vscode/test-cli");
 
 // SHAPE MATTERS. `defineConfig` is the identity function, and the loader only
@@ -30,7 +32,8 @@ module.exports = defineConfig({
           ? { grep: process.env.OSPREY_TEST_GREP }
           : {}),
       },
-      launchArgs: ["--disable-extensions", "--disable-workspace-trust"],
+      launchArgs: ["--disable-extensions", "--disable-workspace-trust",
+        `--user-data-dir=${path.join(os.tmpdir(), `osp-vsix-${process.pid}`)}`],
     },
   ],
   coverage: {

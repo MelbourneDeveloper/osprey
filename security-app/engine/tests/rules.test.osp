@@ -1,0 +1,14 @@
+import vigil::Rules
+
+test("hidden alone is not a finding", fn() => expect(Rules::classify("files", "unknown", "unknown", true, false), "information"))
+test("background alone is not a finding", fn() => expect(Rules::classify("processes", "unknown", "unknown", false, false), "information"))
+test("invalid signature warrants review", fn() => expect(Rules::classify("apps", "invalid", "unknown", false, false), "signature-review"))
+test("unknown signature never implies missing sandbox", fn() => expect(Rules::classify("apps", "unknown", "absent", false, false), "information"))
+test("verified missing sandbox is exposure", fn() => expect(Rules::classify("apps", "valid", "absent", false, false), "sandbox-exposure"))
+test("valid sandbox is not a finding", fn() => expect(Rules::classify("apps", "valid", "present", false, false), "information"))
+test("hidden startup target warrants review", fn() => expect(Rules::classify("startup", "unknown", "unknown", true, false), "hidden-startup"))
+test("disabled protection warrants review", fn() => expect(Rules::classify("protection", "unknown", "unknown", false, true), "protection-disabled"))
+test("unverified signing remains a review item", fn() => expect(Rules::classify("apps", "unverified", "unknown", false, false), "signature-review"))
+
+test("signing explanation preserves uncertainty", fn() => expect(contains(Rules::explanation("signature-review"), "does not establish malware"), true))
+test("persistence explanation cites MITRE", fn() => expect(Rules::source("hidden-startup"), "https://attack.mitre.org/techniques/T1543/001/"))

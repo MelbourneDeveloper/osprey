@@ -1,39 +1,51 @@
-# Vigil design system
+# Vigil
 
-Native visual foundation for the security product. **Vigil is a working identity**, pending name and trademark review. This package delivers the SwiftUI design adapter and an interactive design studio with synthetic fixtures. It does not implement monitoring, detection, the Osprey application framework, or the NIMBLESITE agent.
+A standalone native security application under development. All application code, Osprey rules, design assets, tests, research, specifications and plans live in this directory. It can be moved into its own repository without importing source from the enclosing Osprey checkout. The Osprey compiler is an external build dependency.
 
-```sh
-swift run --package-path security-app VigilGallery
-swift test --package-path security-app
-```
+## Build and run
 
-Open `Package.swift` in Xcode to consume `VigilDesign` from a native macOS or iOS host. Minimum library deployment: macOS 14 / iOS 17. The gallery executable is intended for Mac; iOS library compilation is checked independently.
-
-## Included
-
-- Original generated aperture icon and system-font wordmark.
-- Typed semantic colours, spacing, system typography and motion policy.
-- Reusable surfaces, coverage/severity badges, evidence fields, coverage strip and native button styling.
-- Overview with search, selection, evidence inspector and explanation sheet.
-- Interactive component catalog, light/dark switching and Reduce Motion preview.
-- Offline native rendering for desktop and compact layout inspection.
-
-The design contract, component behaviour, motion timing and acceptance boundaries are in [the design specification](docs/design-system.md). `Sources/VigilDesign/Theme.swift` is the current executable token source. Do not create a second handwritten token palette for another backend; extract a shared token source when the Osprey framework is implemented.
-
-## Native previews
+From this directory, with Xcode installed:
 
 ```sh
-swift run --package-path security-app VigilGallery --render security-app/.build/previews
+export OSPREY_COMPILER=/absolute/path/to/osprey
+./build.sh
+open -n .build/Vigil.app
 ```
 
-This renders the same content through `NSHostingView`, including native fields, into local PNG files. It does not capture the user's screen, collect device data, or replace real VoiceOver/keyboard/device testing. Previews omit the window chrome/sidebar; the running gallery uses native `NavigationSplitView`.
+The app opens the real local investigation workspace. `./build.sh` builds and bundles the Osprey engine; running Swift alone after a clean checkout does not build that engine. For this checkout the existing compiler is `/Users/christianfindlay/Documents/Code/osprey/target/release/osprey`.
 
-## Verification
+```sh
+make ci
+```
 
-- macOS gallery builds; semantic text and primary-button contrast tests pass in both appearances.
-- iOS library build succeeds with `xcodebuild -scheme VigilDesign -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build` from this directory.
-- Native desktop light/dark and 390-point compact content renderings were inspected.
-- Live keyboard, VoiceOver, animation and device interaction checks remain pending: the Mac was locked during this session. No App Store readiness or full accessibility certification is claimed.
+This builds the app, runs Osprey rule tests and Swift tests, and compiles the iOS target without signing. macOS 14 and iOS 17 are the deployment baselines. The bundled Mac app is ad-hoc signed for local development, not a Developer ID/notarized release.
+
+## Implemented
+
+- **Investigation:** installed apps, processes and background-app observations, launch definitions, Homebrew receipt provenance, hidden entries and system-protection settings. App signature/sandbox inspection runs on demand.
+- **Review:** Osprey assessment, explanations and primary-source references; persisted findings with acknowledge/investigate/reopen and reasoned, expiring suppression. Relevant follow-up evidence resolves a finding; unknown or missing evidence cannot.
+- **History:** private latest report plus up to 30 snapshots retained for 30 days; finding records for 90 days, startup/package comparisons and JSON export. Exports contain local identifiers and paths.
+- **File integrity:** explicitly selected local regular files, bounded SHA-256 hashing, race checks and recorded baseline comparison. No cloud download, automatic repair or claim that a first baseline is clean.
+- **Network:** explicit open-IP-socket observation without name resolution, payload inspection or blocking. PID attribution is provisional.
+- **Permissions:** guidance for reviewing six sensitive permission categories in System Settings. Actual other-app grants remain unknown.
+- **Advisories:** explicit download from CISA's official KEV mirror or local JSON import, searchable research and visible provenance. Installed-version applicability is not inferred from names. Cached catalogs survive collection failure as stale evidence.
+- **Optional NIMBLESITE:** off by default; native model-configuration picker, session-only end-user JWT, exact question disclosure, cancellation and bounded HTTPS transport. Local tools and automatic device-evidence disclosure are disabled. Deployment setup is in [the agent contract](docs/ai-agent.md#implemented-client-and-deployment-contract-agent-client).
+- **iOS:** native evidence-report import and optional assistant. Unsigned compilation is verified; physical-device interaction and distribution are not yet verified.
+
+The app is a read-only investigation build. Active spyware prevention, continuous Endpoint Security monitoring, Network Extension blocking, complete TCC visibility, installed-version advisory matching, enterprise management, signed releases and the full backend-independent Osprey UI framework remain unfinished. [Implementation status](docs/implementation-status.md) tracks the remaining contract.
+
+Osprey owns assessment and explanatory policy in `engine/`; native collection, storage and presentation are Swift. A short-lived engine process bounds its lifetime. This does not solve the separate long-running C ABI ownership and framework extraction requirements.
+
+## Design system
+
+The same executable retains the design studio explicitly:
+
+```sh
+.build/Vigil.app/Contents/MacOS/Vigil --studio
+.build/Vigil.app/Contents/MacOS/Vigil --render .build/previews
+```
+
+The [design contract](docs/design-system.md), [research](docs/research.md), [product specification](docs/specification.md), [framework contract](docs/ui-framework.md), [agent contract](docs/ai-agent.md) and [delivery plan](docs/plan.md) belong to this application. `Sources/VigilDesign/Theme.swift` owns the native design tokens; resources include the logo. The studio uses synthetic fixtures, clearly labeled separately from the default live workspace.
 
 ## Asset provenance
 

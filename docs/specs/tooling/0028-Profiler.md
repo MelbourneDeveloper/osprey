@@ -154,25 +154,13 @@ self/total hot-function table. It also adds after-line heat decorations
 (`NN.N% · M samples`) with overview-ruler marks [PROF-VSCODE-HEAT], driven by
 `<stem>.profile.json`.
 
-Frame colors are a function of the profile alone, never of the engine. Frames
-are ranked by their file path, then their name, then their original index, and
-each rank picks one colour from a fixed ramp; a frame's colour therefore depends
-only on the document, and the same profile looks the same on every run and every
-machine. The index term carries the whole weight of that promise for frames that
-share a file AND a name — the same function inlined at two sites, or two runtime
-frames with no file at all. An ordering that answered "equal" for those would
-make their ranks a property of the ARRAY, not of the frames: a host sort is
-required to be stable, so the ranks would come out in whatever order the
-document happened to list them, and a profile that named the same two frames in
-the other order would colour them the other way round. The ordering is therefore
-a TOTAL one — it reports two distinct frames as equal only when they are the
-same frame — and that is a property of the comparator, which no observation of
-a sort's output can confirm, so it is asserted on the comparator directly.
+### [PROF-VSCODE-SHARED] Shared profiler UI
 
-Ranking by file THEN name is ranking on the pair, not on a string that happens
-to contain both: any separator used to splice them must be one no path and no
-frame name can contain, or `("/w/a b.osp", "z")` and `("/w/a", "b.osp z")`
-collapse onto one key and two distinct frames become indistinguishable.
+The extension adapts native captures to `@nimblesite/lsp-profiler-ui`, shared with SharpLsp. Osprey keeps its compiler invocation, optimized builds, native sampler, offline symbolization, cancellation, test-explorer profile action, summary parsing and inline sample annotations. The shared package owns the canvas model, interactions, result tables, trace actions, palette and debugger selection bridge. No native export format changes.
+
+`osprey.profiler.palette` overrides the olive/brown-green defaults. Source/runtime frame classification stays in Osprey; frame identities determine deterministic color ranks. The shared view retains per-fiber running/waiting counts and dropped samples. A variable clicked in the Osprey Debug tree, or selected through Watch/Variables' profiler action, can be inspected and added back to Watch. A resumed or terminated session invalidates that selection.
+
+This integration does not claim live process attachment or native heap-retention capture: those require Osprey runtime backends. The common VSIX capture and webview contracts run against the real Osprey extension/compiler, alongside all Osprey-specific profiler tests.
 
 ## [PROF-TEST] Testing
 

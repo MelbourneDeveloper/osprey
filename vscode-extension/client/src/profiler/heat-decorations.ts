@@ -8,24 +8,17 @@ import * as path from "path";
 import * as vscode from "vscode";
 import type { HotLineInfo, ProfileSummary } from "./summary";
 
-export const HEAT_HIGH = "#e8500a"; // >= 20% of samples on one line
-export const HEAT_WARM = "#f97316"; // >= 10%
-export const HEAT_MILD = "#fbbf24"; // >= 5%
-export const HEAT_MUTED = "#88888899"; // everything cooler
+import { cpuHeatColor, resolvePalette } from "@nimblesite/lsp-profiler-ui/out/src/palette";
+import { OSPREY_PALETTE } from "./palette";
+export const HEAT_HIGH = OSPREY_PALETTE.critical;
+export const HEAT_WARM = OSPREY_PALETTE.hot;
+export const HEAT_MILD = OSPREY_PALETTE.warm;
+export const HEAT_MUTED = "#88888899";
 
-const HIGH_PCT = 20;
-const WARM_PCT = 10;
-const MILD_PCT = 5;
-
-/** Heat tier color for a line's sample percentage. */
+/** Use the same validated palette as the shared results panel. */
 export function heatColor(pct: number): string {
-  if (pct >= HIGH_PCT) {
-    return HEAT_HIGH;
-  }
-  if (pct >= WARM_PCT) {
-    return HEAT_WARM;
-  }
-  return pct >= MILD_PCT ? HEAT_MILD : HEAT_MUTED;
+  return cpuHeatColor(pct, resolvePalette(OSPREY_PALETTE,
+    vscode.workspace.getConfiguration("osprey").get("profiler.palette")));
 }
 
 /** The after-line annotation text: ` ▍ 12.4% · 124 samples`. */

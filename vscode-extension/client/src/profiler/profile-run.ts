@@ -99,6 +99,7 @@ export function loadArtifacts(
 
 interface LastRun extends LoadedProfile {
   sourcePath: string;
+  artifacts: ProfileArtifacts;
 }
 
 function appendStream(output: vscode.OutputChannel, text: string): void {
@@ -133,8 +134,8 @@ function finishRun(
   }
   output.appendLine(formatSummaryHeader(loaded.value.summary));
   output.appendLine(`Profile artifacts kept in ${tmpDir}`);
-  remember({ ...loaded.value, sourcePath });
-  showFlamePanel(loaded.value.model, loaded.value.summary, sourcePath);
+  remember({ ...loaded.value, sourcePath, artifacts: artifactPaths(tmpDir, sourcePath) });
+  showFlamePanel(loaded.value.model, loaded.value.summary, sourcePath, artifactPaths(tmpDir, sourcePath));
   heat.apply(loaded.value.summary);
   return true;
 }
@@ -234,7 +235,7 @@ export function registerProfilerCommands(
     { dispose: () => heat.dispose() },
     vscode.window.onDidChangeVisibleTextEditors(() => heat.refresh()),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("osprey.profiler.inlineHeat")) {
+      if (event.affectsConfiguration("osprey.profiler.inlineHeat") || event.affectsConfiguration("osprey.profiler.palette")) {
         heat.refresh();
       }
     }),
@@ -250,7 +251,7 @@ export function registerProfilerCommands(
         );
         return false;
       }
-      showFlamePanel(lastRun.model, lastRun.summary, lastRun.sourcePath);
+      showFlamePanel(lastRun.model, lastRun.summary, lastRun.sourcePath, lastRun.artifacts);
       return true;
     }),
   );

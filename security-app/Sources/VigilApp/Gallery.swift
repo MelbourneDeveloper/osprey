@@ -2,7 +2,7 @@ import SwiftUI
 import VigilDesign
 
 @main
-struct VigilGallery: App {
+struct VigilApp: App {
     #if os(macOS)
     @NSApplicationDelegateAdaptor(VigilApplicationDelegate.self) private var delegate
     #endif
@@ -12,11 +12,17 @@ struct VigilGallery: App {
         #endif
     }
     var body: some Scene {
-        WindowGroup("Vigil · Design studio") {
+        WindowGroup("Vigil") {
             #if os(macOS)
-            Gallery().frame(minWidth: 820, minHeight: 640)
+            Group {
+                if CommandLine.arguments.contains("--studio") { Gallery() }
+                else { SecurityWorkspace() }
+            }.frame(minWidth: 1000, minHeight: 640)
             #else
-            Gallery()
+            TabView {
+                PhoneInvestigation().tabItem { Label("Investigation", systemImage: "magnifyingglass") }
+                AgentView().tabItem { Label("Optional assistant", systemImage: "bubble.left") }
+            }
             #endif
         }
         #if os(macOS)

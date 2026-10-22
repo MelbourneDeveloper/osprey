@@ -21,6 +21,7 @@ import {
 } from "vscode-languageclient/node";
 import { registerDebugLaunch } from "./debug-launch";
 import { registerOspreyDebugPanel } from "./debug-panel";
+import { registerDebugProfilerLink } from "@nimblesite/lsp-profiler-ui/out/src/debug-link";
 import { registerProfilerCommands } from "./profiler/profile-run";
 import { registerTestDocsCommand } from "./test-docs-panel";
 import { registerOspreyTestExplorer } from "./test-explorer";
@@ -62,6 +63,7 @@ export function activate(context: ExtensionContext) {
   // before the server-enabled gate — it only needs the compiler CLI — and
   // first, so the Test Explorer's Profile run profile can reuse its heat
   // manager ([TESTING-PROFILE]).
+  context.subscriptions.push(...registerDebugProfilerLink({ debugType: "osprey" }));
   const heat = registerProfilerCommands(context, () =>
     resolveServerCommand(context),
   );

@@ -31,3 +31,5 @@ These documents belong together and move into the product repository at extracti
 Prove the platform and memory boundaries, then deliver a read-only Mac inventory with permission visibility limits, signed-app identity, background activity, persistence and scoped file inspection. Show the evidence and collection gaps for every result. Add vulnerability matching and network observation after those foundations, then reversible network rules. Deliver the optional AI investigation alongside verified evidence, never as the detection engine.
 
 The framework must prove itself with two consumers: a storage-browser feature and a security-inventory feature. A handful of mapped controls, a polished screenshot, or a compiled application is insufficient acceptance.
+
+The [working application](../README.md) and [implementation status](implementation-status.md) live alongside this dossier in the standalone application root.
