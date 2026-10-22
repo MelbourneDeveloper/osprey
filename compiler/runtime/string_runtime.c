@@ -19,6 +19,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include "float_spelling.h"
 #include "string_runtime.h"
 
 char *osp_string_dup_internal(const char *s, size_t n) {
@@ -329,60 +330,6 @@ int64_t osp_parse_float_strict(const char *s, double *out) {
     return 0;
 }
 
-#define FLOAT_SIGN_SHIFT 63
-
-/* Whole values below 1e10 have at most ten digits, so %.10g spells them as
- * their integer exactly; writing the digits directly skips dtoa entirely.
- * Returns the length written, or 0 when `d` is not such a value. */
-static int whole_float_spelling(double d, uint64_t bits, char *buf) {
-    if (!(d > -1e10 && d < 1e10) || d != (double)(int64_t)d) return 0;
-    char digits[12];
-    int count = 0;
-    int64_t whole = (int64_t)d;
-    for (int64_t v = whole < 0 ? -whole : whole; count == 0 || v > 0; v /= 10) {
-        digits[count++] = (char)('0' + v % 10);
-    }
-    int n = 0;
-    if (bits >> FLOAT_SIGN_SHIFT) buf[n++] = '-';
-    while (count > 0) buf[n++] = digits[--count];
-    buf[n] = '\0';
-    return n;
-}
-
-static int float_spelling_at(double d, int precision, char *buf, size_t cap) {
-    return snprintf(buf, cap, "%.*g", precision, d);
-}
-
-/* The smallest precision from 10 to 17 whose %g spelling reads back as `d`,
- * spelled into `buf`. Seventeen digits always round-trip, and a precision
- * that round-trips stays round-tripping as digits are added -- except at a
- * power of two, whose round-trip interval is narrower below than above --
- * so the search is binary everywhere but there: four spellings at most
- * instead of eight. */
-#define FLOAT_FRACTION_BITS 0x000FFFFFFFFFFFFFull
-#define FLOAT_EXPONENT_BITS 0x7FF0000000000000ull
-
-static int shortest_float_spelling(double d, uint64_t bits, char *buf, size_t cap) {
-    int lopsided = (bits & FLOAT_FRACTION_BITS) == 0 && (bits & FLOAT_EXPONENT_BITS) != 0;
-    int low = 10;
-    int high = 17;
-    int n = float_spelling_at(d, low, buf, cap);
-    if (n < 0 || (size_t)n >= cap || strtod(buf, NULL) == d) return n;
-    int spelled = low++;
-    while (low < high) {
-        int probe = lopsided ? low : low + (high - low) / 2;
-        n = float_spelling_at(d, probe, buf, cap);
-        spelled = probe;
-        if (n < 0 || (size_t)n >= cap) return n;
-        if (strtod(buf, NULL) == d) {
-            high = probe;
-        } else {
-            low = probe + 1;
-        }
-    }
-    return spelled == high ? n : float_spelling_at(d, high, buf, cap);
-}
-
 /* Formats a double so whole-valued floats keep a visible ".0" — without
  * this, sprintf("%.10g", 3.0) yields "3", indistinguishable from int 3
  * in user output. Buffer is malloc'd and owned by the caller. NaN /
@@ -394,14 +341,7 @@ char *osp_float_to_string(double d) {
      * ".0". Widen only as far as the value needs to survive a round trip, so
      * short decimals keep their short spelling and no printed float ever
      * names a different double than the one held. */
-    uint64_t bits;
-    memcpy(&bits, &d, sizeof(bits));
-    int n = whole_float_spelling(d, bits, buf);
-    if (n == 0) {
-        int finite = (bits & FLOAT_EXPONENT_BITS) != FLOAT_EXPONENT_BITS;
-        n = finite ? shortest_float_spelling(d, bits, buf, sizeof(buf))
-                   : float_spelling_at(d, 17, buf, sizeof(buf));
-    }
+    int n = osp_float_spelling(d, buf, sizeof(buf));
     if (n < 0 || (size_t)n >= sizeof(buf)) return osp_string_empty_internal();
     /* If snprintf produced a representation with none of '.', 'e', 'E',
      * 'n' (NaN), or 'i' (inf), the value lost its float-ness — re-append

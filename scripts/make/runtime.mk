@@ -75,6 +75,7 @@ $(NATIVE_RUNTIME_STAMP): $(NATIVE_RUNTIME_INPUTS) $(NATIVE_RUNTIME_CONFIG) Makef
 	  $(CC) $(A) runtime/effects_coro.c         -o bin/effects_coro.o && \
 	  $(CC) $(A) runtime/string_runtime.c       -o bin/string_runtime.o && \
 	  $(CC) $(A) runtime/string_runtime_list.c  -o bin/string_runtime_list.o && \
+	  $(CC) $(B) runtime/float_spelling.c       -o bin/float_spelling.o && \
 	  $(CC) $(B) runtime/list_runtime.c         -o bin/list_runtime.o && \
 	  $(CC) $(B) runtime/map_runtime.c          -o bin/map_runtime.o && \
 	  $(CC) $(B) runtime/map_runtime_hamt.c     -o bin/map_runtime_hamt.o && \

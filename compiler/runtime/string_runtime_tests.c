@@ -16,7 +16,6 @@
  */
 
 #include <assert.h>
-#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -930,9 +929,13 @@ static double from_bits(uint64_t bits) {
    whole-number boundary, short decimals, subnormals and a million random
    bit patterns. [BUILTIN-STRING] */
 static void test_float_to_string_matches_reference(void) {
-    for (int e = -1074; e <= 1023; e++) {
-        expect_reference_spelling(ldexp(1.0, e));
-        expect_reference_spelling(-ldexp(1.0, e));
+    for (uint64_t e = 0; e < 2047; e++) { /* every power of two, subnormal ones too */
+        uint64_t bits = e == 0 ? 1 : e << 52;
+        for (uint64_t shift = 0; e == 0 && shift < 52; shift++) {
+            expect_reference_spelling(from_bits(bits << shift));
+        }
+        expect_reference_spelling(from_bits(bits));
+        expect_reference_spelling(-from_bits(bits));
     }
     const double edges[] = {0.0, -0.0, 1e10, 1e10 - 1, -(1e10 - 1), 9999999999.5,
                             1e15, 0.1, 0.2, 0.3, 1.0 / 3.0, 2.5, -7.75, 5e-324,
@@ -943,11 +946,27 @@ static void test_float_to_string_matches_reference(void) {
     for (int k = -20000; k <= 20000; k++) {
         expect_reference_spelling(k / 1000.0);
         expect_reference_spelling((double)k * 1048576.0);
+        /* exact decimal ties at 11 to 13 digits: round half to even */
+        expect_reference_spelling(12345678901.5 + k);
+        expect_reference_spelling(123456789012.25 + k);
+        expect_reference_spelling(1234567890123.125 + k);
+    }
+    /* every decade and its neighbours: where the decimal exponent turns */
+    for (double up = 1.0, down = 1.0; up < 1e308; up *= 10.0, down /= 10.0) {
+        const double decades[] = {up, down};
+        for (int i = 0; i < 2; i++) {
+            uint64_t bits;
+            memcpy(&bits, &decades[i], sizeof(bits));
+            expect_reference_spelling(decades[i]);
+            expect_reference_spelling(from_bits(bits - 1));
+            expect_reference_spelling(from_bits(bits + 1));
+            expect_reference_spelling(9.999999999999999 * decades[i]);
+        }
     }
     uint64_t state = 0x9E3779B97F4A7C15u;
     for (int i = 0; i < 1000000; i++) {
         double d = from_bits(next_bits(&state));
-        if (isfinite(d)) {
+        if (d - d == 0.0) { /* finite */
             expect_reference_spelling(d);
         }
     }
