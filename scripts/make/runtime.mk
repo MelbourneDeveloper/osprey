@@ -19,7 +19,7 @@ _runtime:
 	@set -e; config_tmp="$(NATIVE_RUNTIME_CONFIG).$$$$"; \
 	  { printf '%s\n' \
 	      "CC=$(CC)" "AR=$(AR)" "A=$(A)" "B=$(B)" "WARN_MAX=$(WARN_MAX)" "GPU_DEVICE_FLAGS=$(GPU_DEVICE_FLAGS)" \
-	      "OSSL=$(OSSL)" "FIB_OBJ=$(FIB_OBJ)" "HTTP_OBJ=$(HTTP_OBJ)" \
+	      "OSSL=$(OSSL)" "OSPREY_VERSION=$(OSPREY_VERSION)" "FIB_OBJ=$(FIB_OBJ)" "HTTP_OBJ=$(HTTP_OBJ)" \
 	      "FIB_OBJ_GC=$(FIB_OBJ_GC)" "HTTP_OBJ_GC=$(HTTP_OBJ_GC)" \
 	      "FIB_OBJ_ARC=$(FIB_OBJ_ARC)" "HTTP_OBJ_ARC=$(HTTP_OBJ_ARC)"; \
 	    command -v "$(firstword $(CC))" 2>/dev/null || true; \
@@ -88,6 +88,10 @@ $(NATIVE_RUNTIME_STAMP): $(NATIVE_RUNTIME_INPUTS) $(NATIVE_RUNTIME_CONFIG) Makef
 	  $(CC) $(B) runtime/coverage_runtime.c     -o bin/coverage_runtime.o && \
 	  $(CC) $(B) runtime/profiler_runtime.c     -o bin/profiler_runtime.o && \
 	  $(CC) $(B) runtime/profiler_sampler.c     -o bin/profiler_sampler.o && \
+	  $(CC) $(B) runtime/profiler_store.c       -o bin/profiler_store.o && \
+	  $(CC) $(B) runtime/profiler_dump.c        -o bin/profiler_dump.o && \
+	  $(CC) $(B) -DOSP_RUNTIME_VERSION='"$(OSPREY_VERSION)"' runtime/profiler_stream.c -o bin/profiler_stream.o && \
+	  $(CC) $(B) runtime/profiler_endpoint.c     -o bin/profiler_endpoint.o && \
 	  $(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong $(WARN_MAX) \
 	        -Wformat -Werror=format-security -Werror=implicit-function-declaration \
 	        -Werror=incompatible-pointer-types -Werror=int-conversion -Warray-bounds -ftrapv \

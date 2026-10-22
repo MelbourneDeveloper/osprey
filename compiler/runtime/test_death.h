@@ -109,6 +109,10 @@ static inline int osp_death_signal_within(OspDeathBody body, unsigned budget) {
   if (pid == 0) {
     (void)signal(SIGABRT, osp_death_dump_and_reraise);
     body();
+    // A body that returns is measured too: the conformance suites run whole
+    // scenarios here and expect 0, and without the dump every line they drove
+    // read as never executed.
+    OSP_GCOV_DUMP();
     _exit(0); // reached only when the guard let the call through
   }
   return osp_death_reap(pid, budget);

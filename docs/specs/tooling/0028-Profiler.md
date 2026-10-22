@@ -7,7 +7,9 @@ It activates only when the environment variable `OSPREY_PROFILE=<path>` is set
 at process start; the raw profile is written to `<path>` at normal exit.
 `OSPREY_PROFILE_HZ=<n>` overrides the sampling rate (clamped to 10..10000,
 default 997). Native POSIX binaries can be profiled without recompilation.
-Windows and Wasm builds carry inactive profiler stubs.
+Windows and Wasm builds carry inactive profiler stubs. A running program can
+also be profiled without either variable, through the live-attach endpoint
+[PROF-ATTACH-ENDPOINT]; at most one session, of either kind, runs at a time.
 
 ## [PROF-COLLECT-SAMPLER] Collection
 
@@ -40,9 +42,13 @@ against the first chained return address, and PAC bits are stripped.
 ## [PROF-COLLECT-REGISTRY] Thread registry
 
 `osp_prof_thread_register(fiber_id, label)` / `osp_prof_thread_unregister()`
-are no-ops when the profiler is inactive. Call sites: the main thread (label
+are no-ops until a session or the live-attach endpoint enables registration;
+from then on every thread registers for the rest of the process, so a later
+session never samples a thread that already exited. Call sites: the main thread (label
 `main`, fiber 0), `fiber_thread_func` (label `fiber`), and effect continuation
-threads (label `effect`, fiber −1). Registry slots carry a generation counter.
+threads (label `effect`, fiber −1). A session numbers the registered threads
+when it starts, and each thread that registers during it, as its `threads`
+rows; between sessions no rows are kept. Registry slots carry a generation counter.
 The sampler revalidates `active && generation` under the registry mutex before
 sampling; unregister uses the same mutex before signaling completion. Lock
 order is registry then allocator, and sampling allocates only after a suspended
@@ -89,6 +95,26 @@ read its header, so only the producer can record this.
 The loader itself is an image. `_dyld_image_count()` reports what dyld loaded,
 not dyld, so `/usr/lib/dyld` is recorded separately; without it every frame of
 process startup belongs to no image and can only be printed as a raw address.
+
+## [PROF-ATTACH-ENDPOINT] Live-attach endpoint
+
+Every native Osprey program on macOS and Linux opens a diagnostics endpoint when `main` starts, unless `OSPREY_DIAGNOSTICS=0`; iOS, Android, Windows and Wasm builds have none. The endpoint is a Unix-domain socket at `$TMPDIR/osprey-diagnostics-<uid>/<pid>.sock` (`/tmp` when `TMPDIR` is unset), so a language server can find every attachable Osprey process by listing one directory, the way a .NET tool finds `dotnet-diagnostic-<pid>` endpoints. The directory is created with mode `0700`, and an existing directory that is not a real directory owned by the user with no group or other permission bits disables the endpoint rather than being repaired. A process removes its socket at normal exit, and each start sweeps sockets in the directory whose process no longer exists, so a crash or a `SIGKILL` leaves nothing behind for long. A forked child has no endpoint.
+
+One listener thread, created with every signal blocked, serves up to eight connections; a ninth gets a `busy` error and is closed. The endpoint never allocates through the Osprey allocator and never touches the managed heap, so it changes no memory backend's behaviour. With the endpoint open, threads register with the profiler as [PROF-COLLECT-REGISTRY] describes, but no sampler runs and no samples or rows are kept until a client starts a session.
+
+### [PROF-ATTACH-PROTOCOL] Wire protocol
+
+A request is one text line (a trailing `\r` is ignored, and a line is at most 255 bytes). Every reply is one JSON object per line with a `kind` field; strings escape every control character, so a value can never break the framing.
+
+| Request | Reply |
+|---|---|
+| `hello` | `{"kind":"hello","protocol":1,"pid":…,"platform":"macos-arm64","cpu_session":false,"runtime_version":"…","exe":"…"}` |
+| `cpu_start <hz>` | `{"kind":"cpu_started","rate_hz":…,"start_unix_ns":…,"images":[…]}`, then `cpu_batch` lines |
+| `cpu_stop` | the last `cpu_batch`, then `{"kind":"cpu_stopped","reason":"requested","dropped":…,"end_unix_ns":…}` |
+
+`<hz>` is clamped to 10..10000 like `OSPREY_PROFILE_HZ`. A `cpu_batch` is `{"kind":"cpu_batch","threads":[…],"stacks":[…],"samples":[…]}` with the records of [PROF-RAW-FORMAT]: `threads` and `stacks` are appended to the session's tables in order, so the indices of one batch continue from the last, and `samples` rows reference those tables. A batch carries an `images` array as well whenever the program's image list changed since `cpu_started`. Batches are sent at most every 100 ms by the sampler thread itself, which owns the sample store; each batch's samples then leave the store, so a long session does not grow without bound.
+
+One CPU session runs per process. `cpu_start` while one runs, including an `OSPREY_PROFILE` session, is refused with `already_profiling`. Closing the connection that started a session ends it. Program exit during a session sends the final batch and `cpu_stopped` with reason `exit`. A connection that cannot take a line within one second is closed, which ends any session it owned instead of stalling the sampler. Errors are `{"kind":"error","code":…,"message":…}` with code `unknown_command`, `bad_argument`, `already_profiling`, `not_profiling`, `attach_failed`, `line_too_long` (the connection is then closed) or `busy`.
 
 ## [PROF-SYMBOLIZE-OFFLINE] Symbolization
 
@@ -165,7 +191,11 @@ This integration does not claim live process attachment or native heap-retention
 ## [PROF-TEST] Testing
 
 - The C runtime suite verifies thread registration, sample capture, stack
-  bounds, and raw JSON output.
+  bounds, and raw JSON output. Its endpoint suite drives the real socket inside
+  a private `TMPDIR`: the opt-out, the directory checks and stale-socket sweep,
+  every request and error, batch indices against the tables earlier batches
+  built, one session per process, a reader that stopped reading, and an exit
+  mid-session.
 - `osprey-profiler` tests verify parsing, aggregation, symbolization,
   exporters, and terminal formatting.
 - The end-to-end profiler script runs an example under `--profile` and parses

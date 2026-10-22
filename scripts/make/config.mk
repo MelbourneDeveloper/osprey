@@ -53,6 +53,9 @@ CC  ?= cc
 AR  ?= ar
 BIN ?= target/release/osprey
 RTB ?= compiler/bin
+# The release version a build is stamped with (release.yml exports it); the
+# runtime reports it to a live-attach client [PROF-ATTACH-PROTOCOL].
+OSPREY_VERSION ?= 0.0.0-dev
 # cargo's parallel jobs, inherited by every recipe that builds Rust.
 export CARGO_BUILD_JOBS ?= 4
 
@@ -142,20 +145,23 @@ OSSL ?= -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated
 # the flag list per suite.
 T    ?= -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong $(WARN) -ftrapv -std=c11 -D_GNU_SOURCE
 # Object lists for the archives (paths relative to compiler/, where `ar` runs).
-FIB_OBJ  ?= bin/memory_runtime.o bin/gpu_runtime.o bin/gpu_host.o bin/tensor_file.o bin/tensor_list.o bin/fiber_runtime.o bin/system_runtime.o bin/file_runtime.o bin/effects_runtime.o bin/effects_coro.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o bin/random_runtime.o bin/test_runtime.o bin/coverage_runtime.o bin/profiler_runtime.o bin/profiler_sampler.o
+# The profiler's objects, linked into every native runtime archive
+# [PROF-ACTIVATE-ENV] [PROF-ATTACH-ENDPOINT].
+PROF_OBJ = bin/profiler_runtime.o bin/profiler_store.o bin/profiler_dump.o bin/profiler_sampler.o bin/profiler_stream.o bin/profiler_endpoint.o
+FIB_OBJ  ?= bin/memory_runtime.o bin/gpu_runtime.o bin/gpu_host.o bin/tensor_file.o bin/tensor_list.o bin/fiber_runtime.o bin/system_runtime.o bin/file_runtime.o bin/effects_runtime.o bin/effects_coro.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o bin/random_runtime.o bin/test_runtime.o bin/coverage_runtime.o $(PROF_OBJ)
 HTTP_OBJ ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_request.o bin/http_server_response.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o $(FIB_OBJ)
 # GC backend archives (osprey --memory=gc): the tracing collector replaces
 # memory_runtime.o, and the value-container units are rebuilt with the malloc
 # redirect (osp_gc_shim.h) so their nodes live in the managed heap. Everything
 # else is the same object. Implements [GC-TRACE-CONSERVATIVE], spec 0018.
-FIB_OBJ_GC  ?= bin/memory_gc.o bin/gpu_runtime.o bin/gpu_host.o bin/tensor_file.o bin/tensor_list.o bin/fiber_runtime.o bin/system_runtime.o bin/file_runtime.o bin/effects_runtime.o bin/effects_coro.o bin/string_runtime.o bin/string_runtime_list.o bin/gc/list_runtime.o bin/gc/map_runtime.o bin/gc/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o bin/random_runtime.o bin/test_runtime.o bin/coverage_runtime.o bin/profiler_runtime.o bin/profiler_sampler.o
+FIB_OBJ_GC  ?= bin/memory_gc.o bin/gpu_runtime.o bin/gpu_host.o bin/tensor_file.o bin/tensor_list.o bin/fiber_runtime.o bin/system_runtime.o bin/file_runtime.o bin/effects_runtime.o bin/effects_coro.o bin/string_runtime.o bin/string_runtime_list.o bin/gc/list_runtime.o bin/gc/map_runtime.o bin/gc/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o bin/random_runtime.o bin/test_runtime.o bin/coverage_runtime.o $(PROF_OBJ)
 HTTP_OBJ_GC ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_request.o bin/http_server_response.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o $(FIB_OBJ_GC)
 # ARC backend archives (osprey --memory=arc): Perceus reference counting
 # replaces memory_runtime.o, and the value-producing units (containers +
 # strings + JSON) are rebuilt with the allocation redirect (osp_arc_shim.h) so
 # their nodes/buffers carry the 16-byte header and registry entry. Implements
 # [GC-ARC-PERCEUS], spec 0018.
-FIB_OBJ_ARC  ?= bin/memory_arc.o bin/gpu_runtime.o bin/gpu_host.o bin/tensor_file.o bin/tensor_list.o bin/fiber_runtime.o bin/system_runtime.o bin/arc/file_runtime.o bin/effects_runtime.o bin/effects_coro.o bin/arc/string_runtime.o bin/arc/string_runtime_list.o bin/arc/list_runtime.o bin/arc/map_runtime.o bin/arc/map_runtime_hamt.o bin/arc/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o bin/random_runtime.o bin/test_runtime.o bin/coverage_runtime.o bin/profiler_runtime.o bin/profiler_sampler.o
+FIB_OBJ_ARC  ?= bin/memory_arc.o bin/gpu_runtime.o bin/gpu_host.o bin/tensor_file.o bin/tensor_list.o bin/fiber_runtime.o bin/system_runtime.o bin/arc/file_runtime.o bin/effects_runtime.o bin/effects_coro.o bin/arc/string_runtime.o bin/arc/string_runtime_list.o bin/arc/list_runtime.o bin/arc/map_runtime.o bin/arc/map_runtime_hamt.o bin/arc/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o bin/random_runtime.o bin/test_runtime.o bin/coverage_runtime.o $(PROF_OBJ)
 HTTP_OBJ_ARC ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_request.o bin/http_server_response.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o $(FIB_OBJ_ARC)
 ifeq ($(UNAME_S),Darwin)
 GPU_DEVICE_OBJ ?= bin/gpu_metal.o

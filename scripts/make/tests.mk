@@ -68,8 +68,12 @@ _coverage_check_rust:
 # memory_arc_tests covers the counting itself.
 OSSL_CFLAGS = $(OSSL) `pkg-config --cflags openssl 2>/dev/null || echo ""`
 OSSL_LIBS   = `pkg-config --libs openssl 2>/dev/null || echo "-lssl -lcrypto"`
+# The profiler's sources, linked by every suite that links a thread-spawning
+# runtime unit [PROF-COLLECT-REGISTRY] [PROF-ATTACH-ENDPOINT].
+PROF_SRC    = runtime/profiler_runtime.c runtime/profiler_store.c runtime/profiler_dump.c \
+              runtime/profiler_sampler.c runtime/profiler_stream.c runtime/profiler_endpoint.c
 RT_THREADS  = runtime/fiber_runtime.c runtime/system_runtime.c runtime/file_runtime.c runtime/effects_runtime.c runtime/effects_coro.c \
-              runtime/profiler_runtime.c runtime/profiler_sampler.c
+              $(PROF_SRC)
 # Frame-pointer profile for the profiler suite: its unwind tests need -g and
 # real frame chains, and it predates the WARN core, so it keeps its own flags.
 PROF_T = -O2 -g -fno-omit-frame-pointer -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -std=c11 -D_GNU_SOURCE
@@ -88,7 +92,7 @@ C_TEST_SUITES ?= memory_gc_stack_root_tests memory_arc_tests memory_gc_tests \
   test_file_runtime tensor_list_tests \
   test_http_length_validation http_server_send_tests http_server_request_tests \
   fiber_runtime_tests http_runtime_tests http_shared_tests \
-  websocket_runtime_tests profiler_runtime_tests \
+  websocket_runtime_tests profiler_runtime_tests profiler_stream_tests \
   coverage_runtime_tests
 C_SRC_memory_gc_stack_root_tests = runtime/memory_gc_stack_root_tests.c runtime/memory_gc.c
 C_LIBS_memory_gc_stack_root_tests = -pthread
@@ -129,7 +133,7 @@ C_SRC_map_tests = runtime/map_tests.c runtime/map_runtime.c runtime/map_runtime_
 C_SRC_string_runtime_tests = runtime/string_runtime_tests.c runtime/string_runtime.c runtime/string_runtime_list.c runtime/list_runtime.c runtime/memory_runtime.c
 C_SRC_json_runtime_tests = runtime/json_runtime_tests.c runtime/json_grammar_tests.c runtime/json_runtime.c
 C_LIBS_json_runtime_tests = -pthread
-C_SRC_effects_runtime_tests = runtime/effects_runtime_tests.c runtime/effects_runtime.c runtime/effects_coro.c runtime/memory_arc.c runtime/gpu_runtime.c runtime/file_runtime.c runtime/profiler_runtime.c runtime/profiler_sampler.c
+C_SRC_effects_runtime_tests = runtime/effects_runtime_tests.c runtime/effects_runtime.c runtime/effects_coro.c runtime/memory_arc.c runtime/gpu_runtime.c runtime/file_runtime.c $(PROF_SRC)
 C_LIBS_effects_runtime_tests = -pthread
 C_SRC_builtins_runtime_tests = runtime/builtins_runtime_tests.c runtime/random_entropy_tests.c runtime/term_tty_tests.c runtime/ffi_runtime.c runtime/random_runtime.c runtime/term_runtime.c runtime/test_runtime.c
 C_SRC_test_system_runtime = runtime/test_system_runtime.c runtime/test_system_failures.c runtime/system_runtime.c runtime/file_runtime.c runtime/memory_runtime.c
@@ -164,8 +168,12 @@ C_FLAGS_websocket_runtime_tests = $(OSSL_CFLAGS)
 C_SRC_websocket_runtime_tests = runtime/websocket_runtime_tests.c runtime/websocket_client_runtime.c runtime/websocket_server_runtime.c runtime/http_shared.c runtime/random_runtime.c runtime/memory_runtime.c
 C_LIBS_websocket_runtime_tests = -pthread $(OSSL_LIBS)
 C_PROFILE_profiler_runtime_tests = $(PROF_T)
-C_SRC_profiler_runtime_tests = runtime/profiler_runtime_tests.c runtime/profiler_runtime.c runtime/profiler_sampler.c
+C_SRC_profiler_runtime_tests = runtime/profiler_runtime_tests.c runtime/profiler_walk_tests.c runtime/profiler_spec_tests.c $(PROF_SRC)
 C_LIBS_profiler_runtime_tests = -pthread
+# Drives the live-attach endpoint over its real socket [PROF-ATTACH-ENDPOINT],
+# inside a private TMPDIR, so it never touches the user's diagnostics directory.
+C_SRC_profiler_stream_tests = runtime/profiler_stream_tests.c runtime/profiler_stream_test_support.c runtime/profiler_stream_lifecycle_tests.c $(PROF_SRC)
+C_LIBS_profiler_stream_tests = -pthread
 C_SRC_coverage_runtime_tests = runtime/coverage_runtime_tests.c runtime/coverage_runtime.c
 
 # Build + run one suite (expanded inside a `cd compiler` shell, hence bin/).
