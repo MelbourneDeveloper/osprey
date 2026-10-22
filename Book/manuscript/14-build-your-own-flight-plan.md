@@ -38,7 +38,7 @@ Choose the deployment route with its host and test environment:
 
 Mobile handlers may describe commands which their host executes, then receive completion events. Plan that protocol explicitly instead of assuming a synchronous file or HTTP adapter can be copied unchanged. iOS app builds and simulator tests need macOS and Xcode; an Android or shared-language test does not establish that the SwiftUI application builds.
 
-Keep the scope within current runtime capabilities. WebAssembly and mobile use the default memory backend and have host-service boundaries. Native fibers use pthreads; cancellation, scopes, and deadlines are planned. Strict static-memory checking, tail-call optimization, and GPU device execution are not available. Current GPU kernels execute on the host, so a capstone cannot claim accelerator performance from that syntax alone.
+Keep the scope within current runtime capabilities. WebAssembly and mobile use the default memory backend and have host-service boundaries. Native fibers use pthreads; cancellation, scopes, and deadlines are planned. Measure performance on the actual target before making speed claims.
 
 Write these constraints next to the relevant feature in the project README. Osprey remains alpha software; record the compiler build and the checks actually run. A skipped platform build is an evidence gap to report, not a successful test.
 
@@ -59,6 +59,6 @@ Produce a one-page build plan with domain states, pure functions, failure routes
 ## Source map
 
 - Working application boundaries: `examples/projects/modules/README.md`, `examples/projects/modules/mobile/README.md`, and `examples/mobile/README.md`.
-- Project and target contracts: `docs/specs/language/0025-ModulesAndNamespaces.md`, `0022-WebAssemblyTarget.md`, `0038-iOSTarget.md`, and `0039-AndroidTarget.md` in the same directory.
+- Project and target contracts: `docs/specs/language/0025-ModulesAndNamespaces.md`, `docs/specs/compiler/0022-WebAssemblyTarget.md`, `docs/specs/platforms/0038-iOSTarget.md`, and `docs/specs/platforms/0039-AndroidTarget.md`.
 - Delivery boundaries: `docs/plans/0016-algebraic-effects-and-handlers.md`, `0020-package-manager.md`, `0023-gpu-computation.md`, and `0026-structured-concurrency.md` in the same directory.
 - `website/src/status.md` provides orientation; confirm a chosen capability against its current specification and runnable evidence before promising it in the capstone.

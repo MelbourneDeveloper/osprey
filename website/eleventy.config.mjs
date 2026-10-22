@@ -7,6 +7,7 @@
 // highlights raw `language-osprey` blocks, and the playground shortcodes.
 import techdoc from "eleventy-plugin-techdoc";
 import Prism from "prismjs";
+import "prismjs/components/prism-python.js";
 import { DateTime } from "luxon";
 import { renderToString as renderTypeDiagram } from "typediagram-core";
 // Shared by the syntaxhighlight plugin, the transform below, and the browser
@@ -233,7 +234,7 @@ export default function (eleventyConfig) {
     if (!outputPath || !outputPath.endsWith(".html")) return content;
     ensureOsprey();
     return content.replace(
-      /<pre([^>]*)><code class="language-(osprey(?:-ml)?)">([\s\S]*?)<\/code><\/pre>/g,
+      /<pre([^>]*)><code class="language-(osprey(?:-ml)?|python)">([\s\S]*?)<\/code><\/pre>/g,
       (block, attributes, lang, code) => {
         if (attributes.includes("data-language")) return block;
         // Strip Prism's token spans while `<` is still escaped as `&lt;`.

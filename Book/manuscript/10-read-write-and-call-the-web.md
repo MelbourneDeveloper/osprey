@@ -248,7 +248,7 @@ The Flight Log can now cross a real boundary without concealing where work or fa
 
 ### Authoritative sources
 
-- Osprey [Algebraic Effects](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0017-AlgebraicEffects.md): callable handlers, value operations, operation typing, and required handlers.
+- Osprey [Effects and handlers](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0017-AlgebraicEffects.md): callable handlers, value operations, operation typing, and required handlers.
 - Osprey [Built-In Functions](https://github.com/Nimblesite/osprey/blob/main/docs/specs/runtime/0012-Built-InFunctions.md): `[BUILTIN-FILE]`, `[BUILTIN-FILE-ERRMSG]`, and string operations; [Error Handling](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0013-ErrorHandling.md): results and their preservation.
 - Osprey [HTTP](https://github.com/Nimblesite/osprey/blob/main/docs/specs/runtime/0014-HTTP.md): integer status conventions and `[HTTP-RESPONSE-HANDLE]`; [WebAssembly Target](https://github.com/Nimblesite/osprey/blob/main/docs/specs/compiler/0022-WebAssemblyTarget.md): host-dependent file access and excluded networking APIs.
 - Executable evidence: this chapter's sources and goldens; the runtime corpus at `tests/regressions/basics/files/file_io_json_workflow.test.osp` and `tests/regressions/http/http_response_handle.test.osp`; the native banking host protocol in `examples/projects/modules/mobile/README.md`.

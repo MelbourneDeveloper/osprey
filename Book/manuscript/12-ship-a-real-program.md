@@ -20,12 +20,13 @@ The planned checkpoint turns the tested project into a native executable, then b
 6. Measure before changing the memory mode
 7. C libraries are powerful and outside the safety guarantee
 
-## Current target choices
+## Target choices covered here
 
 | CLI target | Artifact | Boundary to explain |
 |---|---|---|
 | `native` | Executable for the build host | Native runtime; operating-system and library dependencies still matter. |
 | `wasm32` | `wasm32-wasip1` command module | Needs a WASI host or the supported browser shim; built-in HTTP, fibers, processes, terminal APIs, and arbitrary C imports are unavailable. |
+| `macos` | ARM64 static archive and generated C header | Needs a macOS SDK and native host; distinct from a `native` executable. |
 | `ios`, `ios-sim` | ARM64 static archive and generated C header | Needs an Apple SDK and Swift/Objective-C host; compiling an archive is not building or testing a complete iPhone app. |
 | `android-arm64`, `android-x64` | Static archive and generated C header for that ABI | Needs the Android NDK and an Android/JNI host; validate each ABI and the host application. |
 
@@ -41,7 +42,7 @@ Mobile hosts provide platform networking through their C boundary. Keep records,
 - `--debug` uses unoptimized native code with debug information. `--profile` keeps optimization and supplies profiling metadata. These native flags are rejected for WebAssembly and mobile targets; profiling a debug build would answer a different performance question.
 - Project directories and `osprey.toml` manifests work. Logical namespaces and module imports are independent of source file paths, and one project may contain Default and ML files. Package registry and package-manager workflows are still design work; a working project is not evidence that dependency download or publication commands exist.
 
-For an existing program, `osprey hello.osp --check` validates it, `osprey hello.osp --run` compiles and executes it, and `osprey hello.osp --compile -o hello` creates a native executable. Supply `--target=wasm32` when checking or compiling for that target; a successful native check does not establish WebAssembly support. A project path may replace the single-file path.
+For an existing program, `osprey hello.osp --check` checks syntax, types, and target restrictions; building can still uncover unsupported operations. `osprey hello.osp --run` compiles and executes it. `osprey hello.osp --compile -o hello` creates a native executable. Supply `--target=wasm32` when checking or compiling for that target; a successful native check does not establish WebAssembly support. A project path may replace the single-file path.
 
 ## Compiler-feedback exercise
 

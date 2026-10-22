@@ -7,7 +7,7 @@
 .alpha-link { display: flex; align-items: center; gap: 0.6rem; width: fit-content; line-height: 1.7; }
 .alpha-link > span:last-child { margin-left: 0.4rem; }
 .status-dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: var(--primary-container); box-shadow: 0 0 12px #77d7f470; }
-.home .hero-content { gap: 1.5rem; padding-block: 2rem; }
+.home .hero-content { gap: 1.5rem; padding-block: 2rem; align-self: start; }
 .home .hero-title { font-size: clamp(3.7rem, 6vw, 5.4rem); font-weight: 600; letter-spacing: -0.065em; line-height: 1.02; }
 .home .hero-title em { font-style: normal; color: var(--primary-container); }
 .home .hero-subtitle { font-size: clamp(1.3rem, 2vw, 1.7rem); line-height: 1.4; color: var(--on-surface); }
@@ -44,12 +44,6 @@
 .effect-intro p { color: var(--on-surface-variant); line-height: 1.8; }
 .text-link { display: inline-flex; align-items: center; gap: 1.5rem; font-size: 0.85rem; font-weight: 500; }
 .effect-intro .text-link { margin-top: 1rem; }
-.effect-steps { list-style: none; margin: 0; padding: 0; }
-.effect-steps li { display: flex; gap: 1.5rem; border-top: 1px solid var(--outline-variant); padding: 1.5rem 0; }
-.effect-steps li:first-child { padding-top: 0; border: 0; }
-.step-number { color: var(--primary-container); font: 0.72rem var(--font-mono); padding-top: 0.25rem; }
-.effect-steps h3 { font-size: 1.15rem; font-weight: 500; letter-spacing: -0.025em; margin-bottom: 0.5rem; }
-.effect-steps p { color: var(--on-surface-variant); font-size: 0.87rem; margin: 0; }
 .support-note { color: var(--on-surface-variant); font-size: 0.78rem; line-height: 1.7; max-width: 100ch; margin-top: 3rem; }
 .model-section { border-bottom: 0; border-top: 1px solid #77d7f425; }
 .model-section .flight-code pre[class*="language-"] { min-height: 0; }
@@ -102,7 +96,7 @@
   .home .hero-content { padding-top: 1rem; }
   .home-eyebrow { font-size: 0.6rem; letter-spacing: 0.07em; }
   .home .hero-title { font-size: clamp(3.25rem, 14vw, 4.7rem); }
-  .flight-film { top: 2.5rem; right: -360px; width: 730px; opacity: 0.4; }
+  .flight-film { top: 1rem; right: -180px; width: 650px; opacity: 0.35; }
   .home .hero-description { max-width: 32ch; }
   .home .hero-actions .btn { font-size: 0.8rem; padding: 0.85rem 0.95rem; }
   .home .flight-code pre[class*="language-"] { font-size: clamp(0.56rem, 2.65vw, 0.7rem); padding: 1rem 0.75rem; min-height: 13rem; }
@@ -120,6 +114,17 @@
   .home .mobile-gallery figcaption span { font-size: 0.7rem; }
   .home-install { padding-block: 4rem; }
 }
+/* Motion keeps the final layout visible without scripts or animation support. */
+.overview-film { margin: 0; align-self: center; }
+.overview-film video { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-lowest); }
+.overview-film figcaption { margin-top: var(--space-3); color: var(--on-surface-variant); font-size: 0.78rem; }
+.overview-film figcaption a { white-space: nowrap; }
+.home .is-revealed { animation: arrive 650ms ease-out both; }
+.home .hero-title em { display: inline-block; }
+.home .flight-code .language-python { white-space: pre-wrap; overflow-wrap: anywhere; }
+.home .hero-actions .btn:hover { transform: translateY(-2px); }
+.home .hero-actions .btn { transition: transform var(--transition-fast), background var(--transition-fast); }
+@keyframes arrive { from { opacity: 0.35; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
   .home *, .home *::before, .home *::after { animation: none !important; transition: none !important; }
 }

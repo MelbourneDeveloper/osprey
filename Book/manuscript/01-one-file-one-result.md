@@ -116,7 +116,7 @@ osprey hello.osp --compile -o hello
 
 Chapter 12 returns to build targets and deployment. For now, remember the useful split:
 
-- `--check` asks whether the source is a valid, well-typed program.
+- `--check` checks syntax, types, and target restrictions without building or running the program. Some unsupported operations are rejected only when building.
 - `--run` checks, builds, and starts it.
 - `--compile` checks and builds an artifact you can start later.
 
@@ -269,7 +269,7 @@ Notice what did not change: the values, the function's job, the immutable bindin
 
 Some flavor differences are deeper than removing `fn` or braces. ML functions are curried by default, and a flat multi-argument call uses its own spelling. That is why Chapter 13 gives flavor switching a proper treatment instead of presenting it as automatic punctuation replacement.
 
-The important emotional fact is simpler: you are not choosing a lifelong camp. Learn Osprey through Default. Try another surface later if it helps you read or write. More flavors can fit the architecture in the future.
+Learn Osprey through Default. Try another flavor later if it helps you read or write.
 
 ## Flight Log checkpoint
 

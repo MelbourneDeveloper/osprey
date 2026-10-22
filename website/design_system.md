@@ -1,117 +1,47 @@
-# Osprey website design system
+# Osprey design system
 
-This document defines the website colors and their use in interface elements.
+Osprey looks like logic in flight: a midnight canvas, luminous cyan, precise type, and room to think. This applies to the website, diagrams, video, captions, and posters. Start every brief with [the messaging guide](../docs/messaging.md): show a need, choose a handler, show the result.
 
----
+## Source of truth
 
-## 🎨 **Color Palette**
+[Design palette](../docs/designs/design.md) defines the brand; [CSS tokens](src/css/variables.css) supply its working values. Use those tokens directly. Video pages import the same CSS and the Osprey code grammar rather than inventing another palette or copying code. The TikTok repository supplies rendering, narration, and music; its social-reel styling is not Osprey's website styling.
 
-**Primary Colors**
+## Color and depth
 
-* `BlueDark`: `#0B3A5E` — used for text, headers, nav background
-* `BlueMid`: `#005C9C` — for buttons, accents, links
-* `BlueLight`: `#38A1DB` — call to action, highlights
+| Role | Token | Value | Use |
+| --- | --- | --- | --- |
+| Canvas | `--surface` | `#0c1325` | Full frame and page |
+| Inset | `--surface-lowest` | `#070d1f` | Code and quiet backgrounds |
+| Raised | `--surface-container` | `#191f32` | Cards and panels |
+| Headline | `--on-surface` | `#dce1fb` | Primary text |
+| Supporting text | `--on-surface-variant` | `#bdc8cd` | Descriptions and labels |
+| Accent | `--primary-container` | `#77d7f4` | One focal word, active handler, progress |
+| Link | `--primary` | `#bdeeff` | Actions and readable emphasis |
+| Boundary | `--outline-variant` | `#3e484c` | Fine borders and dividers |
+| Error | `--error` | `#ffb4ab` | Actual failure states |
 
-**Secondary Colors**
+Use tonal layers and a restrained cyan glow for depth. Keep warm accents and syntax colors semantic. No rainbow stripes, cream backgrounds, comic shadows, oversized stickers, or bouncing typography.
 
-* `Aqua`: `#77D7F4` — cards, hover states, subtle fills
-* `Sky`: `#C7EBF9` — background sections, borders
-* `OffWhite`: `#FDFDFD` — page background
+## Type and composition
 
-**Neutral**
+Use Geist for prose and headlines, JetBrains Mono for code, labels, and output. Headlines use weight 500–600, tight tracking, and short lines; body copy uses weight 400 and comfortable leading. Avoid all-caps paragraphs. Code is source, not decoration: show enough context to understand it and keep it legible at the delivered size.
 
-* `DarkGrey`: `#1F1F1F` — body text
-* `LightGrey`: `#F2F2F2` — containers, lines, code blocks
-* `White`: `#FFFFFF` — cards, panels
+Use an 8px spacing rhythm, a 1200px website container, and 24px gutters. Give each section one headline and one idea. Cards use fine outlines and the existing 10–14px radii. Buttons use the site's primary and secondary styles; visible focus uses cyan with an offset. At small widths, stack the content without shrinking the type to fit a desktop composition.
 
----
+## Motion
 
-## 🔤 **Typography**
+The bird starts automatically, muted and looping. Pause it when it leaves the viewport or the tab is hidden; keep a pause control and preserve the visitor's choice. Reduced-motion and data-saving preferences show the poster until the visitor opts in.
 
-* **Font Family**: `Inter`, `SF Pro Text`, `system-ui`, sans-serif
-* **Weights**: 400 (body), 500 (emphasis), 700 (headings)
+Use 150–250ms feedback for controls, a brief 8–12px entrance for a headline, and a slow, low-amplitude drift for atmospheric light. Reveal a section once as it enters view. Animate opacity and transforms; avoid perpetual page-wide repainting. Reduced motion shows the final state immediately. Content and navigation must remain usable without JavaScript.
 
-### Sizes
+## Video and sound
 
-* `Display`: 64px
-* `Headline`: 40px
-* `Subhead`: 24px
-* `Body`: 16px
-* `Code`: 14px (monospace: `JetBrains Mono`, `Fira Code`)
+A homepage film is a short demonstration, not a feature inventory. Open with effects. Show real source, the handler choice, and its output; end with one next step and an alpha qualification. Use the same bird, navy surfaces, cyan focus, fonts, syntax colors, and thin code-panel outlines as the page. A change of handler can become a visual transition: the code stays anchored while the implementation and result change.
 
----
+Compose landscape films at 1920×1080 with at least 80px safe margins. Keep each headline to two short lines. Show one code idea at a time; captions sit in their own lower safe area. Produce H.264/AAC with fast start, a deliberate poster, English WebVTT captions, and a lightweight web encode.
 
-## 🧱 **Layout & Spacing**
+Narration explains what the viewer sees in concrete language. Use the TikTok factory's licensed local voice and original upbeat score, with music ducked beneath speech. Sound starts only when the visitor plays the film. Decorative motion stays silent.
 
-* **Max Width**: 1200px
-* **Gutters**: 24px
-* **Grid**: 12-column flexible grid
+## Review
 
-**Spacing Scale (px)**:
-`4, 8, 16, 24, 32, 48, 64, 96`
-
----
-
-## 🧩 **Components**
-
-### Button
-
-```css
-.button-primary {
-  background: #005C9C;
-  color: #FFFFFF;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 500;
-  transition: background 0.2s ease;
-}
-.button-primary:hover {
-  background: #007ACC;
-}
-```
-
-### Code Block
-
-```css
-.code-block {
-  background: #F2F2F2;
-  border-left: 4px solid #005C9C;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
-  padding: 16px;
-  border-radius: 6px;
-}
-```
-
-### Card
-
-```css
-.card {
-  background: #FFFFFF;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(11, 58, 94, 0.08);
-  padding: 24px;
-  transition: box-shadow 0.2s ease;
-}
-.card:hover {
-  box-shadow: 0 8px 24px rgba(11, 58, 94, 0.15);
-}
-```
-
----
-
-## 🔄 **Interactions**
-
-* **Transitions**: `all 0.2s ease` for buttons, cards, links
-* **Hover States**: slightly lighter or darker tone
-* **Focus States**: `outline: 2px solid #77D7F4`
-
----
-
-## 🧠 **Usage Guidelines**
-
-* Keep the blue gradients consistent — darker for navs and actions, lighter for backgrounds.
-* Use `Aqua` or `Sky` sparingly to guide the eye or divide sections.
-* All icons should follow a single-weight stroke (24px line icon set).
-* Use whitespace generously. Let the brand breathe.
+Read [messaging](../docs/messaging.md) before writing a frame. Check every code excerpt against its source and every claim against demonstrated behavior. Inspect the poster and representative frames; watch the encoded film with sound. Check the homepage at desktop and phone widths, automatic bird playback, pause/resume, reduced motion, captions, keyboard focus, and overflow. Build and run the website tests before handoff.

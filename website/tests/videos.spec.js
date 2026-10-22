@@ -107,3 +107,34 @@ test("WebVTT cues and durations parse the way the markup needs them", async () =
   expect(isoDuration(3600)).toBe("PT1H");
   expect(isoDuration(0)).toBe("PT0S");
 });
+
+async function captureHomepage(page, width) {
+  await page.locator('.mobile-gallery').scrollIntoViewIfNeeded();
+  for (const image of await page.locator('.mobile-gallery img').all()) {
+    await image.evaluate((element) => element.decode());
+  }
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await page.screenshot({ path: `/tmp/osprey-home-${width}.png`, fullPage: true });
+  await page.screenshot({ path: `/tmp/osprey-hero-${width}.png` });
+}
+
+for (const width of [390, 1440]) {
+  test(`homepage overview plays with captions and sound at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const player = page.locator("#overview-video");
+    await player.scrollIntoViewIfNeeded();
+    await expect(player).toBeVisible();
+    await expect(player.locator('track[kind="captions"]')).toHaveAttribute("src", /overview\.en\.vtt$/);
+    await player.evaluate((video) => video.play());
+    await expect.poll(() => player.evaluate((video) => video.currentTime)).toBeGreaterThan(0.5);
+    expect(await player.evaluate((video) => video.muted)).toBe(false);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await captureHomepage(page, width);
+  });
+}
+
+test("homepage Python GPU excerpt includes the actual tensor operation", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator('#gpt2 code.language-python')).toContainText('return perform(Tensor.mat_mul(a, b, rows, inner, cols))');
+});

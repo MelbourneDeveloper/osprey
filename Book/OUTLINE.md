@@ -313,7 +313,7 @@ No chapter introduces more than four conceptual families. Every factual visual i
 - A complete API or built-in-function reference
 - Teaching ML before the Default path is comfortable
 - Claims that Osprey will always have exactly two source flavors
-- Roadmap-only package management, structured concurrency scopes, strict static memory, or hardware GPU execution; project modules and cross-flavor imports are implemented
+- Roadmap-only package management, structured concurrency scopes, or strict static memory; project modules and cross-flavor imports are implemented
 - Pretending all WebAssembly targets have native runtime services
 - Presenting C calls as covered by Osprey's memory-safety guarantee
 - Invented diagnostics, Playground screens, benchmark results, or performance rankings

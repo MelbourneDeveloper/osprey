@@ -2,7 +2,7 @@
 
 You can begin with a text file and one change to a quoted string. This book builds from that first result, explaining each new idea through a program you can run.
 
-Osprey helps you build programs from values and functions, keep ordinary failure visible, and choose how operations such as logging or storage are implemented. That last ability comes from **algebraic effects**. Chapter 9 introduces them from the beginning; no previous knowledge of functional programming is required.
+Osprey helps you build programs from values and functions, keep ordinary failure visible, and choose how operations such as logging or storage are implemented. That last ability comes from **effects and handlers**. Chapter 9 introduces them from the beginning; no previous knowledge of functional programming is required.
 
 This working manuscript has completed Chapters 1–4 and 8–10. The remaining chapters are labelled outlines. Each finished chapter supplies self-contained examples, so you can explore the effects sequence while the intervening lessons are being written.
 
@@ -20,7 +20,7 @@ Chapter 1 works on either path. Command blocks show the local form; Playground r
 
 ## One teaching surface first
 
-Osprey can currently be written in Default flavor and ML flavor. More source flavors may arrive in the future.
+This book uses Default flavor, with optional ML comparisons. Osprey also has a partially implemented Python flavor; it does not run ordinary Python programs.
 
 You do not need to choose among them now.
 
@@ -82,7 +82,7 @@ Project modules and imports between Default and ML files already work. The packa
 
 Examples identify their target when it matters. Native executables support dynamic control handlers with single-shot resumption; WebAssembly and mobile libraries currently support value handlers and static discharge, but reject dynamic control operations. Chapter 9 explains those terms beside runnable examples.
 
-Memory choices also have limits: the default allocator retains general allocations, while native GC and ARC are separate options. Chapter 12 explains the choices and deployment boundaries. Calling a C library crosses Osprey's memory-safety boundary.
+Memory choices also have limits: the default allocator retains general allocations, while native GC and ARC are separate options. The Chapter 12 outline records the choices and deployment boundaries. Calling a C library crosses Osprey's memory-safety boundary.
 
 Read each example's requirements and test the program on the target you plan to use.
 

@@ -2,7 +2,7 @@
 
 A compiler can tell you that a lesson title is text. It cannot tell you that the title still contains the learner's goal. Both `"Lesson: Read a match"` and `"Lesson: something else"` are valid strings. Only one is the answer we wanted.
 
-The Flight Log now has decisions, explicit states, and results that can explain failure. This chapter turns its promises into checks you can run whenever you change it. We will test the words a learner sees, the progression of a lesson, and the limits on a session estimate.
+This chapter supplies a self-contained Flight Log checkpoint and turns its promises into checks you can run whenever you change it. We will test the words a learner sees, the progression of a lesson, and the limits on a session estimate.
 
 Start with one small claim:
 
@@ -25,7 +25,7 @@ From the `Book` directory, check and run it:
 ../target/release/osprey examples/chapter-08/title.test.osp --run
 ```
 
-With an installed compiler, use `osprey` in place of `../target/release/osprey`. The check confirms that the program fits together. The run executes the test and prints:
+With an installed compiler, use `osprey` in place of `../target/release/osprey`. `--check` checks the source without generating or running an executable; some unsupported operations are rejected only during code generation. `--run` compiles and executes this test and prints:
 
 ```text
 ok 1 - title keeps the learner's goal
@@ -33,7 +33,7 @@ ok 1 - title keeps the learner's goal
 # tests=1 passed=1 failed=0 skipped=0
 ```
 
-Read the source from the outside inward. `test` receives a name and a zero-argument function. The name describes the promise. `fn() => ...` supplies the work that the test runner will call while it is recording this case's result.
+Read the source from the outside inward. `test` receives a name and a zero-argument function. The name describes the promise. `fn() => ...` supplies the work that runs when the program evaluates this `test` call. It does not register work for a later phase; the directory test runner discovers files and runs them as programs.
 
 The body calls `expect(actual, expected)`. The first argument is what the program produced; the second is what we intended. `lessonTitle` computes the actual text. The literal string provides an independent expected answer.
 
@@ -63,7 +63,9 @@ There are three useful kinds of evidence in this book. Type checking rejects inc
 
 A **golden file** is that stored expected output. The book's `make check-examples` command compares each runnable example with its sibling `.expectedoutput` file. It also checks separate examples that must fail compilation. Changing a golden file is changing the expected behavior; read the difference before accepting it.
 
-The current assertion helpers have a practical limit: they compare supported scalar values through their rendered forms. For example, integer `5` and string `"5"` render alike and can compare equal. Use compatible types in your assertions and leave type questions to the compiler. Lists and records are not direct `expect` operands; test their relevant contents or the output your program promises.
+`expect` and `check` compare rendered strings, not typed structural equality. They accept integers, booleans, floats, strings, and `Result` values with supported scalar payloads. Integer `5` and string `"5"` render alike and compare equal; a successful `parseInt("5")` also compares equal to plain integer `5`, because success renders as its payload. An error renders as `Error(<message>)`. The assertions do not require both operands to have the same type, so use compatible types deliberately. When the `Result` variant matters, match it explicitly, as the checkpoint below does.
+
+Lists, maps, and records are rejected as direct assertion operands during code generation. A successful `--check` alone does not establish that such an assertion can run. Compare relevant scalar fields or elements instead.
 
 For our summary, exact text is part of the promise. For a `Lesson` record, the meaningful questions concern its title and status. We will avoid manufacturing a giant printed record merely to satisfy the assertion helper.
 
@@ -260,7 +262,7 @@ The distinction matters when maintaining a suite. A failed assertion is evidence
 
 Run `../target/release/osprey test examples/chapter-08` from `Book`. The runner discovers both `.test.osp` files, prints their results under file headings, and finishes with `# suites: 2 passed, 0 failed`. Together, they contain seven named cases. The rejection fixture is intentionally not named `.test.osp`, so discovery does not treat it as a passing test suite.
 
-Use `make check-examples` to run the book's wider checks, including exact output and expected compiler rejection. A runner invocation checks behavior; the book command additionally keeps the printed evidence in these pages tied to the saved examples.
+Use `make check-examples` to run the book's wider checks, including exact output and expected compiler rejection. It compares runnable example output with saved `.expectedoutput` files and rejection diagnostics with `.expectederror` files. It does not extract or verify the manuscript's code blocks or transcripts; those must also be compared with the fixtures when editing the chapter.
 
 ### Agent handoff
 
@@ -284,7 +286,7 @@ Report the commands, outcomes, and exact expected text.
 
 Review the added cases yourself. The second summary should contain the new title and `[complete]`. The empty-string case should take the error route. An agent should point to those observations, not merely report that it ran a command.
 
-In Chapter 9, the Flight Log begins asking for work beyond a pure calculation. Algebraic effects will let a function request an operation while a chosen handler supplies its implementation. A test can supply predictable answers through that boundary. The habit stays the same: state the behavior, choose useful cases, and inspect what happened.
+In Chapter 9, the Flight Log begins asking for work beyond a pure calculation. Effects and handlers let a function request an operation while a chosen handler supplies its implementation. A test can supply predictable answers through that boundary. The habit stays the same: state the behavior, choose useful cases, and inspect what happened.
 
 ## Landing check
 
@@ -298,6 +300,7 @@ In Chapter 9, the Flight Log begins asking for work beyond a pure calculation. A
 
 ### Authoritative sources
 
-- Osprey [Testing Framework](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0027-TestingFramework.md): `[TESTING-BUILTIN-TEST]`, `[TESTING-BUILTIN-EXPECT]`, `[TESTING-EQUALITY]`, `[TESTING-TAP]`, `[TESTING-EXIT]`, and `[TESTING-CLI-RUN]`.
+- Osprey [Testing Framework](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0027-TestingFramework.md): `[TESTING-BUILTIN-TEST]`, `[TESTING-BUILTIN-EXPECT]`, `[TESTING-BUILTIN-CHECK]`, `[TESTING-EQUALITY]`, `[TESTING-TAP]`, and `[TESTING-EXIT]`.
+- Osprey [Test runner and editor integration](https://github.com/Nimblesite/osprey/blob/main/docs/specs/tooling/TestRunner.md): `[TESTING-CLI-RUN]` for file discovery, suite execution, and aggregate results.
 - Osprey [Pattern Matching](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0007-PatternMatching.md) and [Error Handling](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0013-ErrorHandling.md): exhaustive cases, `Result`, and preservation of error payloads.
 - Executable sources, exact output, and the rejection fixture in `examples/chapter-08/`. The chapter's deliberately false expectation and temporary behavior changes were also run and confirmed to fail; edition verification is recorded in `evidence.json`.

@@ -2,7 +2,7 @@
 
 ## Positioning
 
-*The Osprey Book* is the bridge between “I can copy a code sample” and “I can design a small, honest program.” It teaches programming through Osprey's practical functional core: values, functions, inferred types, pattern matching, explicit failure, algebraic effects, and concurrent work. Effects receive a full beginner introduction: request an operation, choose its handler, and run the same application code under another implementation.
+*The Osprey Book* is the bridge between “I can copy a code sample” and “I can design a small, honest program.” It teaches programming through Osprey's practical functional core: values, functions, inferred types, pattern matching, explicit failure, effects and handlers, and concurrent work. Effects receive a full beginner introduction: request an operation, choose its handler, and run the same application code under another implementation.
 
 The book is not a compressed language specification. It is a guided build in which every new idea solves a problem the reader has already met.
 
@@ -40,7 +40,7 @@ Default flavor is the book's teaching surface. Every core lesson and complete ru
 
 ML flavor is an optional alternate surface introduced after the reader already understands the shared idea. It is never called a separate language, an advanced mode, or a choice that must be made up front. The book may show a compact ML twin in a “Same flight, different feathers” aside when the comparison reduces confusion.
 
-The language architecture is open to more flavors. Avoid claims that Osprey will always have exactly two. Say “the currently available Default and ML flavors” when the current count matters.
+The language architecture is open to more flavors. Avoid claims that Osprey will always have exactly two. Name the relevant flavors; the Python flavor is partially implemented, so do not imply that its whole specification is available.
 
 A coding agent can translate surface syntax quickly, which makes experimentation approachable. The book still requires the reader to run `--check` and the relevant tests after translation. Agent assistance lowers typing cost; it does not replace evidence.
 
@@ -96,4 +96,4 @@ The project is intentionally ordinary. It provides enough domain to make types a
 - A promise that alpha software will never change
 - Treating ML syntax as mandatory for “real” functional programming
 - Pretending a coding agent makes checking and testing optional
-- Teaching the planned package manager, structured cancellation, GPU device execution, or strict static memory as shipped features
+- Teaching the planned package manager, structured cancellation, or strict static memory as shipped features
