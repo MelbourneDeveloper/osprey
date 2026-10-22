@@ -11,7 +11,8 @@
 # that says nothing about the code that changed. Build what the gate measures.
 _test_rust: _runtime_wasm
 	@echo "==> [rust] running tests with coverage..."
-	set -o pipefail && RUST_TEST_THREADS=$${RUST_TEST_THREADS:-4} cargo llvm-cov --workspace --profile ci --lcov --output-path lcov.info 2>&1 | tee test.log
+	@$(MKDIR) $(COVERAGE_DIR) $(LOG_DIR)
+	set -o pipefail && RUST_TEST_THREADS=$${RUST_TEST_THREADS:-4} cargo llvm-cov --workspace --profile ci --lcov --output-path $(RUST_LCOV) 2>&1 | tee $(RUST_LOG)
 
 # Per-crate enforcement: each rust crate NAMED IN $(COVERAGE_THRESHOLDS_FILE) is
 # gated independently against its own threshold (floor 95% + monotonic ratchet).
@@ -33,13 +34,13 @@ _test_rust: _runtime_wasm
 # ratcheted in at its measured value so the check can land without masking it.
 _coverage_check_rust:
 	@if [ ! -f "$(COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
-	if [ ! -f lcov.info ]; then echo "[rust] FAIL: lcov.info not produced"; exit 1; fi; \
+	if [ ! -f $(RUST_LCOV) ]; then echo "[rust] FAIL: $(RUST_LCOV) not produced"; exit 1; fi; \
 	fail=0; \
 	for crate in $$(jq -r '.projects | to_entries[] | select(.value.language=="rust") | .key' "$(COVERAGE_THRESHOLDS_FILE)"); do \
 	  threshold=$$(jq -r --arg c "$$crate" '.projects[$$c].threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
-	  set -- $$(awk -F: -v c="$$crate" 'index($$0,"SF:")==1{in_c=index($$2,"/crates/" c "/")>0} in_c&&/^LH:/{h+=$$2} in_c&&/^LF:/{f+=$$2} END{printf "%d %d",h+0,f+0}' lcov.info); \
+	  set -- $$(awk -F: -v c="$$crate" 'index($$0,"SF:")==1{in_c=index($$2,"/crates/" c "/")>0} in_c&&/^LH:/{h+=$$2} in_c&&/^LF:/{f+=$$2} END{printf "%d %d",h+0,f+0}' $(RUST_LCOV)); \
 	  lh=$$1; lf=$$2; \
-	  if [ "$$lf" -eq 0 ]; then echo "[rust] $$crate FAIL: no lines found in lcov.info"; fail=1; continue; fi; \
+	  if [ "$$lf" -eq 0 ]; then echo "[rust] $$crate FAIL: no lines found in $(RUST_LCOV)"; fail=1; continue; fi; \
 	  pct=$$(awk "BEGIN{printf \"%.1f\", $$lh/$$lf*100}"); \
 	  pct_int=$$(awk "BEGIN{printf \"%d\", $$lh/$$lf*100}"); \
 	  if [ "$$pct_int" -lt "$$threshold" ]; then \
@@ -308,7 +309,7 @@ _conformance-arc:
 # checks out a tree with no bin/ and falls through to PATH — which makes it
 # exactly the kind of failure a developer cannot reproduce from a green CI run.
 # Restaging keeps `make test` honest about which compiler it just tested.
-_test_vscode_extension: _vsix_bundle $(EXT_NODE_DEPS)
+_test_vscode_extension: _vsix_bundle $(EXT_NODE_DEPS) $(PROFILER_UI_BUILT)
 	@echo "==> [vscode-extension] staging osprey as 'osprey' for LSP integration..."
 	$(MKDIR) target/path-bin
 	cp $(BIN) target/path-bin/osprey
@@ -384,7 +385,7 @@ _bank_test:
 _language-test: build
 	$(MAKE) _test_language_corpus
 
-_lint: $(EXT_NODE_DEPS)
+_lint: $(EXT_NODE_DEPS) $(PROFILER_UI_BUILT)
 	@echo "==> Linting..."
 	node scripts/verify-node-deps-guard.mjs
 	node scripts/verify-no-dead-code.mjs

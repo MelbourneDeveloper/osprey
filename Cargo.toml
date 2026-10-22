@@ -17,6 +17,8 @@ members = [
     "crates/osprey-profiler",
     "crates/osprey-cli",
 ]
+# The lspkit submodule is its own workspace; its crates are path dependencies.
+exclude = ["lspkit"]
 
 [workspace.package]
 version = "0.0.0-dev"

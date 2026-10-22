@@ -109,9 +109,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        # The site's images and videos are Git LFS files.
+        # The site's images and videos are Git LFS files; the extension links
+        # the shared profiler UI from the lspkit submodule.
         with:
           lfs: true
+          submodules: true
 
       - uses: actions/setup-node@v4
         with:
@@ -128,6 +130,9 @@ jobs:
       # release binary.
       - name: Setup Osprey Compiler
         uses: ./.github/actions/setup-osprey-compiler
+
+      - name: Build the shared profiler UI (lspkit submodule)
+        run: make _profiler_ui
 
       - name: Install VS Code extension dependencies
         run: npm ci
@@ -306,7 +311,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-rust
-          path: lcov.info
+          path: target/coverage/lcov.info
           retention-days: 7
           if-no-files-found: error
 
@@ -315,7 +320,7 @@ jobs:
         if: failure()
         with:
           name: test-log-rust
-          path: test.log
+          path: target/logs/rust-test.log
           if-no-files-found: ignore
           retention-days: 7
 
@@ -435,6 +440,9 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        # The extension links the shared profiler UI from the lspkit submodule.
+        with:
+          submodules: true
       # `pretest` compiles the extension, which copies its icon from this
       # LFS-stored logo and refuses a pointer. Fetch only the logo.
       - name: Fetch the logo the extension icon is copied from
@@ -801,6 +809,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: coverage-rust
+          path: target/coverage/
       - uses: actions/download-artifact@v4
         with:
           name: coverage-extension
@@ -829,6 +838,6 @@ jobs:
         with:
           name: coverage-report
           path: |
-            lcov.info
+            target/coverage/lcov.info
             vscode-extension/coverage/
           retention-days: 7

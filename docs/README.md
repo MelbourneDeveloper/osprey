@@ -6,4 +6,3 @@
 - [Language guides](../website/src/docs/index.md): using Osprey.
 - [Release process](RELEASING.md): building and publishing releases.
 - [Historical reviews](reviews/): findings against the revisions named in each review.
-- [Security product dossier](security-app/README.md): anti-spyware research, native Osprey framework, product contracts and separate-repository delivery plan.

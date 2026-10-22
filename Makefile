@@ -19,7 +19,7 @@ include scripts/android.mk
 # =============================================================================
 
 ## build: C runtime archives + Rust workspace (release) + VSCode extension
-build: _runtime $(EXT_NODE_DEPS)
+build: _runtime $(EXT_NODE_DEPS) $(PROFILER_UI_BUILT)
 	@echo "==> Building..."
 	cargo build --release --workspace
 	cd $(EXT_DIR) && npm run compile
@@ -153,7 +153,7 @@ fmt: $(EXT_NODE_DEPS)
 clean:
 	@echo "==> Cleaning..."
 	cargo clean
-	$(RM) $(RTB) compiler/lib outputs lcov.info test.log
+	$(RM) $(RTB) compiler/lib outputs
 	cd $(EXT_DIR) && $(RM) out dist coverage test.log
 
 ## ci: lint + hawk + test + bank-test + bank-e2e + build (full CI simulation)

@@ -62,6 +62,10 @@ jobs:
       version: ${{ steps.v.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        # vscode-extension's lockfile links the shared profiler UI from the
+        # lspkit submodule.
+        with:
+          submodules: true
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -412,6 +416,9 @@ jobs:
           - { os: windows-latest, target: win32-x64,   artifact: win32-x64 }
     steps:
       - uses: actions/checkout@v4
+        # The extension links the shared profiler UI from the lspkit submodule.
+        with:
+          submodules: true
       # The extension icon is copied from this LFS-stored logo. Fetch only it;
       # without it the VSIX carries an LFS pointer the Marketplace rejects.
       - name: Fetch the logo the extension icon is copied from
@@ -442,6 +449,15 @@ jobs:
             for (const c of m.components) if (c.expectedVersion) c.expectedVersion=v;
             fs.writeFileSync("vscode-extension/shipwright.json", JSON.stringify(m,null,2)+"\n");
           '
+      # npm, not make: this matrix includes a Windows runner. Mirrors the
+      # $(PROFILER_UI_BUILT) rule in scripts/make/config.mk; keep the
+      # typediagram version equal to its TYPEDIAGRAM_VERSION.
+      - name: Build the shared profiler UI (lspkit submodule)
+        shell: bash
+        run: |
+          npm --prefix lspkit/packages/lsp-profiler-ui ci
+          (cd lspkit && npx --yes --package typediagram@0.11.0 -c 'node scripts/typediagram/generate.mjs')
+          npm --prefix lspkit/packages/lsp-profiler-ui run compile
       - name: Install deps + stamp package.json
         working-directory: vscode-extension
         run: |

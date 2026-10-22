@@ -97,6 +97,26 @@ WEBCOMPILER_NODE_DEPS = webcompiler/node_modules/.package-lock.json
 BANK_WEB_NODE_DEPS    = examples/projects/modules/web/node_modules/.package-lock.json
 BANK_E2E_NODE_DEPS    = examples/projects/modules/e2e/node_modules/.package-lock.json
 
+# The extension links the shared profiler UI from the lspkit submodule
+# ([PROF-VSCODE-SHARED]); tsc and esbuild resolve its compiled out/, so the
+# package is built before anything compiles the extension. Its wire types are
+# gitignored and generated from lspkit's model ([PROF-WIRE-GEN]) with the
+# typediagram CLI version lspkit's own CI pins.
+PROFILER_UI_DIR     = lspkit/packages/lsp-profiler-ui
+PROFILER_UI_BUILT   = $(PROFILER_UI_DIR)/out/src/index.js
+TYPEDIAGRAM_VERSION = 0.11.0
+
+$(PROFILER_UI_BUILT): $(PROFILER_UI_DIR)/node_modules/.package-lock.json $(shell find $(PROFILER_UI_DIR)/src -name '*.ts' ! -name wire-generated.ts 2>/dev/null) lspkit/docs/models/profiler.td
+	@echo "==> [lsp-profiler-ui] generating the wire model and compiling the shared profiler UI..."
+	cd lspkit && npx --yes --package typediagram@$(TYPEDIAGRAM_VERSION) -c 'node scripts/typediagram/generate.mjs'
+	npm --prefix $(PROFILER_UI_DIR) run compile
+
+# Build logs and coverage reports live under target/, never in the repo root.
+LOG_DIR      = target/logs
+COVERAGE_DIR = target/coverage
+RUST_LCOV    = $(COVERAGE_DIR)/lcov.info
+RUST_LOG     = $(LOG_DIR)/rust-test.log
+
 %/node_modules/.package-lock.json: %/package-lock.json
 	@echo "==> [$*] installing node dependencies (npm ci)..."
 	npm --prefix $* ci
