@@ -5,6 +5,7 @@
 ## ⚠️ Non-negotiables
 
 - **Subagents are illegal.**
+- **External agents (pi) use only these models:** Kimi K3 (`moonshotai/kimi-k3`), GLM 5.3 and GLM 5.3 Flash (`zai/glm-5.3`, `zai/glm-5.3-flash`), DeepSeek V4.1 and DeepSeek V4.1 Flash (`deepseek/deepseek-v4-pro`, `deepseek/deepseek-flash`). No other model, ever.
 - **Never ask the user questions.** Use your judgement, record assumptions, act autonomously.
 - **Answer punctually, not at length.** A few sentences or a short list; no essays, recaps or restating the question. Mark the one point the user must not miss with an emoji — nothing else gets one.
 - **Zero duplicate code.** Edit in place, never create parallel versions. Use deslop: `find-similar` before writing code, `top-offenders` after modifying it.
