@@ -151,7 +151,7 @@ static bool send_batch(int fd) {
   fputs("],\"stacks\":[", m.f);
   size_t stacks = osp_prof_write_stacks(m.f, g_stream.sent_stacks);
   fputs("],\"samples\":[", m.f);
-  osp_prof_write_samples(m.f);
+  osp_prof_write_samples(m.f, true);
   fputc(']', m.f);
   write_images_if_changed(m.f);
   fputc('}', m.f);

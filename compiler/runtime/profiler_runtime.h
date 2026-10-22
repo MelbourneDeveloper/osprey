@@ -77,11 +77,13 @@ typedef struct OspProfSlot {
 // session, so a thread that registered between sessions has none yet.
 #define OSP_PROF_ROW_NONE UINT32_MAX
 
-// One retained sample [PROF-RAW-FORMAT]: `t_ns` is relative to session start.
+// One retained sample [PROF-RAW-FORMAT]: `t_ns` is relative to session start,
+// and `tick` numbers the sampler tick that recorded it [PROF-ATTACH-PROTOCOL].
 typedef struct OspProfSample {
   uint64_t t_ns;
   uint32_t thread;
   uint32_t stack;
+  uint32_t tick;
   uint8_t state;
 } OspProfSample;
 
@@ -177,6 +179,8 @@ const char *osp_prof_row_label(uint32_t row);
 
 // Empty every table; sample times are then measured from `epoch_ns`.
 void osp_prof_store_reset(uint64_t epoch_ns);
+// The sampler starts a tick: samples recorded from now on carry its number.
+void osp_prof_store_begin_tick(void);
 size_t osp_prof_stack_count(void);
 // The leaf-first pcs of interned stack `index`, `*len` of them.
 const uint64_t *osp_prof_stack_pcs(size_t index, uint32_t *len);
@@ -200,7 +204,9 @@ uint32_t osp_prof_image_count(void);
 uint32_t osp_prof_write_threads(FILE *f, uint32_t from);
 // Stacks [from, count); returns count.
 size_t osp_prof_write_stacks(FILE *f, size_t from);
-void osp_prof_write_samples(FILE *f);
+// Every retained sample as a [PROF-RAW-FORMAT] row, with its tick as a fifth
+// column when `with_tick` (the stream's rows) [PROF-ATTACH-PROTOCOL].
+void osp_prof_write_samples(FILE *f, bool with_tick);
 const char *osp_prof_platform(void);
 // The whole raw profile of the session that just stopped.
 void osp_prof_write_raw(FILE *f);

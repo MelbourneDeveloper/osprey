@@ -230,12 +230,16 @@ size_t osp_prof_write_stacks(FILE *f, size_t from) {
   return count;
 }
 
-void osp_prof_write_samples(FILE *f) {
+void osp_prof_write_samples(FILE *f, bool with_tick) {
   size_t count = osp_prof_sample_count();
   for (size_t i = 0; i < count; i++) {
     OspProfSample s = osp_prof_sample_at(i);
-    fprintf(f, "%s[%" PRIu64 ",%u,%u,%u]", i == 0 ? "" : ",", s.t_ns,
+    fprintf(f, "%s[%" PRIu64 ",%u,%u,%u", i == 0 ? "" : ",", s.t_ns,
             s.thread, s.stack, s.state);
+    if (with_tick) {
+      fprintf(f, ",%u", s.tick);
+    }
+    fputc(']', f);
   }
 }
 
@@ -267,7 +271,7 @@ void osp_prof_write_raw(FILE *f) {
   fprintf(f, "],\"stacks\":[");
   (void)osp_prof_write_stacks(f, 0);
   fprintf(f, "],\"samples\":[");
-  osp_prof_write_samples(f);
+  osp_prof_write_samples(f, false);
   fprintf(f, "]}\n");
 }
 

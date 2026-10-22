@@ -428,6 +428,7 @@ static void platform_teardown(void) {
 // ---- sampler thread lifecycle ------------------------------------------------
 
 static void sampler_tick(void) {
+  osp_prof_store_begin_tick();
   OspProfSnap snaps[OSP_PROF_MAX_THREADS];
   int n = osp_prof_snapshot(snaps, OSP_PROF_MAX_THREADS);
   for (int i = 0; i < n; i++) {

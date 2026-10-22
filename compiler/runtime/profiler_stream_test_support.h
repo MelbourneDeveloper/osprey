@@ -38,6 +38,7 @@ typedef struct TestConn {
 // defined, the samples they carried, and whether `label` named a row.
 typedef struct TestStream {
   size_t rows, stacks, samples;
+  unsigned last_tick;
   bool saw_label;
 } TestStream;
 

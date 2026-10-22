@@ -30,6 +30,7 @@ typedef struct OspProfStore {
   size_t sample_len, sample_cap;
   uint64_t dropped;
   uint64_t epoch_ns;
+  uint32_t tick;
 } OspProfStore;
 
 static OspProfStore g_store;
@@ -42,6 +43,7 @@ void osp_prof_store_reset(uint64_t epoch_ns) {
   g_store = (OspProfStore){.epoch_ns = epoch_ns};
 }
 
+void osp_prof_store_begin_tick(void) { g_store.tick++; }
 void osp_prof_note_drop(void) { g_store.dropped++; }
 uint64_t osp_prof_dropped(void) { return g_store.dropped; }
 size_t osp_prof_stack_count(void) { return g_store.stack_len; }
@@ -190,8 +192,9 @@ void osp_prof_record_repeat(uint64_t t_ns, uint32_t thread_index,
     return;
   }
   uint64_t rel = t_ns >= g_store.epoch_ns ? t_ns - g_store.epoch_ns : 0;
-  g_store.samples[g_store.sample_len++] = (OspProfSample){
-      .t_ns = rel, .thread = thread_index, .stack = stack_index, .state = state};
+  g_store.samples[g_store.sample_len++] =
+      (OspProfSample){.t_ns = rel, .thread = thread_index, .stack = stack_index,
+                      .tick = g_store.tick, .state = state};
 }
 
 uint32_t osp_prof_record_sample(uint64_t t_ns, uint32_t thread_index,

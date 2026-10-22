@@ -199,15 +199,19 @@ static size_t count_elements(const char *lo, const char *hi) {
   return n;
 }
 
-// Every sample must name a row and a stack some batch has defined by now.
-static size_t check_samples(const char *lo, const char *hi, const TestStream *s) {
+// Every sample must name a row and a stack some batch has defined by now, and
+// ticks never run backwards: the rows of one tick are one sampling instant.
+static size_t check_samples(const char *lo, const char *hi, TestStream *s) {
   size_t n = 0;
   for (const char *p = lo; p < hi; p++) {
     unsigned long long t = 0;
-    unsigned thread = 0, stack = 0, state = 0;
+    unsigned thread = 0, stack = 0, state = 0, tick = 0;
     if (*p == '[') {
-      assert(sscanf(p, "[%llu,%u,%u,%u]", &t, &thread, &stack, &state) == 4);
+      assert(sscanf(p, "[%llu,%u,%u,%u,%u]", &t, &thread, &stack, &state,
+                    &tick) == 5);
       assert(thread < s->rows && stack < s->stacks && state <= 1);
+      assert(tick >= s->last_tick);
+      s->last_tick = tick;
       p = strchr(p, ']');
       n++;
     }
