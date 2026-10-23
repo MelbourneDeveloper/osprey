@@ -132,7 +132,7 @@ pub(crate) fn report_type_errors(input: &CompilationInput) -> usize {
     for e in &errors {
         eprintln!("{}", input.diagnostic(e.position, &e.message));
     }
-    warnings::report(input, &warnings::collect(input.program()));
+    warnings::report(input, &warnings::collect(input));
     errors.len()
 }
 

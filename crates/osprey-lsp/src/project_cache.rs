@@ -128,7 +128,7 @@ fn analyse(config: &ProjectConfig, sources: &[SourceFile]) -> Checked {
     // A file with type errors reports no warnings, so proving them would be
     // work nobody reads.
     let warnings = match (&assembled, errors.is_empty()) {
-        (Ok(project), true) => crate::warning_actions::Warnings::of(&project.program),
+        (Ok(project), true) => crate::warning_actions::Warnings::of_project(project),
         _ => crate::warning_actions::Warnings::none(),
     };
     Checked {

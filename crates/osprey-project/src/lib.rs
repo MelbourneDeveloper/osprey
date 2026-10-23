@@ -190,6 +190,20 @@ impl AssembledProject {
         self.backend.as_ref().unwrap_or(&self.program)
     }
 
+    /// Whether the function emitted as `symbol` is an exported module member:
+    /// public, and owned by a module that is itself public. Its signature is
+    /// API for every consumer of the module ([TYPE-ANNOTATION-REDUNDANT]).
+    /// A namespace-level function is not a module member.
+    #[must_use]
+    pub fn exported_member(&self, symbol: &str) -> bool {
+        let Some(name) = self.source_name_by_mangled.get(symbol) else {
+            return false;
+        };
+        let owner = name.rsplit_once("::").map(|(owner, _)| owner);
+        self.public_api.contains_key(name)
+            && owner.is_some_and(|owner| self.public_api.contains_key(owner))
+    }
+
     /// Metadata for the selected entry source, or `None` for a malformed value.
     #[must_use]
     pub fn entry(&self) -> Option<&SourceMetadata> {

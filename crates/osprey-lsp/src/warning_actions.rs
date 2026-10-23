@@ -52,8 +52,18 @@ impl Warnings {
     }
 
     pub(crate) fn of(program: &Program) -> Self {
+        Self::judged(program, &|_| false)
+    }
+
+    /// A project's warnings: an exported module member's signature is API and
+    /// is never reported redundant ([TYPE-ANNOTATION-REDUNDANT]).
+    pub(crate) fn of_project(project: &osprey_project::AssembledProject) -> Self {
+        Self::judged(&project.program, &|symbol| project.exported_member(symbol))
+    }
+
+    fn judged(program: &Program, contract: &dyn Fn(&str) -> bool) -> Self {
         Self {
-            redundant: osprey_types::redundant_annotation_sites(program),
+            redundant: osprey_types::redundant_annotation_sites_for(program, |_| true, contract),
             unused: osprey_types::unused_symbols(program),
             callbacks: osprey_types::redundant_callbacks(program),
         }

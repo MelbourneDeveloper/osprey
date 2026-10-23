@@ -65,6 +65,8 @@ mod pattern;
 mod prelude;
 pub use prelude::{is_prelude_line, PRELUDE_LINE_BASE};
 mod redundant;
+#[cfg(test)]
+mod redundant_contract_tests;
 mod redundant_sites;
 #[cfg(test)]
 mod redundant_tests;
@@ -95,9 +97,9 @@ pub use info::{
     CtorLayout, EffectRequirements, HandlerSite, OpType, PerformSite, ProgramTypes, SiteTable,
 };
 pub use redundant::{
-    redundant_annotation_sites, redundant_annotation_sites_where, redundant_annotations,
-    redundant_annotations_where, RedundantAnnotation, RedundantTarget, TypeWarning,
-    REDUNDANT_ANNOTATION,
+    redundant_annotation_sites, redundant_annotation_sites_for, redundant_annotation_sites_where,
+    redundant_annotations, redundant_annotations_where, RedundantAnnotation, RedundantTarget,
+    TypeWarning, REDUNDANT_ANNOTATION,
 };
 pub use staging::{lower_static_checked, signal_dependencies};
 pub use ty::{has_type_var, names, render_with_holes, Scheme, Type, VarId, HOLE};

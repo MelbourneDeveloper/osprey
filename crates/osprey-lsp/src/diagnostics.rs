@@ -217,7 +217,7 @@ fn assembly_diagnostics(
         Ok(project) => {
             let errors = osprey_types::check_program(&project.program);
             let warnings = if errors.is_empty() {
-                crate::warning_actions::Warnings::of(&project.program)
+                crate::warning_actions::Warnings::of_project(&project)
             } else {
                 crate::warning_actions::Warnings::none()
             };

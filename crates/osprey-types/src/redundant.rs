@@ -112,7 +112,24 @@ pub fn redundant_annotation_sites_where(
     program: &Program,
     include: impl Fn(Option<Position>) -> bool,
 ) -> Vec<RedundantAnnotation> {
-    let written = sites(program);
+    redundant_annotation_sites_for(program, include, &|_| false)
+}
+
+/// [`redundant_annotation_sites_where`], holding the signatures of the
+/// functions `contract` names fixed. An exported module member's signature is
+/// its API: whether another project still needs it is not a question one
+/// program can answer, so it is never reported and never erased while the
+/// rest is judged. Annotations inside its body are judged as usual.
+#[must_use]
+pub fn redundant_annotation_sites_for(
+    program: &Program,
+    include: impl Fn(Option<Position>) -> bool,
+    contract: &dyn Fn(&str) -> bool,
+) -> Vec<RedundantAnnotation> {
+    let written: Vec<Site> = sites(program)
+        .into_iter()
+        .filter(|site| !site.slot.signs(contract))
+        .collect();
     if !written.iter().any(|site| include(site.position)) {
         return Vec::new();
     }

@@ -44,6 +44,18 @@ pub(crate) enum Slot {
 /// The name reported for an annotation written on an anonymous function.
 const LAMBDA_OWNER: &str = "<lambda>";
 
+impl Slot {
+    /// Whether this is part of the signature of a function `contract` names.
+    pub(crate) fn signs(&self, contract: &dyn Fn(&str) -> bool) -> bool {
+        match self {
+            Self::Signature { owner } | Self::Param { owner, .. } | Self::Return { owner } => {
+                owner != LAMBDA_OWNER && contract(owner)
+            }
+            Self::Binding { .. } => false,
+        }
+    }
+}
+
 /// One written annotation, addressed by its index in the pre-order walk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Site {

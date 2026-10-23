@@ -223,6 +223,14 @@ impl CompilationInput {
         })
     }
 
+    /// Whether `symbol` is an exported module member, whose signature is API.
+    pub(crate) fn exported_member(&self, symbol: &str) -> bool {
+        match &self.unit {
+            CompilationUnit::Project(project) => project.exported_member(symbol),
+            CompilationUnit::Script(_) => false,
+        }
+    }
+
     pub(crate) fn project_warnings(&self) -> &[osprey_project::ProjectWarning] {
         match &self.unit {
             CompilationUnit::Project(project) => &project.warnings,

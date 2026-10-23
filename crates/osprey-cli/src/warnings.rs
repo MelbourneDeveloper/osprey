@@ -20,8 +20,17 @@ use crate::project::CompilationInput;
 type Listing = Vec<(String, String)>;
 
 /// Compiler warnings share one terminal listing and never affect exit status.
-pub(crate) fn collect(program: &osprey_ast::Program) -> Vec<TypeWarning> {
-    let mut warnings = osprey_types::redundant_annotations(program);
+pub(crate) fn collect(input: &CompilationInput) -> Vec<TypeWarning> {
+    of(input.program(), &|symbol| input.exported_member(symbol))
+}
+
+/// The warnings of `program`, holding the signatures `contract` names fixed.
+fn of(program: &osprey_ast::Program, contract: &dyn Fn(&str) -> bool) -> Vec<TypeWarning> {
+    let mut warnings: Vec<TypeWarning> =
+        osprey_types::redundant_annotation_sites_for(program, |_| true, contract)
+            .into_iter()
+            .map(|site| site.warning)
+            .collect();
     warnings.extend(osprey_types::redundant_callbacks(program));
     warnings.extend(
         osprey_types::unused_symbols(program)
@@ -210,7 +219,7 @@ mod tests {
             osprey_types::check_program(&parsed.program),
             Vec::<osprey_types::TypeError>::new()
         );
-        let warnings = super::collect(&parsed.program);
+        let warnings = super::of(&parsed.program, &|_| false);
         let input = CompilationInput::script("mixed.osp", source.to_owned(), parsed.program);
         assert_eq!(render(&input, &warnings), Some(
             "\nmixed.osp\n  1:3  warning: unused parameter `ignored`\n  2:1  warning: redundant type annotation on `spare`: inference derives `int` without it\n  2:1  warning: unused variable `spare`\n\n3 warnings (redundant-annotation, unused-parameter, unused-variable)".to_owned()
@@ -223,7 +232,7 @@ mod tests {
             "fn work() = 41\nfn relay(callback) = callback()\nlet answer = relay(fn() => work())\n";
         let parsed = osprey_syntax::parse_program(source);
         assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
-        let warnings = super::collect(&parsed.program);
+        let warnings = super::of(&parsed.program, &|_| false);
         assert_eq!(warnings.len(), 1, "{warnings:?}");
         let input = CompilationInput::script("callback.osp", source.to_owned(), parsed.program);
         assert_eq!(render(&input, &warnings), Some(
@@ -238,7 +247,7 @@ mod tests {
             osprey_syntax::Flavor::Ml,
         );
         assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
-        let warnings = super::collect(&parsed.program);
+        let warnings = super::of(&parsed.program, &|_| false);
         assert_eq!(
             warnings
                 .iter()
@@ -261,7 +270,10 @@ mod tests {
     fn an_invalid_program_retains_errors_and_has_no_speculative_advice() {
         let parsed = osprey_syntax::parse_program("fn broken(unused) = missing\n");
         assert_eq!(parsed.errors, Vec::<osprey_syntax::SyntaxError>::new());
-        assert_eq!(super::collect(&parsed.program), Vec::<TypeWarning>::new());
+        assert_eq!(
+            super::of(&parsed.program, &|_| false),
+            Vec::<TypeWarning>::new()
+        );
         assert_eq!(
             crate::report_type_errors(&CompilationInput::script(
                 "broken.osp",
@@ -284,7 +296,7 @@ mod tests {
             parsed.program,
         )
         .unwrap_or_else(|errors| panic!("{errors:?}"));
-        let warnings = super::collect(input.program());
+        let warnings = super::collect(&input);
         assert_eq!(
             warnings
                 .iter()
@@ -317,7 +329,7 @@ mod tests {
                 osprey_types::check_program(&parsed.program),
                 Vec::<osprey_types::TypeError>::new()
             );
-            let warnings = super::collect(&parsed.program);
+            let warnings = super::of(&parsed.program, &|_| false);
             let input = CompilationInput::script("top-level", source.to_owned(), parsed.program);
             assert_eq!(render(&input, &warnings), Some("\ntop-level\n  1:0  warning: unused pattern binding `unused`\n\n1 warning (unused-pattern-binding)".to_owned()));
         }

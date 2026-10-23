@@ -183,6 +183,12 @@ load-bearing exactly when a parameter must relate two or more positions
 caller must pin an otherwise-unconstrained variable. HM inference is
 unchanged: unannotated functions stay implicitly polymorphic, and a
 polymorphic function is monomorphised independently at each call site.
+A declared binder closes the signature, so the scheme is quantified at the
+declaration — before any call site is inferred — whatever order the files are
+checked in and across a mutually recursive group: every call site, including
+one in an earlier file or a sibling of a recursive cycle, instantiates fresh
+variables. The Default/ML `generic_mutual_recursion` pair pins a two-function
+cycle used at two types in one program.
 Variance markers are **not** permitted on function binders (variance is
 declaration-site on types and effects only — [TYPE-VARIANCE-DECL]).
 
@@ -1038,16 +1044,17 @@ seen : List<int>
 seen = []
 ```
 
-**What is never redundant.** Four constructs carry types as part of their
+**What is never redundant.** Five constructs carry types as part of their
 declaration rather than as a constraint on an inferred one, and no annotation
 in them is ever reported:
 
+- an exported module member's signature: its parameter, return and header annotations are the module's API, consumed by projects the analysis cannot see. Whether one program still needs them says nothing about the next, so they are held fixed while the rest is judged. Annotations inside the member's body, and the signatures of private members and namespace-level functions, are judged as usual;
 - a `signature` block's members ([MODULES-SIGNATURE](0025-ModulesAndNamespaces.md#signatures-modules-signature)) — a signature *is* the module's public contract. Elaboration copies a signature's types onto the members that left them off, and it marks every type it supplies, so a member that wrote nothing is never blamed for the copy. A member that *writes* the same type again is judged like any other function: that duplicate is a real line, and deleting it changes nothing;
 - record field declarations and union variant payloads, whose types are their definition;
 - `extern` and foreign declarations ([Foreign Function Interface](../compiler/0019-ForeignFunctionInterface.md)), which have no body to infer from;
 - an annotation whose erasure changes a type variable's constraints or its relationship to a declared binder.
 
-Types inserted by module-signature elaboration are compiler-generated constraints and never receive a redundancy warning. A written annotation in a module body is checked normally, even if its spelling equals the module's signature. The compiler records this provenance when it inserts a constraint; matching member names or type spellings is not evidence that an annotation was generated.
+Types inserted by module-signature elaboration are compiler-generated constraints and never receive a redundancy warning. A written annotation in a private member's body or signature is checked normally, even if its spelling equals the module's signature; an exported member's signature is held fixed as above. The compiler records this provenance when it inserts a constraint; matching member names or type spellings is not evidence that an annotation was generated.
 
 An annotation that would erase a `Result` is not redundant either — it is a
 type error ([Result Preservation](#result-preservation)), reported as one.
