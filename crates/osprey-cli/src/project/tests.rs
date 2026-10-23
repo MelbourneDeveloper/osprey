@@ -295,12 +295,13 @@ fn temp_project(name: &str, files: &[(&str, &str)]) -> PathBuf {
 #[test]
 fn an_exported_module_members_signature_is_never_reported_redundant() {
     // [TYPE-ANNOTATION-REDUNDANT] `shout`'s signature is API for every project
-    // using `lib::Flow`; the private `loud` beside it is judged as usual.
+    // using `lib::Flow`; the private `loud` beside it is judged as usual:
+    // `text + "!"` alone derives `string -> string`.
     let root = temp_project(
         "contract-warnings",
         &[
             ("osprey.toml", "[project]\nname = \"exp\"\nsource_roots = [\"src\", \"main.ospml\"]\ndefault_namespace = \"app\"\nentry = \"main.ospml\"\n"),
-            ("src/flow.ospml", "namespace lib\n\nmodule Flow\n    export shout : string -> string\n    shout text = loud text\n    loud : string -> string\n    loud text = \"${text}!\"\n"),
+            ("src/flow.ospml", "namespace lib\n\nmodule Flow\n    export shout : string -> string\n    shout text = loud text\n    loud : string -> string\n    loud text = text + \"!\"\n"),
             ("main.ospml", "namespace app\n\nimport lib::Flow\n\nprint (Flow::shout \"hi\")\n"),
         ],
     );

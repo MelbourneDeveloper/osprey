@@ -65,6 +65,13 @@ i = identity 42          // identity<int>
 s = identity "hello"     // identity<string>
 ```
 
+`[TYPE-BINDING-ORDER]` Source order does not decide what generalizes. Each top-level
+function is checked after the functions it calls, so a caller defined above
+its helper still uses the caller at several types. Functions that call each
+other form one recursive group, which is checked together and stays
+monomorphic inside the group. A function that reads a top-level `let` which has
+not run yet is checked at its own position.
+
 ### Reporting a Partly Inferred Type — [TYPE-RENDER-HOLES]
 
 Inference does not always reach a single ground type, and what a tool reports

@@ -5,6 +5,7 @@
 //! the declared signatures, then resolves everything against the final
 //! substitution.
 
+mod binding_order;
 mod bindings;
 mod collect;
 mod declarations;
