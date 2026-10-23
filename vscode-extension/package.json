@@ -397,7 +397,7 @@
   "dependencies": {
     "@nimblesite/shipwright-vscode": "^0.5.4",
     "vscode-languageclient": "^9.0.1",
-    "@nimblesite/lsp-profiler-ui": "file:../../SharpLsp/lspkit/packages/lsp-profiler-ui"
+    "@nimblesite/lsp-profiler-ui": "file:../lspkit/packages/lsp-profiler-ui"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",
