@@ -77,6 +77,7 @@ pub(crate) fn build(
             target.runtime()
         ))
     })?;
+    let runtime = crate::linking::fresh_runtime(&runtime).map_err(|e| fail(&e))?;
     let scratch = Scratch::new(path, target.name())?;
     let ll = scratch.path.join("app.ll");
     let obj = scratch.path.join("app.o");

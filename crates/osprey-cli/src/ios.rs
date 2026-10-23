@@ -148,6 +148,7 @@ pub(crate) fn build(
     let sdk = sdk_path(target)?;
     let runtime =
         find_runtime_lib(target.runtime()).ok_or_else(|| fail(&target.missing_runtime()))?;
+    let runtime = crate::linking::fresh_runtime(&runtime).map_err(|e| fail(&e))?;
     let scratch = Scratch::new(path, target.sdk())?;
     write(&scratch.path.join("app.ll"), &ir)?;
     let obj = scratch.path.join("app.o");
