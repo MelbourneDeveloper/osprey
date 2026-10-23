@@ -24,10 +24,11 @@ const ENTRY_POINT: &str = "main";
 
 mod bindings;
 mod forwarding;
+mod handlers;
 mod hygiene;
 mod region;
 mod requirements;
-use region::{answered, innermost_arm, shadowed_regions, specialization_key, Region};
+use region::{answered, innermost_arm, specialization_key, Region};
 pub(crate) use requirements::function_definitions;
 use requirements::{all_requirements, retain_referenced_originals, static_performers};
 
@@ -61,6 +62,9 @@ struct Lowering {
     /// position, but inference addresses a lambda by its position. Each gets
     /// its own synthetic one, on line 0, which no source line occupies.
     wrappers: u32,
+    /// Effects whose enclosing static regions a runtime handler currently
+    /// shadows: a `mask` of one would skip into a discharged region.
+    shadowed: Vec<String>,
 }
 
 /// Discharge every static handler in `program`.
@@ -86,6 +90,7 @@ pub(crate) fn run(program: &Program) -> Result<Program, Vec<StageError>> {
         fuel: REWRITE_BOUND,
         depth: 0,
         wrappers: 0,
+        shadowed: Vec::new(),
     };
     let mut rewritten = program;
     for statement in &mut rewritten.statements {
@@ -143,6 +148,7 @@ impl Lowering {
                 self.enter_region(expression, regions);
             }
             Expr::Handler { .. } => self.enter_runtime_handler(expression, regions),
+            Expr::Mask { .. } => self.enter_mask(expression, regions),
             Expr::Perform { effect, .. } if answered(regions, effect) => {
                 self.substitute(expression, regions);
             }
@@ -154,90 +160,6 @@ impl Lowering {
             }
             _ => children_mut(expression, &mut |child| self.rewrite(child, regions)),
         }
-    }
-
-    /// Rewrite under a runtime handler. Its arms and return clause see the
-    /// enclosing regions unchanged, since they execute outside their own
-    /// activation. Its body sees the same effect's regions with only the
-    /// supplied operations shadowed: an uncovered operation still reaches the
-    /// enclosing static interpretation ([STAGE-LOWER-ORDER]).
-    fn enter_runtime_handler(&mut self, expression: &mut Expr, regions: &mut Vec<Region>) {
-        let Expr::Handler {
-            effect,
-            arms,
-            body,
-            return_clause,
-            finally,
-            ..
-        } = expression
-        else {
-            return;
-        };
-        for arm in arms.iter_mut() {
-            self.rewrite(&mut arm.body, regions);
-        }
-        for clause in return_clause.iter_mut().chain(finally.iter_mut()) {
-            self.rewrite(clause, regions);
-        }
-        let mut visible = shadowed_regions(regions, effect, arms);
-        self.rewrite(body, &mut visible);
-    }
-
-    /// Discharge one region: its body is rewritten with the region pushed, and
-    /// the handler node is replaced by that body. Implements [STAGE-RESIDUE].
-    fn enter_region(&mut self, expression: &mut Expr, regions: &mut Vec<Region>) {
-        let Expr::Handler {
-            effect,
-            arms,
-            body,
-            return_clause,
-            finally,
-            ..
-        } = expression
-        else {
-            return;
-        };
-        let cleanup = finally.take();
-        self.regions = self.regions.saturating_add(1);
-        let mut selected_arms = arms.clone();
-        for arm in &mut selected_arms {
-            // Validate unused arms too, and resolve their requests in the
-            // enclosing scope rather than recursively selecting themselves.
-            self.rewrite(&mut arm.body, regions);
-            let required = self.arm_requirements(&arm.body);
-            if !required.is_empty() {
-                self.errors.push(StageError::new(
-                    format!("static handler arm `{effect}.{}` requires runtime effects: {}; arm operations must be statically discharged", arm.operation, required.join(", ")),
-                    arm.position,
-                ));
-            }
-        }
-        let region = Region {
-            effect: effect.clone(),
-            arms: selected_arms,
-            id: self.regions,
-        };
-        let mut discharged = (**body).clone();
-        regions.push(region);
-        self.rewrite(&mut discharged, regions);
-        let _ = regions.pop();
-        let answered = if let Some(mut clause) = return_clause.take() {
-            self.rewrite(&mut clause, regions);
-            Expr::Call {
-                function: clause,
-                arguments: vec![discharged],
-                named_arguments: Vec::new(),
-            }
-        } else {
-            discharged
-        };
-        *expression = match cleanup {
-            Some(mut cleanup) => {
-                self.rewrite(&mut cleanup, regions);
-                crate::handler_value::finalized(answered, *cleanup)
-            }
-            None => answered,
-        };
     }
 
     /// Replace one performed operation with the innermost answering arm.
