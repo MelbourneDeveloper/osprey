@@ -1,8 +1,8 @@
 //! Effect row call values.
 use super::{
     builtin_return_shape, expression_name, merge_optional_value, project_element,
-    source_named_callee, Analyzer, BTreeSet, CallArguments, Callable, CallableEnv, Expr,
-    NamedArgument, Summary, Value,
+    source_named_callee, stabilize_merged_callables, Analyzer, BTreeSet, CallArguments, Callable,
+    CallableEnv, Expr, NamedArgument, Summary, Value,
 };
 
 impl Analyzer<'_> {
@@ -170,8 +170,67 @@ impl Analyzer<'_> {
                 aggregate(merged)
             }
             "mapValues" => aggregate(element(0)),
+            "fold" | "foldList" => self.fold_value(arguments, scope, env),
             _ => return builtin_return_shape(name),
         })
+    }
+
+    /// `fold(list, acc, callback)` returns the final accumulator: the union of
+    /// the initial accumulator and the callback's returned value, so callable
+    /// provenance a callback stores into the accumulator — including through a
+    /// recursive aggregate — flows into the fold result. The callback's own
+    /// latent effects are invoked by `eager_callback_slots`. Implements
+    /// [EFFECTS-PROVENANCE].
+    fn fold_value(&self, arguments: &[Expr], scope: &[String], env: &CallableEnv) -> Value {
+        let mut acc = arguments
+            .get(1)
+            .and_then(|argument| self.value(argument, scope, env))
+            .unwrap_or_default();
+        self.merge_fold_return(&mut acc, arguments, scope, env);
+        acc
+    }
+
+    /// One modelled iteration of `fold`: the callback sees the accumulator and
+    /// the source's element, and whatever it returns joins the accumulator's
+    /// provenance. Implements [EFFECTS-PROVENANCE].
+    fn merge_fold_return(
+        &self,
+        acc: &mut Value,
+        arguments: &[Expr],
+        scope: &[String],
+        env: &CallableEnv,
+    ) {
+        let Some(callback) = arguments
+            .get(2)
+            .and_then(|argument| self.callable(argument, scope, env))
+        else {
+            return;
+        };
+        let callback_arguments = self.fold_callback_arguments(acc, arguments, scope, env);
+        if let Some(returned) =
+            self.project_call_return(Value::from_callable(callback), callback_arguments)
+        {
+            acc.union(stabilize_merged_callables(&returned));
+        }
+    }
+
+    /// What `fold` hands its callback: the accumulator so far and one element
+    /// of the source list.
+    fn fold_callback_arguments(
+        &self,
+        acc: &Value,
+        arguments: &[Expr],
+        scope: &[String],
+        env: &CallableEnv,
+    ) -> CallArguments {
+        let source_element = arguments
+            .first()
+            .and_then(|argument| self.value(argument, scope, env))
+            .and_then(project_element);
+        CallArguments {
+            positional: vec![Some(acc.clone()), source_element],
+            named: Vec::new(),
+        }
     }
 
     /// Cached callable values keep their latent effects after the snapshot escapes.

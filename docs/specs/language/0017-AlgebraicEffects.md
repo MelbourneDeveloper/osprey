@@ -207,7 +207,9 @@ a builtin name cannot confer builtin effect behavior.
 record fields, list and map elements, collection `+`, Result payloads, and fibers.
 An operator that produces a primitive value does not carry the callable
 provenance of its operands into that result. Analysis of recursive aggregates
-must reach a finite fixed point. If a nested value must be widened, projections
+must reach a finite fixed point: a repeated structural access cycle is
+summarised as every callable stored below it. If a nested value must be
+widened, projections
 through it remain unknown rather than being treated as pure; invoking an
 unresolved callable is rejected. Widening never removes a known operation
 requirement or turns an unknown field into proof that a same-named free function

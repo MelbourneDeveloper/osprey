@@ -34,7 +34,10 @@ pub(super) fn advance_function(
             // Recompute rather than merge with the previous iteration.
             // `function_return` already merges every return path of the body,
             // so each pass yields a COMPLETE answer for the rows it was given;
-            // unioning across passes only preserves superseded ones.
+            // unioning across passes only preserves superseded ones. The one
+            // feedback a pass cannot complete on its own — `fold`'s accumulator
+            // carrying its callback's return — is cut in `fold_value`, which
+            // stabilises that contribution instead of unrolling it.
             *slot = Some(returned.widened().widened());
             changed |= *slot != before;
         }

@@ -31,8 +31,9 @@ use names::{
 };
 mod value_shapes;
 use value_shapes::{
-    builtin_callable_value, builtin_return_shape, method_thunk, project_callable, project_element,
-    project_fiber_value, project_field, project_success_value,
+    builtin_callable_value, builtin_return_shape, method_thunk, project_callable, project_deep,
+    project_element, project_fiber_value, project_field, project_success_value,
+    stabilize_merged_callables,
 };
 mod provenance;
 use provenance::{
@@ -141,6 +142,29 @@ enum Projection {
     Element,
     SuccessValue,
     FiberValue,
+    /// Every callable stored anywhere below the parameter: the finite summary
+    /// of a recursive aggregate whose field/element structure repeats. A path
+    /// that repeats one structural cycle is replaced by this single step, so
+    /// the abstract value of the aggregate stays finite. Resolving it walks
+    /// the concrete argument and stays fail-closed at the provenance budget.
+    /// Implements [EFFECTS-PROVENANCE].
+    Deep,
+}
+
+impl Projection {
+    /// Structural steps traverse stored data, so repeating one describes a
+    /// recursive aggregate. The call-shaped steps can repeat without the
+    /// value itself being recursive, and a cycle through them is not sound to
+    /// summarise: invoking a stored closure is not storing one.
+    fn is_structural(&self) -> bool {
+        matches!(
+            self,
+            Projection::Field(_)
+                | Projection::Element
+                | Projection::SuccessValue
+                | Projection::FiberValue
+        )
+    }
 }
 
 /// A method on a symbolic receiver cannot select its UFCS fallback until the
