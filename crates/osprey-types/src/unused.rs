@@ -250,10 +250,16 @@ impl Analysis {
                 finally,
                 ..
             } => {
+                // A capability-named handler reads that binding ([EFFECTS-INSTANCE]).
+                self.read(osprey_ast::effect_name::base(effect));
                 self.handler(effect, arms, body, owner);
                 for clause in return_clause.iter().chain(finally) {
                     self.expression(clause, owner);
                 }
+            }
+            Expr::Perform { effect, .. } | Expr::Mask { effect, .. } => {
+                self.read(osprey_ast::effect_name::base(effect));
+                self.children(expression, owner);
             }
             _ => self.children(expression, owner),
         }

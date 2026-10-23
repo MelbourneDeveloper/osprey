@@ -386,6 +386,11 @@ impl Resolver<'_> {
                     self.rewrite_expr(value, context, locals);
                 }
             }
+            Expr::Mask { effect, body, .. } => {
+                self.rewrite_effect_name(effect, context, locals);
+                self.rewrite_expr(body, context, locals);
+            }
+            Expr::Instance { effect, .. } => self.rewrite_effect_name(effect, context, locals),
             Expr::Send { channel, value } => {
                 self.rewrite_expr(channel, context, locals);
                 self.rewrite_expr(value, context, locals);

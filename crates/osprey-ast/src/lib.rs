@@ -1003,6 +1003,27 @@ pub enum Expr {
         /// [EFFECTS-GENERIC-INSTANTIATION].
         position: Option<Position>,
     },
+    /// `mask E { body }` — evaluate `body` with the activation currently
+    /// answering `E` (an effect, or a capability bound by `instance`) hidden,
+    /// so its requests reach the next one out. Implements [EFFECTS-MASK].
+    Mask {
+        /// The masked effect or capability name.
+        effect: String,
+        /// The masked body.
+        body: Box<Expr>,
+        /// Source position — the key under which inference publishes the
+        /// masked effect's instantiation.
+        position: Option<Position>,
+    },
+    /// `instance E` — a fresh capability identity for effect `E`, with no
+    /// implementation installed. Implements [EFFECTS-INSTANCE].
+    Instance {
+        /// The effect the capability performs.
+        effect: String,
+        /// Source position — the key under which inference publishes the
+        /// capability's instantiation.
+        position: Option<Position>,
+    },
     /// `resume(value)` — resume the performer's delimited continuation with
     /// `value` (or `Unit` when absent). Legal only inside a handler arm body.
     /// Implements [EFFECTS-RESUME].

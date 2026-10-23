@@ -84,16 +84,21 @@ pub(super) fn site_arguments(
 }
 
 pub(super) fn requirement_name(requirement: &Requirement) -> String {
-    if requirement.arguments.is_empty() {
-        format!("{}.{}", requirement.effect, requirement.operation)
+    // A capability's identity is its last argument, `#line:col`; it reads as
+    // `Store@3:15` ([EFFECTS-INSTANCE]).
+    let (arguments, capability) = match requirement.arguments.split_last() {
+        Some((last, rest)) if last.starts_with('#') => (rest, last.replacen('#', "@", 1)),
+        _ => (requirement.arguments.as_slice(), String::new()),
+    };
+    let instantiation = if arguments.is_empty() {
+        String::new()
     } else {
-        format!(
-            "{}<{}>.{}",
-            requirement.effect,
-            requirement.arguments.join(", "),
-            requirement.operation
-        )
-    }
+        format!("<{}>", arguments.join(", "))
+    };
+    format!(
+        "{}{instantiation}{capability}.{}",
+        requirement.effect, requirement.operation
+    )
 }
 
 // Signal intrinsics share positional and named callback resolution.

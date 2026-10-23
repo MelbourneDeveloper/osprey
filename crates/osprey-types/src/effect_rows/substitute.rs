@@ -35,7 +35,7 @@ impl Analyzer<'_> {
                 if let Some(callback) = callback {
                     summary.union(
                         self.invoke_with_arguments(callback, use_.arguments)
-                            .excluding(&use_.excluded),
+                            .within(&use_.scopes),
                     );
                 } else if use_.index >= arguments.len() {
                     // No argument occupies this slot yet — the call is still

@@ -133,6 +133,8 @@ impl Analyzer<'_> {
             | Expr::Bool(_)
             | Expr::Identifier(_)
             | Expr::Path(_)
+            // A fresh capability is a plain value ([EFFECTS-INSTANCE]).
+            | Expr::Instance { .. }
             // Constructing a closure is pure. Its latent row is included only
             // when the closure is called or passed to an eager callback slot.
             | Expr::Lambda { .. } => Summary::default(),
@@ -245,6 +247,18 @@ impl Analyzer<'_> {
                         .insert(Requirement::new(effect, operation, instance));
                 }
                 out
+            }
+            // A mask passes its body's requests one answering activation
+            // further out ([EFFECTS-MASK]); a capability is a plain value.
+            Expr::Mask {
+                effect,
+                body,
+                position,
+            } => {
+                let arguments =
+                    self.instance_arguments(effect, *position, &self.instances.handlers, "mask");
+                self.expression(body, scope, env)
+                    .masked(osprey_ast::effect_name::base(effect), &arguments)
             }
             Expr::Handler {
                 effect,

@@ -25,6 +25,7 @@ mod drive;
 mod finally;
 mod requests;
 mod return_clause;
+mod scope;
 use captures::{
     build_env, caps_from_names, capture_list, capture_list_resuming, reload_env, ArmCap,
 };
@@ -33,6 +34,7 @@ pub(crate) use control::gen_resume;
 use control::{gen_resuming_handler, AnswerShape, DriveArm};
 use drive::emit_drive_fn;
 pub(crate) use requests::{gen_arithmetic_request, gen_perform};
+pub(crate) use scope::{gen_instance, gen_mask};
 
 /// A parsed effect-operation signature: parameter types, the result LLVM type,
 /// and (when the result is `Result<T, _>`) the success inner type. A generic
@@ -295,7 +297,8 @@ fn gen_activation(
     position: Option<osprey_ast::Position>,
 ) -> Result<Value> {
     declare_stack(cg);
-    let effect = osprey_ast::effect_name::base(effect);
+    let target = scope::target(cg, effect, position)?;
+    let effect = target.effect.as_str();
     let site_ops = crate::effect_generics::site_handler_ops(cg, position)?;
     // The DECLARATION decides which lowering a region needs: any control
     // operation among its arms means a continuation may be captured.
@@ -307,7 +310,7 @@ fn gen_activation(
         .iter()
         .any(|sig| sig.mode.is_control())
     {
-        return gen_resuming_handler(cg, effect, arms, body, return_clause, &site_ops);
+        return gen_resuming_handler(cg, &target, arms, body, return_clause, &site_ops);
     }
     // A generic effect's handler registers under its instantiation-mangled
     // key, so only same-instantiation performs resolve to it. Implements
@@ -322,11 +325,9 @@ fn gen_activation(
         let id = cg.next_handler_id();
         let fn_name = format!("__handler_{effect}_{}_{id}", arm.operation);
         emit_handler_fn(cg, &fn_name, arm, &sig, resolved, &caps, &env_ty)?;
-        let op_id = cg.operation_id(&key, &arm.operation)?;
+        let op_id = cg.operation_id(&key, &arm.operation)?.to_string();
         let fp = cg.emit_reg(format!("bitcast {} @{fn_name} to i8*", sig.fn_ptr_ty()));
-        let _ = cg.emit_reg(format!(
-            "call i32 @__osprey_handler_push_scoped(i32 {op_id}, i8* {fp}, i8* {env}, i32 {activation})"
-        ));
+        scope::push_handler(cg, &target.instance, [&op_id, &fp, &env, &activation]);
     }
 
     let result = gen_expr(cg, body)?;

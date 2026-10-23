@@ -20,6 +20,16 @@ pub(super) fn publish_effects(
         })
         .collect()
 }
+/// Capability sites for the backend: position → the capability's effect.
+/// Implements [EFFECTS-INSTANCE].
+fn published_capabilities(checker: &Checker) -> HashMap<(u32, u32), String> {
+    checker
+        .capability_sites
+        .iter()
+        .map(|(position, effect, _)| ((position.line, position.column), effect.clone()))
+        .collect()
+}
+
 pub(super) fn publish_program(
     program: &Program,
     mut checker: Checker,
@@ -95,6 +105,7 @@ pub(super) fn publish_program(
         lists,
         performs,
         handler_ops,
+        capabilities: published_capabilities(&checker),
         call_bindings,
         applications: checker
             .application_tys

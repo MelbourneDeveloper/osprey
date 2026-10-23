@@ -166,7 +166,7 @@ pub(crate) struct Checker {
     function_effects: HashMap<String, crate::info::EffectRequirements>,
     pub(crate) ctors: HashMap<String, CtorInfo>,
     /// Effect name -> its generic declaration (type params + raw op sigs).
-    effects: HashMap<String, EffectInfo>,
+    pub(crate) effects: HashMap<String, EffectInfo>,
     pub(crate) expression_types: HashMap<usize, Type>,
     /// Union/Result type name -> its variant constructor names (exhaustiveness).
     pub(crate) union_variants: HashMap<String, Vec<String>>,
@@ -247,6 +247,10 @@ pub(crate) struct Checker {
     /// signatures, keyed by its source position — resolved and published for
     /// the code generator.
     pub(crate) handler_tys: Vec<(Position, Vec<Type>, HashMap<String, crate::info::OpType>)>,
+    /// Every `perform`, `handler` and `mask` site that names a capability
+    /// rather than an effect: its position, the capability's effect and its
+    /// identity. Implements [EFFECTS-INSTANCE].
+    pub(crate) capability_sites: Vec<(Position, String, String)>,
     /// Function name → its declared type parameters bound to fresh inference
     /// variables (empty for undeclared). Implements [TYPE-GENERICS-FN].
     fn_typarams: HashMap<String, HashMap<String, Type>>,

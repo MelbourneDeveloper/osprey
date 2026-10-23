@@ -77,7 +77,7 @@ pub(super) fn coerce_to_answer(
 /// on a body thread and each `perform` suspends into this host-side dispatcher.
 pub(super) fn gen_resuming_handler(
     cg: &mut Codegen,
-    effect: &str,
+    target: &super::scope::Target,
     arms: &[HandlerArm],
     body: &Expr,
     return_clause: Option<&Expr>,
@@ -85,6 +85,7 @@ pub(super) fn gen_resuming_handler(
 ) -> Result<Value> {
     declare_stack(cg);
     declare_coro(cg);
+    let effect = target.effect.as_str();
     // Same instantiation-mangled runtime key as the non-resuming path.
     // Implements [EFFECTS-GENERIC-RUNTIME].
     let key = crate::effect_generics::runtime_effect_key(effect, &site_ops.effect_args)?;
@@ -144,12 +145,7 @@ pub(super) fn gen_resuming_handler(
             "bitcast {} @{suspend_fn} to i8*",
             arm.sig.fn_ptr_ty()
         ));
-        let _ = cg.call(
-            "i32",
-            "__osprey_handler_push_scoped",
-            "i32, i8*, i8*, i32",
-            &[&op_id, &fp, &coro, &activation],
-        );
+        super::scope::push_handler(cg, &target.instance, [&op_id, &fp, &coro, &activation]);
     }
 
     let snap = cg.call("i8*", "__osprey_handler_snapshot", "", &[]);

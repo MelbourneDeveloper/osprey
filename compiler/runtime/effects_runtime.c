@@ -27,11 +27,19 @@
 // No handler is live for an operation: the empty evidence slot.
 #define NO_HANDLER (-1)
 
+// The default capability identity: unnamed `perform E.op` and `handler E`.
+#define DEFAULT_INSTANCE 0
+
 // HandlerEntry represents a single handler on the stack
 typedef struct {
     int operation_id;
     int activation_base;
     int shadowed;            // Stack index this entry hides for its operation, or NO_HANDLER
+    // The entry a lookup through this one resolves to: its own index for an
+    // installed handler, the next outer activation for a `mask` entry, or
+    // NO_HANDLER when a mask skipped the last one ([EFFECTS-MASK]).
+    int answers;
+    int64_t instance;        // Capability identity this entry answers ([EFFECTS-INSTANCE])
     void *handler_func_ptr;  // Function pointer to handler
     void *env;               // Captured environment (cells + values), or NULL
 } HandlerEntry;
@@ -120,7 +128,8 @@ static int push_rejected(int operation_id, int base) {
 // values shared by every arm of one `handle` region; NULL when nothing is
 // captured).
 // Returns 0 on success, -1 on a bad id, a bad activation depth or overflow
-int __osprey_handler_push_scoped(int operation_id, void *handler_func_ptr, void *env, int base) {
+int __osprey_handler_push_in(int operation_id, int64_t instance, void *handler_func_ptr,
+                             void *env, int base) {
     ensure_handler_stack_initialized();
     if (push_rejected(operation_id, base)) {
         return -1;
@@ -131,8 +140,62 @@ int __osprey_handler_push_scoped(int operation_id, void *handler_func_ptr, void 
     entry->handler_func_ptr = handler_func_ptr;
     entry->env = env;
     entry->activation_base = base;
+    entry->answers = g_handler_stack->top;
+    entry->instance = instance;
     link_evidence(g_handler_stack, g_handler_stack->top);
     return 0;
+}
+
+int __osprey_handler_push_scoped(int operation_id, void *handler_func_ptr, void *env, int base) {
+    return __osprey_handler_push_in(operation_id, DEFAULT_INSTANCE, handler_func_ptr, env, base);
+}
+
+// The innermost visible entry for (operation, instance), starting at `index`
+// and following each entry's shadowed link. Entries of other instances are
+// transparent to it.
+static int visible_entry(int index, int64_t instance) {
+    while (index != NO_HANDLER && g_handler_stack->stack[index].instance != instance) {
+        index = g_handler_stack->stack[index].shadowed;
+    }
+    return index;
+}
+
+static int resolved_entry(int operation_id, int64_t instance) {
+    int index = visible_entry(g_handler_stack->evidence[operation_id], instance);
+    return index == NO_HANDLER ? NO_HANDLER : g_handler_stack->stack[index].answers;
+}
+
+// `mask`: hide the activation that currently answers (operation, instance)
+// from the rest of the masked body. The pushed entry answers whatever was
+// visible just outside that activation; handlers installed later in the body
+// shadow it as usual, and popping it restores the hidden activation. Nested
+// masks skip successive activations. Implements [EFFECTS-MASK].
+int __osprey_handler_mask(int operation_id, int64_t instance) {
+    ensure_handler_stack_initialized();
+    if (push_rejected(operation_id, g_handler_stack->top + 1)) {
+        return -1;
+    }
+    int skipped = resolved_entry(operation_id, instance);
+    int outer = skipped == NO_HANDLER
+                    ? NO_HANDLER
+                    : visible_entry(g_handler_stack->stack[skipped].shadowed, instance);
+    g_handler_stack->top++;
+    HandlerEntry *entry = &g_handler_stack->stack[g_handler_stack->top];
+    entry->operation_id = operation_id;
+    entry->handler_func_ptr = NULL;
+    entry->env = NULL;
+    entry->activation_base = g_handler_stack->top;
+    entry->answers = outer == NO_HANDLER ? NO_HANDLER : g_handler_stack->stack[outer].answers;
+    entry->instance = instance;
+    link_evidence(g_handler_stack, g_handler_stack->top);
+    return 0;
+}
+
+// A fresh capability identity for `instance E` ([EFFECTS-INSTANCE]). Identities
+// are process-wide so a capability keeps its meaning across fiber threads.
+int64_t __osprey_instance_new(void) {
+    static int64_t next = DEFAULT_INSTANCE;
+    return __atomic_add_fetch(&next, 1, __ATOMIC_RELAXED);
 }
 
 // Pop a handler from the stack
@@ -148,24 +211,32 @@ int __osprey_handler_pop(void) {
     return 0;
 }
 
-static HandlerEntry *find_handler(int operation_id) {
+static HandlerEntry *find_handler(int operation_id, int64_t instance) {
     ensure_handler_stack_initialized();
     if (operation_id < 0 || operation_id >= OSP_MAX_OPERATION_IDS) {
         return NULL;
     }
-    int index = g_handler_stack->evidence[operation_id];
+    int index = resolved_entry(operation_id, instance);
     return index == NO_HANDLER ? NULL : &g_handler_stack->stack[index];
 }
 
 // Both lookups resolve the same active entry, including its captured environment.
-void *__osprey_handler_lookup(int operation_id) {
-    HandlerEntry *entry = find_handler(operation_id);
+void *__osprey_handler_lookup_in(int operation_id, int64_t instance) {
+    HandlerEntry *entry = find_handler(operation_id, instance);
     return entry == NULL ? NULL : entry->handler_func_ptr;
 }
 
-void *__osprey_handler_lookup_env(int operation_id) {
-    HandlerEntry *entry = find_handler(operation_id);
+void *__osprey_handler_lookup_env_in(int operation_id, int64_t instance) {
+    HandlerEntry *entry = find_handler(operation_id, instance);
     return entry == NULL ? NULL : entry->env;
+}
+
+void *__osprey_handler_lookup(int operation_id) {
+    return __osprey_handler_lookup_in(operation_id, DEFAULT_INSTANCE);
+}
+
+void *__osprey_handler_lookup_env(int operation_id) {
+    return __osprey_handler_lookup_env_in(operation_id, DEFAULT_INSTANCE);
 }
 
 static HandlerScope *save_scope_tail(int base) {
@@ -187,14 +258,18 @@ static HandlerScope *save_scope_tail(int base) {
     return scope;
 }
 
-HandlerScope *__osprey_handler_suspend_scope(int operation_id) {
-    HandlerEntry *entry = find_handler(operation_id);
+HandlerScope *__osprey_handler_suspend_scope_in(int operation_id, int64_t instance) {
+    HandlerEntry *entry = find_handler(operation_id, instance);
     if (entry == NULL) {
         fprintf(stderr, "FATAL: Cannot suspend missing handler for operation %d\n",
                 operation_id);
         abort();
     }
     return save_scope_tail(entry->activation_base);
+}
+
+HandlerScope *__osprey_handler_suspend_scope(int operation_id) {
+    return __osprey_handler_suspend_scope_in(operation_id, DEFAULT_INSTANCE);
 }
 
 void __osprey_handler_restore_scope(HandlerScope *scope) {

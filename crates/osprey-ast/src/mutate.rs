@@ -106,6 +106,7 @@ fn effect_children_mut(expression: &mut Expr, visit: &mut impl FnMut(&mut Expr))
                 visit(value);
             }
         }
+        Expr::Mask { body, .. } => visit(body),
         Expr::Send { channel, value } => {
             visit(channel);
             visit(value);

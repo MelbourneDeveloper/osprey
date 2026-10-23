@@ -1,7 +1,7 @@
 //! Effect row specialize.
 use super::{
     map_parameter_use_values, map_projection_values, Callable, HashMap, Projection, Requirements,
-    Summary, Value,
+    Scope, Summary, Value,
 };
 
 /// Substitute complete type-name tokens, so `t3` never rewrites `t30`.
@@ -39,12 +39,37 @@ pub(super) fn specialize_requirements(
         .collect();
 }
 
+fn specialize_scope(scope: &mut Scope, bindings: &HashMap<String, String>) {
+    match scope {
+        Scope::Handled(answers) => {
+            *answers = std::mem::take(answers)
+                .into_iter()
+                .map(|(mut requirement, count)| {
+                    requirement.arguments = requirement
+                        .arguments
+                        .iter()
+                        .map(|arg| specialize_argument(arg, bindings))
+                        .collect();
+                    (requirement, count)
+                })
+                .collect();
+        }
+        Scope::Masked { arguments, .. } => {
+            for argument in arguments {
+                *argument = specialize_argument(argument, bindings);
+            }
+        }
+    }
+}
+
 pub(super) fn specialize_summary(summary: &mut Summary, bindings: &HashMap<String, String>) {
     specialize_requirements(&mut summary.required, bindings);
     summary.parameter_uses = std::mem::take(&mut summary.parameter_uses)
         .into_iter()
         .map(|mut use_| {
-            specialize_requirements(&mut use_.excluded, bindings);
+            for scope in &mut use_.scopes {
+                specialize_scope(scope, bindings);
+            }
             map_parameter_use_values(&mut use_, |value| {
                 specialize_value(value, bindings);
             });

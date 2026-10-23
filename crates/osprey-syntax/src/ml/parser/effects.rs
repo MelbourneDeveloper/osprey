@@ -47,6 +47,33 @@ impl Parser<'_> {
         }
     }
 
+    /// `mask Effect` + an indented body. Implements [EFFECTS-MASK].
+    pub(in crate::ml) fn mask_expr(&mut self) -> MlExpr {
+        let pos = self.pos();
+        self.advance(); // `mask`
+        let first = self.ident().unwrap_or_default();
+        let effect = self.instantiated_effect(first);
+        if !matches!(self.peek(), TokKind::Indent) {
+            self.error("expected an indented body after `mask Effect`");
+        }
+        MlExpr::Mask {
+            effect,
+            body: Box::new(self.body_after_eq()),
+            pos,
+        }
+    }
+
+    /// `instance Effect` — a fresh capability. Implements [EFFECTS-INSTANCE].
+    pub(in crate::ml) fn instance_expr(&mut self) -> MlExpr {
+        let pos = self.pos();
+        self.advance(); // `instance`
+        let first = self.ident().unwrap_or_default();
+        MlExpr::Instance {
+            effect: self.instantiated_effect(first),
+            pos,
+        }
+    }
+
     /// `handler Effect` + indented arms — the handler ITSELF, with no region
     /// attached: a value that can be bound, passed and called. Calling it with a
     /// zero-argument computation runs that computation under these arms.

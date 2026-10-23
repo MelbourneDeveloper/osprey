@@ -153,7 +153,10 @@ impl Checker {
                 ));
                 self.ctx.fresh()
             }
-            Expr::Perform { .. } | Expr::Handler { .. } => self.infer_effect_expr(e, env),
+            Expr::Perform { .. } | Expr::Handler { .. } | Expr::Mask { .. } => {
+                self.infer_effect_expr(e, env)
+            }
+            Expr::Instance { effect, position } => self.infer_instance(effect, *position),
             Expr::Resume(value) => self.infer_resume(value.as_deref(), env),
         }
     }
@@ -170,8 +173,9 @@ impl Checker {
         Type::string()
     }
 
-    /// Dispatch the two effect expression forms (split out of [`Self::infer_expr`]
-    /// to keep its match within budget).
+    /// Dispatch the effect expression forms (split out of [`Self::infer_expr`]
+    /// to keep its match within budget). Each resolves its target first: an
+    /// effect declaration or a capability ([EFFECTS-INSTANCE]).
     fn infer_effect_expr(&mut self, e: &Expr, env: &TypeEnv) -> Type {
         match e {
             Expr::Perform {
@@ -180,25 +184,45 @@ impl Checker {
                 arguments,
                 named_arguments,
                 position,
-            } => self.infer_perform(
+            } => match self.effect_target(effect, *position, env) {
+                Some(target) => self.infer_perform(
+                    target,
+                    operation,
+                    arguments,
+                    named_arguments,
+                    *position,
+                    env,
+                ),
+                None => self.ctx.fresh(),
+            },
+            Expr::Mask {
                 effect,
-                operation,
-                arguments,
-                named_arguments,
-                *position,
-                env,
-            ),
+                body,
+                position,
+            } => self.infer_mask(effect, body, *position, env),
             Expr::Handler {
+                stage,
                 effect,
                 arms,
                 return_clause,
                 finally,
                 body,
                 position,
-                ..
             } => {
+                let Some(target) = self.effect_target(effect, *position, env) else {
+                    return self.ctx.fresh();
+                };
+                if target.instance.is_some() && stage.is_compile_time() {
+                    self.errors.push(
+                        TypeError::new(format!(
+                            "a compile-time handler cannot answer the capability `{effect}`: \
+a capability is a runtime identity"
+                        ))
+                        .with_pos(*position),
+                    );
+                }
                 let answer = self.infer_handler(
-                    effect,
+                    target,
                     arms,
                     body,
                     return_clause.as_deref(),
@@ -351,7 +375,7 @@ impl Checker {
     /// Implements [EFFECTS-GENERIC-INSTANTIATION] and [EFFECTS-OP-TYPING].
     fn infer_perform(
         &mut self,
-        effect: &str,
+        target: crate::handler_scope::Target<'_>,
         operation: &str,
         arguments: &[Expr],
         named_arguments: &[NamedArgument],
@@ -367,25 +391,21 @@ impl Checker {
         // `!Stash<string>` surrounds `Stash.put(42)`, the row must not rewrite
         // the performed instance from `Stash<int>` to `Stash<string>` in the
         // later static discharge proof.
-        let actual_instance = self.effect_instance_ops(effect);
+        let effect = target.effect;
+        let actual_instance = target
+            .instance
+            .clone()
+            .or_else(|| self.effect_instance_ops(effect));
         if !named_arguments.is_empty() {
             self.errors.push(TypeError::new(format!(
                 "perform `{effect}.{operation}` does not support named arguments"
             )));
         }
-        // A written instantiation is the request's identity; an unwritten one
-        // is the innermost enclosing handler's, else a fresh instance for
-        // inference. Identity is the base name: `Stash<int>` and `Stash`
-        // name one effect. Implements [EFFECTS-GENERIC-INSTANTIATION].
-        let base = osprey_ast::effect_name::base(effect);
-        let scope = self
-            .handler_scopes
-            .iter()
-            .rev()
-            .find(|s| s.name == base)
-            .filter(|_| osprey_ast::effect_name::instantiation(effect).is_none())
-            .map(|s| (s.args.clone(), s.ops.clone()))
-            .or_else(|| self.effect_instance_ops(effect));
+        // A capability's instance is fixed by its type; otherwise a written
+        // instantiation is the request's identity and an unwritten one is the
+        // innermost enclosing handler's, else a fresh instance for inference.
+        // Implements [EFFECTS-GENERIC-INSTANTIATION] and [EFFECTS-INSTANCE].
+        let scope = target.instance.or_else(|| self.scoped_instance(effect));
         let Some((eff_args, ops)) = scope else {
             self.errors
                 .push(TypeError::new(format!("unknown effect `{effect}`")));
@@ -447,21 +467,23 @@ impl Checker {
     /// [EFFECTS-GENERIC-INSTANTIATION], and [EFFECTS-OP-TYPING].
     fn infer_handler(
         &mut self,
-        effect: &str,
+        target: crate::handler_scope::Target<'_>,
         arms: &[osprey_ast::HandlerArm],
         body: &Expr,
         return_clause: Option<&Expr>,
         position: Option<osprey_ast::Position>,
         env: &TypeEnv,
     ) -> Type {
-        let (eff_args, inst_ops, effect_known) =
-            if let Some((args, ops)) = self.effect_instance_ops(effect) {
-                (args, ops, true)
-            } else {
-                self.errors
-                    .push(TypeError::new(format!("unknown effect `{effect}`")));
-                (Vec::new(), HashMap::new(), false)
-            };
+        let effect = target.effect;
+        let (eff_args, inst_ops, effect_known) = if let Some((args, ops)) =
+            target.instance.or_else(|| self.effect_instance_ops(effect))
+        {
+            (args, ops, true)
+        } else {
+            self.errors
+                .push(TypeError::new(format!("unknown effect `{effect}`")));
+            (Vec::new(), HashMap::new(), false)
+        };
         let answer = self.ctx.fresh();
         let mut answering: Vec<(String, Type)> = Vec::new();
         let mut seen_arms = HashSet::new();

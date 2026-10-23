@@ -192,6 +192,23 @@ pub(crate) enum MlExpr {
         /// ([EFFECTS-GENERIC-INSTANTIATION]).
         pos: Position,
     },
+    /// `mask Effect` + indented body — skip one enclosing activation of the
+    /// effect or capability while the body runs ([EFFECTS-MASK]).
+    Mask {
+        /// The masked effect or capability name.
+        effect: String,
+        /// The masked body.
+        body: Box<MlExpr>,
+        /// Source position of the `mask` keyword.
+        pos: Position,
+    },
+    /// `instance Effect` — a fresh capability identity ([EFFECTS-INSTANCE]).
+    Instance {
+        /// The effect the capability performs.
+        effect: String,
+        /// Source position of the `instance` keyword.
+        pos: Position,
+    },
     /// `resume` or `resume value` — resume a suspended continuation
     /// ([FLAVOR-ML-EFFECT]).
     Resume(Option<Box<MlExpr>>),

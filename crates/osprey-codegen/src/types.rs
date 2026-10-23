@@ -57,7 +57,8 @@ fn ltype_of_con(name: &str, args: &[Type]) -> LType {
         // Int and unit travel as a machine word — as do fiber and channel
         // handles, which are runtime ids drawn from one shared counter, not
         // pointers.
-        names::INT | names::UNIT | names::FIBER | names::CHANNEL => LType::I64,
+        // A capability is a runtime identity word as well ([EFFECTS-INSTANCE]).
+        names::INT | names::UNIT | names::FIBER | names::CHANNEL | names::CAPABILITY => LType::I64,
         // An erased `any` is a pointer to its shape-carrying box
         // ([`crate::anybox`], [TYPE-ANY]) — never a bare machine word.
         names::ANY => LType::Any,

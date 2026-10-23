@@ -1,12 +1,16 @@
-//! Handler lifetime clauses the checker types beside the arms: a `finally`
-//! cleanup runs outside its own activation and returns `Unit`. Implements
-//! [EFFECTS-FINALIZATION] (docs/specs/language/0017-AlgebraicEffects.md).
+//! Handler scope forms the checker types beside the arms: a `finally` cleanup
+//! runs outside its own activation and returns `Unit`; `mask` hides one
+//! activation; `instance` creates a capability that effect forms can name.
+//! Implements [EFFECTS-FINALIZATION], [EFFECTS-MASK] and [EFFECTS-INSTANCE]
+//! (docs/specs/language/0017-AlgebraicEffects.md).
 
 use crate::check::Checker;
 use crate::env::TypeEnv;
 use crate::error::TypeError;
-use crate::ty::Type;
+use crate::info::OpType;
+use crate::ty::{names, Type};
 use osprey_ast::{Expr, Position};
+use std::collections::HashMap;
 
 impl Checker {
     /// Type `cleanup` in the handler's enclosing environment. It cannot resume
@@ -31,5 +35,142 @@ cleanup runs after the answer is decided and cannot replace it"
                 .with_pos(position),
             );
         }
+    }
+}
+
+/// An effect's type arguments and its operations instantiated at them.
+pub(crate) type EffectInstance = (Vec<Type>, HashMap<String, OpType>);
+
+/// What a `perform`, `handler` or `mask` names: an effect declaration, or a
+/// capability whose effect instance is already fixed by its type.
+pub(crate) struct Target<'a> {
+    /// The name as written: an effect spelling or a capability binding.
+    pub(crate) effect: &'a str,
+    /// The capability's instance; `None` for an effect declaration.
+    pub(crate) instance: Option<EffectInstance>,
+}
+
+impl Checker {
+    /// `instance E` is a fresh capability identity typed
+    /// `Capability<E, #line:col>`: the site makes two unrelated instances
+    /// distinct types, so they never unify. Implements [EFFECTS-INSTANCE].
+    pub(crate) fn infer_instance(&mut self, effect: &str, position: Option<Position>) -> Type {
+        let Some((args, _)) = self.effect_instance_ops(effect) else {
+            self.errors
+                .push(TypeError::new(format!("unknown effect `{effect}`")).with_pos(position));
+            return self.ctx.fresh();
+        };
+        let base = osprey_ast::effect_name::base(effect);
+        let identity = position.map_or_else(
+            || String::from("#?"),
+            |at| format!("#{}:{}", at.line, at.column),
+        );
+        Type::con(
+            names::CAPABILITY,
+            vec![Type::con(base, args), Type::con(identity, Vec::new())],
+        )
+    }
+
+    /// Resolve the target of an effect form. A local binding names a
+    /// capability; anything else names an effect declaration. `None` means
+    /// the binding is not a capability, which has been reported.
+    pub(crate) fn effect_target<'a>(
+        &mut self,
+        name: &'a str,
+        position: Option<Position>,
+        env: &TypeEnv,
+    ) -> Option<Target<'a>> {
+        let Some(scheme) = env.get(name) else {
+            return Some(Target {
+                effect: name,
+                instance: None,
+            });
+        };
+        let ty = crate::env::instantiate(&mut self.ctx, &scheme.clone());
+        let resolved = self.ctx.apply(&ty);
+        let Some((effect, args, identity)) = capability_parts(&resolved) else {
+            self.errors.push(
+                TypeError::new(format!(
+                    "`{name}` is not a capability: its type is `{resolved}`; an effect form \
+names an effect or a value created by `instance`"
+                ))
+                .with_pos(position),
+            );
+            return None;
+        };
+        if let Some(at) = position {
+            self.capability_sites
+                .push((at, effect.clone(), identity.clone()));
+        }
+        Some(Target {
+            effect: name,
+            instance: Some(self.effect_ops_at(&effect, args)),
+        })
+    }
+
+    /// The operations of `effect` instantiated at `args`.
+    fn effect_ops_at(&self, effect: &str, args: Vec<Type>) -> EffectInstance {
+        let ops = self.effects.get(effect).map_or_else(HashMap::new, |info| {
+            let pmap = info.type_params.iter().cloned().zip(args.iter().cloned());
+            Self::instantiate_ops(info, &pmap.collect())
+        });
+        (args, ops)
+    }
+
+    /// `mask E { body }` answers its body's value. The masked effect's
+    /// instantiation is published like a handler's, from a written
+    /// instantiation, a capability, or the innermost enclosing handler.
+    /// Implements [EFFECTS-MASK].
+    pub(crate) fn infer_mask(
+        &mut self,
+        effect: &str,
+        body: &Expr,
+        position: Option<Position>,
+        env: &TypeEnv,
+    ) -> Type {
+        if let Some(target) = self.effect_target(effect, position, env) {
+            match target.instance.or_else(|| self.scoped_instance(effect)) {
+                Some((args, ops)) => {
+                    if let Some(at) = position {
+                        self.handler_tys.push((at, args, ops));
+                    }
+                }
+                None => self
+                    .errors
+                    .push(TypeError::new(format!("unknown effect `{effect}`")).with_pos(position)),
+            }
+        }
+        self.infer_expr(body, env)
+    }
+
+    /// An unwritten instantiation is the innermost enclosing handler's, else a
+    /// fresh one; a written one is its own. Implements
+    /// [EFFECTS-GENERIC-INSTANTIATION].
+    pub(crate) fn scoped_instance(&mut self, effect: &str) -> Option<EffectInstance> {
+        let base = osprey_ast::effect_name::base(effect);
+        self.handler_scopes
+            .iter()
+            .rev()
+            .find(|scope| scope.name == base)
+            .filter(|_| osprey_ast::effect_name::instantiation(effect).is_none())
+            .map(|scope| (scope.args.clone(), scope.ops.clone()))
+            .or_else(|| self.effect_instance_ops(effect))
+    }
+}
+
+/// `Capability<E<args>, #site>` as (E, args, #site).
+fn capability_parts(ty: &Type) -> Option<(String, Vec<Type>, String)> {
+    let Type::Con { name, args } = ty else {
+        return None;
+    };
+    match (name.as_str(), args.as_slice()) {
+        (
+            names::CAPABILITY,
+            [Type::Con {
+                name: effect,
+                args: effect_args,
+            }, Type::Con { name: identity, .. }],
+        ) => Some((effect.clone(), effect_args.clone(), identity.clone())),
+        _ => None,
     }
 }

@@ -131,7 +131,7 @@ impl Analyzer<'_> {
                     index,
                     projection,
                     arguments,
-                    excluded: Requirements::new(),
+                    scopes: Vec::new(),
                 }]
                 .into_iter()
                 .collect(),

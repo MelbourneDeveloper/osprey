@@ -267,7 +267,7 @@ pub(super) fn callable_summary(callable: &Callable) -> Summary {
                 index: *index,
                 projection: projection.clone(),
                 arguments: CallArguments::default(),
-                excluded: Requirements::new(),
+                scopes: Vec::new(),
             }]
             .into_iter()
             .collect(),

@@ -54,6 +54,9 @@ pub mod names {
     /// The dense scalar buffer for GPU computation [GPU-BUFFER]
     /// (docs/specs/runtime/0034-GPUComputation.md).
     pub const GPU_BUFFER: &str = "GpuBuffer";
+    /// A capability identity created by `instance E`: `Capability<E, #site>`
+    /// ([EFFECTS-INSTANCE]).
+    pub const CAPABILITY: &str = "Capability";
 }
 
 /// A type in the Osprey type system.

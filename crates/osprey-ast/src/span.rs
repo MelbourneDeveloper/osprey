@@ -313,6 +313,11 @@ fn offset_expr(expr: &mut Expr, offset: u32) {
                 offset_expr(value, offset);
             }
         }
+        Expr::Mask { body, position, .. } => {
+            shift(position, offset);
+            offset_expr(body, offset);
+        }
+        Expr::Instance { position, .. } => shift(position, offset),
         Expr::Yield(value) | Expr::Resume(value) => {
             if let Some(value) = value {
                 offset_expr(value, offset);

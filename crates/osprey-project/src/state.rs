@@ -290,6 +290,7 @@ impl<'a> Inspector<'a> {
                     self.expr(value, in_owner_arm, position);
                 }
             }
+            Expr::Mask { body, .. } => self.expr(body, in_owner_arm, position),
             Expr::Send { channel, value } => {
                 self.expr(channel, in_owner_arm, position);
                 self.expr(value, in_owner_arm, position);
@@ -326,7 +327,8 @@ impl<'a> Inspector<'a> {
             | Expr::Float(_)
             | Expr::Str(_)
             | Expr::Bool(_)
-            | Expr::Identifier(_) => {}
+            | Expr::Identifier(_)
+            | Expr::Instance { .. } => {}
         }
     }
 

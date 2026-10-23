@@ -11,6 +11,7 @@
 mod analyze;
 mod call_values;
 mod calls;
+mod capabilities;
 mod environment;
 mod handlers;
 #[cfg(test)]
@@ -82,6 +83,9 @@ pub(crate) struct Instances {
     /// final fragment overwrite the others.
     pub(crate) performs: HashMap<(u32, u32), Vec<Vec<String>>>,
     pub(crate) handlers: HashMap<(u32, u32), Vec<String>>,
+    /// Capability sites: position → the effect the named capability performs
+    /// ([EFFECTS-INSTANCE]).
+    pub(crate) capabilities: HashMap<(u32, u32), String>,
     /// Explicit function-row arguments in source order, canonicalized by the
     /// type checker so a nominal record and its inferred row share an identity.
     pub(crate) declared_rows: HashMap<(u32, u32), Vec<Option<Vec<String>>>>,
@@ -101,9 +105,18 @@ struct Requirement {
     effect: String,
     operation: String,
     arguments: Vec<String>,
+    /// How many more activations answering this operation a `mask` still
+    /// skips: a handler discharges the requirement only at zero, and
+    /// otherwise lets it pass with one fewer ([EFFECTS-MASK]).
+    masked: u32,
 }
 
 type Requirements = BTreeSet<Requirement>;
+
+/// Mask levels and handler counts saturate here, so recursion under `mask`
+/// still reaches a fixed point. A request masked this deep is never proven
+/// discharged: the proof stays sound by rejecting it ([EFFECTS-MASK]).
+const MASK_LIMIT: u32 = 8;
 
 /// Provenance is an abstract value, not a runtime value tree. Recursive
 /// closures and aggregates grow across fixed-point iterations. Bound both
@@ -124,7 +137,23 @@ struct ParameterUse {
     index: usize,
     projection: Vec<Projection>,
     arguments: CallArguments,
-    excluded: Requirements,
+    /// The handlers and masks between the invocation and the function
+    /// boundary, innermost first; applied in order once the callback's own
+    /// requirements are known.
+    scopes: Vec<Scope>,
+}
+
+/// One layer a callback invocation sits under.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum Scope {
+    /// Handlers answering these requirements: how many answering activations
+    /// each passes, saturating at [`MASK_LIMIT`].
+    Handled(BTreeMap<Requirement, u32>),
+    /// A `mask` of one effect identity ([EFFECTS-MASK]).
+    Masked {
+        effect: String,
+        arguments: Vec<String>,
+    },
 }
 
 /// A callable can be stored below a record field or collection element. Keep

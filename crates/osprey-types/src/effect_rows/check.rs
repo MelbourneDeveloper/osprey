@@ -14,6 +14,8 @@ use super::{
     reason = "the fixed point, contract validation, and entry proof form one ordered checker pass"
 )]
 pub(crate) fn check(program: &Program, instances: &Instances, exports: &[&str]) -> CheckedEffects {
+    let renamed = super::capabilities::resolved(program, &instances.capabilities);
+    let program = renamed.as_ref().unwrap_or(program);
     let mut index = Index::collect(program);
     for function in &mut index.functions {
         let entries = function.position.and_then(|position| {

@@ -323,6 +323,8 @@ impl Analyzer<'_> {
                     .as_deref()
                     .and_then(|value| self.value(value, scope, &local))
             }
+            // A mask changes which activation answers, not the value.
+            Expr::Mask { body, .. } => self.value(body, scope, env),
             Expr::Resume(value) | Expr::Yield(value) => value
                 .as_deref()
                 .and_then(|value| self.value(value, scope, env)),

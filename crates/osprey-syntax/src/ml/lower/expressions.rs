@@ -104,6 +104,7 @@ pub(in crate::ml) fn lower_expr(expr: MlExpr) -> Expr {
             body,
             pos,
         } => lower_handler(stage, effect, arms, clauses, Some(*body), pos),
+        scope @ (MlExpr::Mask { .. } | MlExpr::Instance { .. }) => lower_scope_form(scope),
         MlExpr::Resume(value) => Expr::Resume(value.map(|e| Box::new(lower_expr(*e)))),
         MlExpr::Await(inner) => Expr::Await(Box::new(lower_expr(*inner))),
         MlExpr::Yield(value) => Expr::Yield(value.map(|e| Box::new(lower_expr(*e)))),
@@ -115,6 +116,23 @@ pub(in crate::ml) fn lower_expr(expr: MlExpr) -> Expr {
         MlExpr::Select(arms) => Expr::Select {
             arms: arms.into_iter().map(lower_arm).collect(),
         },
+    }
+}
+
+/// `mask E` + body and `instance E`. Implements [EFFECTS-MASK] and
+/// [EFFECTS-INSTANCE].
+fn lower_scope_form(expr: MlExpr) -> Expr {
+    match expr {
+        MlExpr::Mask { effect, body, pos } => Expr::Mask {
+            effect,
+            body: Box::new(lower_expr(*body)),
+            position: Some(pos),
+        },
+        MlExpr::Instance { effect, pos } => Expr::Instance {
+            effect,
+            position: Some(pos),
+        },
+        other => lower_expr(other),
     }
 }
 

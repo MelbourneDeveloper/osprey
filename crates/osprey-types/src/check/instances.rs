@@ -96,7 +96,7 @@ pub(super) fn effect_instances(checker: &mut Checker) -> crate::effect_rows::Ins
         }
     }
     let declared_rows = resolved_declared_rows(checker);
-    crate::effect_rows::Instances {
+    let mut instances = crate::effect_rows::Instances {
         expression_types: resolved_expression_types(checker).into(),
         methods: checker.methods.clone(),
         non_callable_call_error: checker
@@ -132,6 +132,25 @@ pub(super) fn effect_instances(checker: &mut Checker) -> crate::effect_rows::Ins
             .collect(),
         binders: resolved_binders(checker),
         ..Default::default()
+    };
+    tag_capabilities(checker, &mut instances);
+    instances
+}
+
+/// A capability site's identity is part of its effect identity: append it to
+/// the published arguments, so only that capability's handlers discharge its
+/// requests, and record the effect each capability name stands for.
+/// Implements [EFFECTS-INSTANCE].
+fn tag_capabilities(checker: &Checker, instances: &mut crate::effect_rows::Instances) {
+    for (position, effect, identity) in &checker.capability_sites {
+        let key = (position.line, position.column);
+        for candidate in instances.performs.get_mut(&key).into_iter().flatten() {
+            candidate.push(identity.clone());
+        }
+        if let Some(arguments) = instances.handlers.get_mut(&key) {
+            arguments.push(identity.clone());
+        }
+        let _ = instances.capabilities.insert(key, effect.clone());
     }
 }
 /// Every inferred expression type under the final substitution, so the effect

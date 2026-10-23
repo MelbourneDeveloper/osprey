@@ -125,7 +125,8 @@ fn expression_children<'a>(expression: &'a Expr, visit: &mut impl FnMut(AstNode<
         | Expr::FieldAccess {
             target: operand, ..
         }
-        | Expr::Lambda { body: operand, .. } => visit(AstNode::Expression(operand)),
+        | Expr::Lambda { body: operand, .. }
+        | Expr::Mask { body: operand, .. } => visit(AstNode::Expression(operand)),
         Expr::Call {
             function: target,
             arguments,
@@ -170,28 +171,34 @@ fn expression_children<'a>(expression: &'a Expr, visit: &mut impl FnMut(AstNode<
             visit_each(arguments, visit, |argument| argument);
             visit_each(named_arguments, visit, |argument| &argument.value);
         }
-        Expr::Handler {
-            arms,
-            body,
-            return_clause,
-            finally,
-            ..
-        } => {
-            visit_each(arms, visit, |arm| &arm.body);
-            let clauses = return_clause
-                .as_deref()
-                .into_iter()
-                .chain(finally.as_deref());
-            for child in std::iter::once(body.as_ref()).chain(clauses) {
-                visit(AstNode::Expression(child));
-            }
-        }
+        Expr::Handler { .. } => handler_children(expression, visit),
         Expr::Integer(_)
         | Expr::Float(_)
         | Expr::Str(_)
         | Expr::Bool(_)
         | Expr::Identifier(_)
-        | Expr::Path(_) => {}
+        | Expr::Path(_)
+        | Expr::Instance { .. } => {}
+    }
+}
+
+/// A handler's arm bodies, handled body, return clause and cleanup.
+fn handler_children<'a>(expression: &'a Expr, visit: &mut impl FnMut(AstNode<'a>)) {
+    if let Expr::Handler {
+        arms,
+        body,
+        return_clause,
+        finally,
+        ..
+    } = expression
+    {
+        visit_each(arms, visit, |arm| &arm.body);
+        for child in [Some(body), return_clause.as_ref(), finally.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            visit(AstNode::Expression(child));
+        }
     }
 }
 

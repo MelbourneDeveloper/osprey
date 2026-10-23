@@ -78,6 +78,16 @@ impl Lowerer<'_> {
                     position: Some(self.pos(node)),
                 }
             }
+            // Implements [EFFECTS-MASK] and [EFFECTS-INSTANCE].
+            "mask_expression" => Expr::Mask {
+                effect: self.mentioned_effect(node),
+                body: Box::new(self.lower_expr_field(node, "body")),
+                position: Some(self.pos(node)),
+            },
+            "instance_expression" => Expr::Instance {
+                effect: self.mentioned_effect(node),
+                position: Some(self.pos(node)),
+            },
             "resume_expression" => {
                 Expr::Resume(self.first_named(node).map(|n| Box::new(self.lower_expr(n))))
             }

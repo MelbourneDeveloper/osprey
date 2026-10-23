@@ -589,6 +589,8 @@ module.exports = grammar({
         $.send_call,
         $.recv_call,
         $.perform_expression,
+        $.mask_expression,
+        $.instance_expression,
         $.resume_expression,
         $.type_constructor,
         $.update_expression,
@@ -609,6 +611,13 @@ module.exports = grammar({
     await_call: ($) => seq('await', '(', $.expression, ')'),
     send_call: ($) => seq('send', '(', $.expression, ',', $.expression, ')'),
     recv_call: ($) => seq('recv', '(', $.expression, ')'),
+    // `mask E { body }` skips one enclosing activation of E (or of a named
+    // capability) while `body` runs. Implements [EFFECTS-MASK].
+    mask_expression: ($) =>
+      seq('mask', field('effect', choice($.qualified_path, $.identifier)), optional(field('instantiation', $.type_arguments)), field('body', $.block)),
+    // `instance E` creates a fresh capability identity. Implements [EFFECTS-INSTANCE].
+    instance_expression: ($) =>
+      prec.right(seq('instance', field('effect', choice($.qualified_path, $.identifier)), optional(field('instantiation', $.type_arguments)))),
     perform_expression: ($) =>
       seq('perform', field('effect', choice($.qualified_path, $.identifier)), optional(field('instantiation', $.type_arguments)), '.', field('operation', $.identifier), '(', optional($.argument_list), ')'),
     // `resume(v)` resumes the performer's delimited continuation with `v`;

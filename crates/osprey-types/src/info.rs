@@ -94,6 +94,10 @@ pub struct ProgramTypes {
     /// handler-arm view of the same instantiation data). Implements
     /// [EFFECTS-GENERIC-INSTANTIATION].
     pub handler_ops: HashMap<(u32, u32), HandlerSite>,
+    /// `perform`/`handler`/`mask` sites naming a capability: position → the
+    /// capability's effect. The capability's runtime identity is the value
+    /// bound to the written name. Implements [EFFECTS-INSTANCE].
+    pub capabilities: HashMap<(u32, u32), String>,
     /// Explicit call substitutions, applied while specializing generic bodies.
     pub applications: HashMap<(u32, u32), HashMap<VarId, Type>>,
     /// Binder identity is part of the contract even when its spelling is omitted.
