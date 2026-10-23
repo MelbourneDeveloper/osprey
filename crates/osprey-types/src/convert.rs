@@ -44,8 +44,19 @@ pub(crate) fn type_expr_to_type(te: &TypeExpr, params: &HashMap<String, Type>) -
             .iter()
             .map(|g| type_expr_to_type(g, params))
             .collect();
-        Type::con(te.name.clone(), args)
+        applied(&te.name, args)
     }
+}
+
+/// `head<args>`: a named constructor, or the structural record a built-in
+/// name stands for.
+fn applied(head: &str, mut args: Vec<Type>) -> Type {
+    if head == names::SIGNAL_SNAPSHOT && args.len() == 1 {
+        if let Some(value) = args.pop() {
+            return Type::signal_snapshot(value);
+        }
+    }
+    Type::con(head.to_string(), args)
 }
 
 /// Convert a bare field/effect type string (e.g. `"int"`, `"T"`,
@@ -86,7 +97,7 @@ pub(crate) fn type_name_to_type(s: &str, params: &HashMap<String, Type>) -> Type
                 .iter()
                 .map(|a| type_name_to_type(a, params))
                 .collect();
-            return Type::con(head.to_string(), args);
+            return applied(head, args);
         }
     }
     if let Some(elem) = s.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {

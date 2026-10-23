@@ -1,0 +1,43 @@
+/// A helper that builds or forwards a signal snapshot can name its type in a
+/// signature, so one shared helper serves every slice at its own value type
+/// (#284). Implements [STAGE-SIGNALS-CACHE].
+
+static effect Signal<T> { read: fn() -> T }
+
+type Count = { value: int }
+
+type Title = { text: string }
+
+fn count() = (perform Signal<Count>.read()).value
+fn title() = (perform Signal<Title>.read()).text
+fn countLabel() = "count=${count()}"
+fn titleLength() = length(title())
+
+/// A never-built snapshot: its unknown dependency makes the first refresh rebuild.
+fn blank<T>(seed) -> SignalSnapshot<T> = { dependencies: ["<unknown>"], revision: 0, value: seed }
+
+/// One refresh of `cached`, whatever its value type.
+fn refreshed<T>(cached, changed, work) -> SignalSnapshot<T> = signalRefresh(cached, changed, work)
+
+fn labels(n, cached) = {
+    handle static Signal<Count> { read => Count { value: n } }
+    refreshed(cached, ["<unknown>"], countLabel)
+}
+
+fn lengths(text, cached) = {
+    handle static Signal<Title> { read => Title { text: text } }
+    refreshed(cached, ["<unknown>"], titleLength)
+}
+
+fn oneHelperServesEveryValueType() = {
+    let label = labels(4, blank(""))
+    let size = lengths("osprey", blank(0))
+    print("${label.value} ${size.value}")
+    checkAll("the annotated helpers keep each slice's type", [
+        label.value == "count=4", label.revision == 1,
+        size.value == 6, size.revision == 1,
+        length(label.dependencies) == 1, length(size.dependencies) == 1
+    ])
+}
+
+test("one helper serves every value type", oneHelperServesEveryValueType)

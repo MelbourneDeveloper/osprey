@@ -58,6 +58,10 @@ struct Lowering {
     /// How many substitutions are currently nested, so a diverging rewrite is
     /// reported rather than overflowing the stack ([`REWRITE_DEPTH_BOUND`]).
     depth: u32,
+    /// Closures the rewrite wraps around a specialization have no source
+    /// position, but inference addresses a lambda by its position. Each gets
+    /// its own synthetic one, on line 0, which no source line occupies.
+    wrappers: u32,
 }
 
 /// Discharge every static handler in `program`.
@@ -82,6 +86,7 @@ pub(crate) fn run(program: &Program) -> Result<Program, Vec<StageError>> {
         regions: 0,
         fuel: REWRITE_BOUND,
         depth: 0,
+        wrappers: 0,
     };
     let mut rewritten = program;
     for statement in &mut rewritten.statements {
@@ -293,8 +298,8 @@ impl Lowering {
             return Some(value);
         }
         let key = specialization_key(name, regions);
-        if let Some(existing) = self.emitted.get(&key) {
-            return self.specialized_reference(name, existing, regions);
+        if let Some(existing) = self.emitted.get(&key).cloned() {
+            return self.specialized_reference(name, &existing, regions);
         }
         let specialized = format!("{name}__stage{}", self.emitted.len().saturating_add(1));
         let _ = self.emitted.insert(key, specialized.clone());
@@ -398,7 +403,7 @@ impl Lowering {
     /// A specialization receives capturing arms as ordinary lexical closures.
     /// Passing their values instead would sever captured mutable cells.
     fn specialized_reference(
-        &self,
+        &mut self,
         original: &str,
         specialized: &str,
         regions: &[Region],
@@ -425,11 +430,15 @@ impl Lowering {
             .map(|param| Expr::Identifier(param.name.clone()))
             .collect();
         arguments.extend(captures);
+        self.wrappers = self.wrappers.saturating_add(1);
         Some(Expr::Lambda {
             parameters: parameters.clone(),
             return_type: None,
             body: Box::new(call(specialized, arguments)),
-            position: None,
+            position: Some(Position {
+                line: 0,
+                column: self.wrappers,
+            }),
         })
     }
 }
