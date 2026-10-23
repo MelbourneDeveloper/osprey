@@ -43,10 +43,25 @@ fn identifier(cg: &mut Codegen, name: &str) -> Result<Callback> {
     {
         return of(cg, &Expr::Identifier(target));
     }
-    Ok(match cg.lambda_def(name).cloned() {
-        Some(definition) => known_lambda(cg, definition, cg.lambda_envs.get(name).cloned()),
-        None => named(cg, name),
-    })
+    if let Some(definition) = cg.lambda_def(name).cloned() {
+        return Ok(known_lambda(
+            cg,
+            definition,
+            cg.lambda_envs.get(name).cloned(),
+        ));
+    }
+    module_global(cg, name).unwrap_or_else(|| Ok(named(cg, name)))
+}
+
+/// A function-valued module global is called through its closure cell: the
+/// name has no emitted symbol of its own, so a named callback would link to
+/// a `declare` no `define` ever produced. Implements
+/// [MODULES-FILE-SCOPE-BINDING], [TYPE-GENERICS-FN].
+fn module_global(cg: &mut Codegen, name: &str) -> Option<Result<Callback>> {
+    let sig = crate::globals::fn_type(cg, name)
+        .as_ref()
+        .and_then(|ty| Codegen::fn_value_sig(&cg.prog, ty))?;
+    crate::globals::read(cg, name).map(|handle| Ok(Callback::Value(handle.operand, sig)))
 }
 
 fn known_lambda(

@@ -14,6 +14,8 @@
 //! inferrer would have derived on its own ([TYPE-ANNOTATION-REDUNDANT]).
 
 mod applications;
+#[cfg(test)]
+mod applications_tests;
 mod arithmetic;
 pub use arithmetic::fold_arithmetic;
 mod builtin_constraints;

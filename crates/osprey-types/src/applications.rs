@@ -13,6 +13,52 @@ use std::collections::{HashMap, HashSet};
 
 type Bindings = HashMap<VarId, Type>;
 
+/// The instantiations every recorded use of a generalized binding AGREES on,
+/// for the variables a published site type still leaves open.
+///
+/// A `let` quantifies its unconstrained variables, so a site type inside its
+/// initializer — a lambda's ABI above all — keeps the quantified variable
+/// while every later use instantiates it fresh. One agreeing, concrete
+/// instantiation across all uses is the ABI the one evaluated value actually
+/// has, so it resolves the variable in the published tables; uses that
+/// disagree leave it open and the backend still rejects the closure loudly.
+/// Implements [TYPE-GENERICS-APPLY] (docs/specs/language/0004-TypeSystem.md).
+pub(crate) fn alias_resolutions(
+    sites: &HashMap<usize, Bindings>,
+    candidates: &HashSet<VarId>,
+    ctx: &mut InferCtx,
+) -> Bindings {
+    let mut agreed: HashMap<VarId, Option<Type>> = HashMap::new();
+    for bindings in sites.values() {
+        record_agreements(bindings, candidates, ctx, &mut agreed);
+    }
+    agreed
+        .into_iter()
+        .filter_map(|(var, ty)| ty.map(|ty| (var, ty)))
+        .collect()
+}
+
+/// Fold one origin's bindings into `agreed`, marking a variable `None` when
+/// a use instantiates it at a different type, or at a type that is itself
+/// still generic: a use inside a generic function is a different type at
+/// each of ITS instantiations, so it can never agree with a concrete one.
+fn record_agreements(
+    bindings: &Bindings,
+    candidates: &HashSet<VarId>,
+    ctx: &mut InferCtx,
+    agreed: &mut HashMap<VarId, Option<Type>>,
+) {
+    for (var, ty) in bindings {
+        if candidates.contains(var) {
+            let ty = Some(ctx.apply(ty)).filter(|ty| !crate::has_type_var(ty));
+            let candidate = agreed.entry(*var).or_insert_with(|| ty.clone());
+            if *candidate != ty {
+                *candidate = None;
+            }
+        }
+    }
+}
+
 /// Every origin binding, filed under each variable its type mentions. Growing
 /// a site's bindings can only rewrite the origin bindings that mention one of
 /// them, so composing through this index visits those alone instead of every

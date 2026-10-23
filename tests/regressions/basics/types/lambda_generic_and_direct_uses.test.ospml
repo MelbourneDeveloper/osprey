@@ -1,0 +1,17 @@
+(** One `let`-bound lambda used directly at `bool` and through the generic
+    `firstOf` at `string` and `int`. A use inside a generic function is a
+    different type at each of that function's instantiations, so it never
+    pins the shared lambda to one caller's type; each use keeps its own
+    ([TYPE-GENERICS-APPLY]). Pinning it to `bool` miscompiled the other two. *)
+
+boxIt = \x => [x, x]
+firstOf v = listGet (boxIt v) 0
+
+mixedUses () =
+    text = firstOf "text" ?: "none"
+    number = firstOf 7 ?: 0
+    flags = listLength (boxIt true)
+    print "${text} ${toString number} ${toString flags}"
+    checkAll "each use keeps its own type" [text == "text", number == 7, flags == 2]
+
+test "a lambda used directly and through a generic function keeps each type" mixedUses

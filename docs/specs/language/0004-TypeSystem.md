@@ -220,6 +220,16 @@ parameters: `let xs: List<int> = empty()` fixes `T` for
 `fn empty<T>() -> List<T> = []`. Explicit type arguments are the only spelling
 that can pin a phantom binder absent from both parameter and result types.
 
+A `let`-generalized variable carries its resolution to the published site
+types: a closure inside the initializer keeps the binding's quantified
+variable while inference runs, and the one instantiation every later use of
+the binding agrees on settles it — so a lambda handed to a generic function
+still lowers at the ABI its only consuming use pinned, even when that use
+appears after the binding. Uses that disagree leave the variable open, and
+so does a use inside a generic function, which is a different type at each of
+that function's instantiations: the closure is then specialised per use, or
+rejected as still generic, never pinned to one caller's type.
+
 ```osprey
 fn identity<T>(x: T) -> T = x
 fn pick<T, U>(first: T, second: U) -> T = first

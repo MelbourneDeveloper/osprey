@@ -1,0 +1,62 @@
+// A closure passed to a generic higher-order function keeps the concrete
+// instantiation its result's only use later pins: `rows (entries, Navigate, _)`
+// settles the let-generalized `entries` long after the lambda was inferred,
+// and the lambda's published site type must carry that resolution or codegen
+// rejects the closure as "still generic" even though `--check` accepted the
+// program. The `static` handler additionally stages `stagedSidebar` into a
+// `__stage` copy — the shape Vigil's Sidebar first failed in.
+// Implements [TYPE-GENERICS-APPLY], [TYPE-GENERICS-FN], [STAGE-POLY].
+
+static effect Signal T
+    read : Unit => T
+
+type Action = Navigate
+
+type Node A =
+    Text
+        content : string
+
+type Row A =
+    rowKey : string
+    cell : Node<A>
+
+module Lists
+    step (out, items, f, index) = match listGet items index
+        Success item => listAppend out (f item)
+        Error _ => out
+
+    export mapOver<T, U> : (List<T>, (T) -> U) -> List<U>
+    mapOver (items, f) = range (0, length items) |> fold [] (\(out, index) => step (out, items, f, index))
+
+label<A> : string -> Node<A>
+label text = Text(content = text)
+
+entry<A> : (string, Node<A>) -> Row<A>
+entry (key, cell) = Row(rowKey = key, cell = cell)
+
+rows<A> : (List<Row<A>>, A, int) -> Node<A>
+rows (entries, picked, extra) = match picked
+    Navigate => Text(content = "${length entries}:${extra}")
+
+type Found =
+    warnings : int
+
+plainSidebar () =
+    entries = Lists::mapOver (["startup", "files"], \key => entry (key, label key))
+    rows (entries, Navigate, 7)
+
+stagedSidebar () =
+    found = perform Signal<Found>.read ()
+    entries = Lists::mapOver (["startup", "files"], \key => entry (key, label key))
+    rows (entries, Navigate, found.warnings)
+
+plainCase () = match plainSidebar ()
+    Text content => content
+
+stagedCase () =
+    handle static Signal<Found>
+        read => Found(warnings = 2)
+    match stagedSidebar ()
+        Text content => content
+
+test "a let-aliased closure keeps its pinned instantiation" (\() => checkAll "sidebars" [plainCase () == "2:7", stagedCase () == "2:2"])

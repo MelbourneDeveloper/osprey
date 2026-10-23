@@ -1,0 +1,4 @@
+text 7 2
+ok 1 - a lambda used directly and through a generic function keeps each type
+1..1
+# tests=1 passed=1 failed=0 skipped=0
