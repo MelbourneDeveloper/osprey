@@ -1,7 +1,8 @@
 /// A generic function forwarding one of its callable parameters to another
 /// generic function calls the callable it was given, under any parameter
-/// name, through any depth, and inside a staged function (#280).
-/// Implements [TYPE-GENERICS-FN].
+/// name, through any depth, and inside a staged function (#280). A built-in
+/// passed by name is a callback like any other, whatever its lowering.
+/// Implements [TYPE-GENERICS-FN] and [BUILTIN-ITER-CALLBACK].
 
 static effect Signal<T> { read: fn() -> T }
 
@@ -45,5 +46,17 @@ fn forwardedIntoStagedRender() = {
     checkAll("a staged render receives the decoded store", [rendered == "list:abc"])
 }
 
+fn builtinsByName() = {
+    let words = [" beta ", "alpha"]
+    let trimmed = mapList(words, trim)
+    checkAll("a built-in named as a callback is called", [
+        join(trimmed, ",") == "beta,alpha",
+        join(mapList(trimmed, toUpperCase), ",") == "BETA,ALPHA",
+        join(mapList(mapList(trimmed, length), toString), ",") == "4,5",
+        join(range(0, 2) |> map(toString) |> map(toUpperCase) |> toList, ",") == "0,1"
+    ])
+}
+
 test("forwarded by any name", forwardedByAnyName)
 test("forwarded into a staged render", forwardedIntoStagedRender)
+test("a built-in passed by name", builtinsByName)

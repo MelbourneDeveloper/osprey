@@ -1,5 +1,5 @@
 //! Preserve application types and lexical bindings when selecting callbacks.
-use super::{Callback, Codegen, CodegenError, Expr, Result};
+use super::{Callback, Codegen, CodegenError, Expr, Parameter, Result};
 use crate::expr::gen_expr;
 
 /// Resolve known local bodies; computed and module-stored values retain cells.
@@ -90,8 +90,39 @@ fn named(cg: &Codegen, name: &str) -> Callback {
             None,
             None,
         ),
-        None => Callback::Named(name.to_string()),
+        None => eta_builtin(cg, name).unwrap_or_else(|| Callback::Named(name.to_string())),
     }
+}
+
+/// A builtin with no value form has no emitted symbol either, so naming it as
+/// a callback lowers it as `fn(a) => builtin(a)` would: an ordinary builtin
+/// call per element. `None` for every other name.
+fn eta_builtin(cg: &Codegen, name: &str) -> Option<Callback> {
+    if crate::builtin_values::shadowed(cg, name)
+        || cg.extern_params.contains_key(name)
+        || crate::expr::has_value_form(name)
+    {
+        return None;
+    }
+    let osprey_types::Type::Fun { params, .. } = osprey_types::builtin_function_type(name)? else {
+        return None;
+    };
+    let parameters: Vec<Parameter> = (0..params.len())
+        .map(|index| Parameter {
+            name: format!("{name}$argument{index}"),
+            ty: None,
+            inline_constraint: false,
+        })
+        .collect();
+    let body = Expr::Call {
+        function: Box::new(Expr::Identifier(name.to_string())),
+        arguments: parameters
+            .iter()
+            .map(|p| Expr::Identifier(p.name.clone()))
+            .collect(),
+        named_arguments: Vec::new(),
+    };
+    Some(Callback::Lambda(parameters, body, None, None))
 }
 
 fn file_lambda(cg: &Codegen, expr: &Expr) -> bool {
