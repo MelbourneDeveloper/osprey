@@ -13,7 +13,7 @@ import { delay } from "@nimblesite/lsp-profiler-ui/out/src/timeouts";
 import { appliedProfileDecorations, clearProfileDecorations, type ProfileResult } from "@nimblesite/lsp-profiler-ui/out/src/profiler-decorations";
 import { buildFlamegraphHtml, disposeFlamegraphPanel, flamegraphPanelOpen } from "@nimblesite/lsp-profiler-ui/out/src/profiler-flamegraph-html";
 import { assertHardened, assertHtml, pollUntilResult } from "@nimblesite/lsp-profiler-ui/out/src/testing/webview-contract-helpers";
-import { processesViewState, profilerStatusText, recordedOperations } from "@nimblesite/lsp-profiler-ui";
+import { memoryStatusText, processesViewState, profilerStatusText, recordedOperations } from "@nimblesite/lsp-profiler-ui";
 import type { ProfileReport } from "@nimblesite/lsp-profiler-ui/out/src/wire-generated";
 import { OSPREY_PALETTE } from "../../client/src/profiler/palette";
 import { resolveRequiredLldbDap } from "./osprey-test-env";
@@ -115,6 +115,7 @@ suite("CPU profiling — debug-launched end-to-end", () => {
     const opsBefore = recordedOperations().length;
     await runAndProfileCurrentFile();
     assert.ok(profilerStatusText() !== undefined, "the status bar shows the live profile");
+    assert.equal(memoryStatusText(), undefined, "an Osprey debug session never offers memory tracking it has no backend for");
     assert.ok(processesViewState().message?.includes("Profiling PID") === true, `the panel shows the live profile: ${String(processesViewState().message)}`);
     await delay(SAMPLE_WINDOW_MS);
     await vscode.commands.executeCommand(uiCommand("profileStop"));
