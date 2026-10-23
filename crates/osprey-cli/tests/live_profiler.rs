@@ -58,7 +58,12 @@ impl Recorder {
         let sent = self.0.lock().map(|sent| sent.clone()).unwrap_or_default();
         sent.iter()
             .filter(|(method, _)| *method == methods::CPU_PROGRESS)
-            .filter_map(|(_, params)| params.get("top_function").and_then(Value::as_str).map(str::to_owned))
+            .filter_map(|(_, params)| {
+                params
+                    .get("top_function")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            })
             .collect()
     }
 }
@@ -344,11 +349,18 @@ async fn live_progress_names_where_the_time_is_spent_not_the_entry_point() {
             .unwrap_or(0)
     };
     assert!(!tops.is_empty(), "progress is sent while recording");
-    assert!(!tops.iter().any(|top| top == "main"), "the entry point is never the hottest: {tops:?} {report}");
+    assert!(
+        !tops.iter().any(|top| top == "main"),
+        "the entry point is never the hottest: {tops:?} {report}"
+    );
     assert!(
         tops.iter().all(|top| self_samples(top) > 0),
         "every live top spends time of its own: {tops:?} {report}"
     );
-    assert_eq!(tops.last().map(String::as_str), Some(HOT_FUNCTION), "the fixture's time is spent in spin: {report}");
+    assert_eq!(
+        tops.last().map(String::as_str),
+        Some(HOT_FUNCTION),
+        "the fixture's time is spent in spin: {report}"
+    );
     service.shutdown().await;
 }

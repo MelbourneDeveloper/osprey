@@ -17,7 +17,9 @@ fn main() {
 }
 
 fn stamped(variable: &str) -> Option<String> {
-    std::env::var(variable).ok().filter(|value| !value.trim().is_empty())
+    std::env::var(variable)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
 }
 
 /// The checkout's HEAD, marked as a working-tree build.
@@ -31,7 +33,10 @@ fn worktree_head() -> Option<String> {
     if !output.status.success() || head.is_empty() {
         return None;
     }
-    if let Ok(git_head) = Command::new("git").args(["rev-parse", "--git-path", "HEAD"]).output() {
+    if let Ok(git_head) = Command::new("git")
+        .args(["rev-parse", "--git-path", "HEAD"])
+        .output()
+    {
         let path = String::from_utf8_lossy(&git_head.stdout).trim().to_owned();
         println!("cargo:rerun-if-changed={path}");
     }
