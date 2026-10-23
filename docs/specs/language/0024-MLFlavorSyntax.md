@@ -280,6 +280,43 @@ relay x =
 
 An operation modifier is a modifier only when an operation name follows it: `abort : string => Unit` names an operation `abort`. Elsewhere, words retain their grammatical role: `send`, `recv` and `select` introduce channel forms, and `handler` introduces a callable handler.
 
+`[FLAVOR-ML-EFFECT-SCOPE]` The ML forms of [EFFECTS-FINALIZATION], [EFFECTS-MASK]
+and [EFFECTS-INSTANCE](0017-AlgebraicEffects.md#scope-composition-and-instances)
+use layout. A handler takes at most one `finally => cleanup` clause beside its
+arms, with no parameter. `mask E` takes an indented body. `instance E` is an
+expression.
+
+```osprey-ml
+effect Log
+    write : string => Unit
+
+answer =
+    handle Log
+        write m => print "outer ${m}"
+        finally => print "closed"
+    handle Log
+        write m => print "inner ${m}"
+    mask Log
+        perform Log.write "skipped"
+```
+
+This prints `outer skipped`, then `closed`. A capability answers only its own
+handlers; the next example prints `audit a`, then `default b`:
+
+```osprey-ml
+effect Log
+    write : string => Unit
+
+audit = instance Log
+answer =
+    handle Log
+        write m => print "default ${m}"
+    handle audit
+        write m => print "audit ${m}"
+    perform audit.write "a"
+    perform Log.write "b"
+```
+
 `[FLAVOR-ML-EFFECT-ANNOTATIONS]` ML uses the shared operation modifiers from [Algebraic Effects](0017-AlgebraicEffects.md). `static` precedes `effect`; operation modifiers precede the operation name. Layout and the `=>` payload arrow are unchanged.
 
 ```osprey-ml

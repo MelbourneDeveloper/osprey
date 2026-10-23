@@ -116,6 +116,10 @@ instanceExpr ::= "instance" effectRef
 handlerTarget ::= effectRef | capabilityName
 handlerValue ::= "handler" [ "static" ] handlerTarget "{" clauses "}"
 maskExpr ::= "mask" handlerTarget "{" expr "}"
+clauses ::= { handlerArm } [ returnClause ] { handlerArm } [ finallyClause ] { handlerArm }
+          | { handlerArm } finallyClause { handlerArm } [ returnClause ] { handlerArm }
+returnClause ::= "return" identifier "=>" expr
+finallyClause ::= "finally" "=>" expr
 ```
 
 Here `capabilityName` resolves to an ordinary bound instance value; effect names resolve to declarations. ML replaces braces with layout. `instance` accepts a declaration/instantiation, not an existing `@capability` row reference. Block-scoped `handle` uses the same target and clauses as `handler`.
@@ -130,12 +134,32 @@ parameter binds the corresponding row identity; unrelated instances never unify.
 A fresh identity can escape only with its lifetime/requirements preserved, never
 as a claim that its future operations have already been handled.
 
+The compiler fixes each capability's identity at its `instance` site: the type
+is `Capability<E, #line:col>`, so two `instance` expressions never unify, even
+of the same effect. A capability name in `perform`, `handle`, `handler` or
+`mask` resolves lexically to a binding before any effect declaration. The
+static effect proof tracks each capability as its own requirement (rendered
+`Store@3:15.get` in diagnostics), and an unhandled capability operation is an
+ordinary unhandled-effect error. An effect form that names a binding whose type
+is not a capability is rejected. A compile-time handler (`handle static`) cannot
+answer a capability, because a capability is a runtime identity. At runtime each
+`instance` draws a fresh identity and the default identity is `0`. A handler
+answers only requests carrying its own identity.
+
 `[EFFECTS-MASK]` Default `mask E { body }` and ML `mask E` with an indented body
 skip one enclosing activation for that resolved effect instance while evaluating
 `body`. Masking a named capability uses `mask db`. It skips that activation's
 arms, preserves other effects and any handlers installed inside `body`, and
 requires the skipped outer scope in the row. Nested masks skip successive
 activations. It neither removes the requirement nor grants an implementation.
+
+The static proof counts the masks a request is under. A request under `n` masks
+of its effect instance is discharged by the `n+1`th enclosing activation that
+answers its operation. Nesting depth and handler counts saturate at a fixed
+bound, and a saturated request is never discharged, so the proof stays sound. A
+`mask` that would skip into a compile-time handler of the same effect is
+rejected: discharge removes that activation before the program runs, so there is
+nothing to skip.
 
 <a id="effectful-function-types"></a>
 <a id="effect-row-polymorphism-effects-row-poly"></a>
@@ -285,6 +309,12 @@ an affine resource or copy a finalizer's authority to release a shared resource.
 Nested finalizers execute inner to outer. A finalizer that itself transfers
 control must still unwind the remaining outer finalizers; already-run cleanup
 is never repeated.
+
+Runtime handlers register their cleanup on a per-thread finalizer stack before
+the activation starts. Normal completion runs the top entry after the return
+clause. A dropped continuation unwinds the stack inner to outer as its body
+thread exits. Each entry runs once either way. A compile-time handler's cleanup
+is discharged into the program as `let answer = body; cleanup; answer`.
 
 ## Runtime transport obligations
 
