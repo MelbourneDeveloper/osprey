@@ -339,6 +339,7 @@ fn every_container_with_a_nested_let() -> Vec<Expr> {
             }],
             body: b("handlerbody"),
             return_clause: None,
+            finally: None,
             position: None,
         },
     ]

@@ -217,6 +217,15 @@ void __osprey_coro_start(void *raw, int64_t (*body)(void *), void *body_env,
     pthread_mutex_unlock(&coro->lock);
 }
 
+// The dropped continuation still owns its activations: finalize them inner to
+// outer on this body thread, then end it. A finalizer that performs into the
+// aborting region re-enters here and continues with the ones still pending.
+// Implements [MULTI-COST-ABORT] and [EFFECTS-FINALIZATION].
+static void abandon_body(void) {
+    __osprey_finalizer_unwind();
+    pthread_exit(NULL);
+}
+
 int64_t __osprey_coro_suspend(void *raw, int64_t op_id, const int64_t *args, const uint8_t *kinds,
                               int64_t arg_count) {
     OspreyCoro *coro = (OspreyCoro *)raw;
@@ -242,7 +251,7 @@ int64_t __osprey_coro_suspend(void *raw, int64_t op_id, const int64_t *args, con
         // nothing downstream will ever release these operands. Done outside the
         // lock — the memory backend must not be entered holding it.
         release_operands(args, kinds, arg_count);
-        pthread_exit(NULL);
+        abandon_body();
     }
     coro->in_flight = true;
     coro->mail = mailbox_new(op_id, args, kinds, arg_count);
@@ -258,7 +267,7 @@ int64_t __osprey_coro_suspend(void *raw, int64_t op_id, const int64_t *args, con
         // retires it with __osprey_coro_mail_free, or it is still in
         // `coro->mail` and __osprey_coro_free retires it. Releasing again would
         // be a double free, not a leak fix.
-        pthread_exit(NULL);
+        abandon_body();
     }
     int64_t resume_value = coro->resume_value;
     coro->in_flight = false;

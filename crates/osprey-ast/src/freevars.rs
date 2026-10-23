@@ -66,13 +66,14 @@ fn walk(e: &Expr, bound: &mut Vec<String>, out: &mut BTreeSet<String>) {
             arms,
             body,
             return_clause,
+            finally,
             ..
         } => {
             for arm in arms {
                 scoped(bound, arm.params.clone(), out, |b, o| walk(&arm.body, b, o));
             }
             walk(body, bound, out);
-            if let Some(clause) = return_clause {
+            for clause in return_clause.iter().chain(finally) {
                 walk(clause, bound, out);
             }
         }

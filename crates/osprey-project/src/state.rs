@@ -314,10 +314,11 @@ impl<'a> Inspector<'a> {
                 arms,
                 body,
                 return_clause,
+                finally,
                 position: handler_position,
             } => {
                 self.handler(effect, arms, body, *handler_position);
-                if let Some(clause) = return_clause {
+                for clause in return_clause.iter().chain(finally) {
                     self.expr(clause, false, *handler_position);
                 }
             }

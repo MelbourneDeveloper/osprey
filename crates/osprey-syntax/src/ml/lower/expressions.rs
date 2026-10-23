@@ -2,8 +2,8 @@
 use super::{
     curry_position, flat_params, in_scope, is_bound, lower_interpolation, lower_items,
     lower_lambda, params_scope, positional_construction, render_type, scope_of, type_expr, unquote,
-    Expr, FieldAssignment, HandlerArm, MapEntry, MatchArm, MlArm, MlExpr, MlField, MlHandleArm,
-    MlItem, MlParam, MlPattern, MlType, Pattern, Position, SymbolPath, TypeExpr,
+    Expr, FieldAssignment, HandlerArm, MapEntry, MatchArm, MlArm, MlClauses, MlExpr, MlField,
+    MlHandleArm, MlItem, MlParam, MlPattern, MlType, Pattern, Position, SymbolPath, TypeExpr,
 };
 
 /// Lower one CST expression to a canonical [`Expr`].
@@ -93,17 +93,17 @@ pub(in crate::ml) fn lower_expr(expr: MlExpr) -> Expr {
             stage,
             effect,
             arms,
-            return_clause,
+            clauses,
             pos,
-        } => lower_handler(stage, effect, arms, return_clause, None, pos),
+        } => lower_handler(stage, effect, arms, clauses, None, pos),
         MlExpr::Handle {
             stage,
             effect,
             arms,
-            return_clause,
+            clauses,
             body,
             pos,
-        } => lower_handler(stage, effect, arms, return_clause, Some(*body), pos),
+        } => lower_handler(stage, effect, arms, clauses, Some(*body), pos),
         MlExpr::Resume(value) => Expr::Resume(value.map(|e| Box::new(lower_expr(*e)))),
         MlExpr::Await(inner) => Expr::Await(Box::new(lower_expr(*inner))),
         MlExpr::Yield(value) => Expr::Yield(value.map(|e| Box::new(lower_expr(*e)))),
@@ -122,22 +122,27 @@ pub(in crate::ml) fn lower_handler(
     stage: osprey_ast::Stage,
     effect: String,
     arms: Vec<MlHandleArm>,
-    return_clause: Option<Box<MlExpr>>,
+    clauses: MlClauses,
     body: Option<MlExpr>,
     pos: Position,
 ) -> Expr {
     let arms = arms.into_iter().map(lower_handle_arm).collect();
-    let return_clause = return_clause.map(|clause| Box::new(lower_expr(*clause)));
+    let lower_clause = |clause: Box<MlExpr>| Box::new(lower_expr(*clause));
+    let clauses = osprey_ast::Clauses {
+        return_clause: clauses.return_clause.map(lower_clause),
+        finally: clauses.finally.map(lower_clause),
+    };
     match body {
         Some(body) => Expr::Handler {
             stage,
             effect,
             arms,
-            return_clause,
+            return_clause: clauses.return_clause,
+            finally: clauses.finally,
             body: Box::new(lower_expr(body)),
             position: Some(pos),
         },
-        None => osprey_ast::handler_value(stage, effect, arms, return_clause, Some(pos)),
+        None => osprey_ast::handler_value(stage, effect, arms, clauses, Some(pos)),
     }
 }
 

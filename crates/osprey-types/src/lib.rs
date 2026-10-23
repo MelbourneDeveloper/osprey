@@ -60,6 +60,7 @@ mod generics_variance_builtin_tests;
 mod generics_variance_shape_tests;
 #[cfg(test)]
 mod generics_variance_tests;
+mod handler_scope;
 mod info;
 mod init_order;
 mod methods;

@@ -131,13 +131,14 @@ fn effect_children_mut(expression: &mut Expr, visit: &mut impl FnMut(&mut Expr))
             arms,
             body,
             return_clause,
+            finally,
             ..
         } => {
             for arm in &mut *arms {
                 visit(&mut arm.body);
             }
             visit(body);
-            if let Some(clause) = return_clause {
+            for clause in return_clause.iter_mut().chain(finally.iter_mut()) {
                 visit(clause);
             }
         }

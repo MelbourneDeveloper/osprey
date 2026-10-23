@@ -268,6 +268,7 @@ fn scan_body(
             arms,
             body,
             return_clause,
+            finally,
             stage: selected,
             ..
         } => {
@@ -284,7 +285,7 @@ fn scan_body(
             }
             scan_body(body, scan, handled, facts);
             handled.truncate(depth);
-            if let Some(clause) = return_clause {
+            for clause in return_clause.iter_mut().chain(finally.iter_mut()) {
                 scan_body(clause, scan, handled, facts);
             }
         }

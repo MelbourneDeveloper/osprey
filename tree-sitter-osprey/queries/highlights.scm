@@ -18,7 +18,7 @@
 [
   "let" "mut" "fn" "extern" "type" "module" "import"
   "namespace" "signature" "export" "opaque" "state" "as" "extra"
-  "effect" "perform" "handle" "handler" "return" "in"
+  "effect" "perform" "handle" "handler" "return" "finally" "in"
   "match" "select" "where" "if" "else"
 ] @keyword
 

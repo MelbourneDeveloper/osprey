@@ -174,10 +174,15 @@ fn expression_children<'a>(expression: &'a Expr, visit: &mut impl FnMut(AstNode<
             arms,
             body,
             return_clause,
+            finally,
             ..
         } => {
             visit_each(arms, visit, |arm| &arm.body);
-            for child in std::iter::once(body.as_ref()).chain(return_clause.as_deref()) {
+            let clauses = return_clause
+                .as_deref()
+                .into_iter()
+                .chain(finally.as_deref());
+            for child in std::iter::once(body.as_ref()).chain(clauses) {
                 visit(AstNode::Expression(child));
             }
         }

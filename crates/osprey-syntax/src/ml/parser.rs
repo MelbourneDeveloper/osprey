@@ -48,9 +48,9 @@ mod patterns;
 mod types;
 
 use super::cst::{
-    MlArm, MlBinder, MlEffectOp, MlEffectRef, MlExpr, MlExternParam, MlField, MlHandleArm, MlItem,
-    MlModuleKind, MlParam, MlPattern, MlSymbolPath, MlType, MlTypeField, MlTypeParam, MlVariance,
-    MlVariant,
+    MlArm, MlBinder, MlClauses, MlEffectOp, MlEffectRef, MlExpr, MlExternParam, MlField,
+    MlHandleArm, MlItem, MlModuleKind, MlParam, MlPattern, MlSymbolPath, MlType, MlTypeField,
+    MlTypeParam, MlVariance, MlVariant,
 };
 use super::lexer::lex;
 use super::token::{keyword_spelling, TokKind, Token};
@@ -289,7 +289,7 @@ struct HandleHead {
     stage: Stage,
     effect: String,
     arms: Vec<MlHandleArm>,
-    return_clause: Option<Box<MlExpr>>,
+    clauses: MlClauses,
     pos: Position,
 }
 
@@ -299,7 +299,7 @@ impl HandleHead {
             stage: self.stage,
             effect: self.effect,
             arms: self.arms,
-            return_clause: self.return_clause,
+            clauses: self.clauses,
             body: Box::new(body),
             pos: self.pos,
         }

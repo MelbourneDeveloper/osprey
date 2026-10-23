@@ -114,6 +114,7 @@ impl Analyzer<'_> {
                 arms,
                 body,
                 return_clause,
+                finally,
                 ..
             } => {
                 for arm in arms {
@@ -124,6 +125,9 @@ impl Analyzer<'_> {
                     if let Expr::Lambda { body, .. } = clause.as_ref() {
                         self.flow_callable_assignments(body, scope, env);
                     }
+                }
+                if let Some(cleanup) = finally {
+                    self.flow_callable_assignments(cleanup, scope, env);
                 }
             }
             Expr::Send { channel, value } => {

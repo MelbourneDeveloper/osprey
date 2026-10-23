@@ -31,6 +31,12 @@ HandlerScope *__osprey_handler_suspend_scope(int operation_id);
 void __osprey_handler_restore_scope(HandlerScope *scope);
 void __osprey_handler_stack_cleanup(void);
 
+// `finally` clauses [EFFECTS-FINALIZATION]: a cleanup function consumes its env.
+typedef void (*OspFinalizer)(void *env);
+void __osprey_finalizer_push(OspFinalizer run, void *env);
+void __osprey_finalizer_finish(void);
+void __osprey_finalizer_unwind(void);
+
 // Operand kinds in an operation mailbox. A MANAGED slot holds a heap pointer
 // the mailbox OWNS — the performer hands over its +1 at suspend and retiring
 // the mailbox releases it. A SCALAR slot is a bare machine word nobody owns.

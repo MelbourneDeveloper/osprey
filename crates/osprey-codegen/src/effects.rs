@@ -22,9 +22,12 @@ use std::collections::{BTreeSet, HashSet};
 mod captures;
 mod control;
 mod drive;
+mod finally;
 mod requests;
 mod return_clause;
-use captures::{build_env, capture_list, capture_list_resuming, reload_env, ArmCap};
+use captures::{
+    build_env, caps_from_names, capture_list, capture_list_resuming, reload_env, ArmCap,
+};
 pub(crate) use captures::{captured_mut_vars, captured_mut_vars_in_stmts};
 pub(crate) use control::gen_resume;
 use control::{gen_resuming_handler, AnswerShape, DriveArm};
@@ -261,10 +264,29 @@ fn declare_coro(cg: &mut Codegen) {
     cg.add_extern("declare i8* @__osprey_handler_snapshot()");
 }
 
+/// Install a handler activation, finalized by its `finally` clause when it has
+/// one ([EFFECTS-FINALIZATION]).
+pub(crate) fn gen_handler(
+    cg: &mut Codegen,
+    effect: &str,
+    arms: &[HandlerArm],
+    body: &Expr,
+    clauses: [Option<&Expr>; 2],
+    position: Option<osprey_ast::Position>,
+) -> Result<Value> {
+    let [return_clause, cleanup] = clauses;
+    let activation =
+        |cg: &mut Codegen| gen_activation(cg, effect, arms, body, return_clause, position);
+    match cleanup {
+        Some(cleanup) => finally::guarded(cg, cleanup, position, activation),
+        None => activation(cg),
+    }
+}
+
 /// Install a handler activation: capture its environment (the cells
 /// and values its arms reference), emit a handler function per arm bound to that
 /// env, push them on the runtime stack for the duration of `body`, then pop.
-pub(crate) fn gen_handler(
+fn gen_activation(
     cg: &mut Codegen,
     effect: &str,
     arms: &[HandlerArm],

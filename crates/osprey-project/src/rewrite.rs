@@ -408,11 +408,12 @@ impl Resolver<'_> {
                 arms,
                 body,
                 return_clause,
+                finally,
                 ..
             } => {
                 self.rewrite_effect_name(effect, context, locals);
                 self.rewrite_expr(body, context, locals);
-                if let Some(clause) = return_clause {
+                for clause in return_clause.iter_mut().chain(finally.iter_mut()) {
                     self.rewrite_expr(clause, context, locals);
                 }
                 for arm in arms {

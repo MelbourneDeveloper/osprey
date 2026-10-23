@@ -106,13 +106,14 @@ fn collect_expr(expr: &Expr, lines: &mut BTreeSet<u32>) {
             arms,
             body,
             return_clause,
+            finally,
             ..
         } => {
             for arm in arms {
                 collect_expr(&arm.body, lines);
             }
             collect_expr(body, lines);
-            if let Some(clause) = return_clause {
+            for clause in return_clause.iter().chain(finally) {
                 collect_expr(clause, lines);
             }
         }

@@ -169,8 +169,8 @@ pub(crate) enum MlExpr {
         effect: String,
         /// Per-operation handler arms.
         arms: Vec<MlHandleArm>,
-        /// Normal-completion transformation as a unary lambda.
-        return_clause: Option<Box<MlExpr>>,
+        /// The `return` and `finally` clauses.
+        clauses: MlClauses,
         /// Source position of the `handler` keyword.
         pos: Position,
     },
@@ -184,8 +184,8 @@ pub(crate) enum MlExpr {
         effect: String,
         /// The per-operation handler arms.
         arms: Vec<MlHandleArm>,
-        /// Normal-completion transformation as a unary lambda.
-        return_clause: Option<Box<MlExpr>>,
+        /// The `return` and `finally` clauses.
+        clauses: MlClauses,
         /// The handled body expression (after `in`).
         body: Box<MlExpr>,
         /// Source position of the `handle` keyword
@@ -211,6 +211,16 @@ pub(crate) enum MlExpr {
     /// `select` + indented `pattern => body` arms — choose among ready channel
     /// arms ([FLAVOR-ML-CONCURRENCY]).
     Select(Vec<MlArm>),
+}
+
+/// A handler's completion clauses: `return x => …` as a unary lambda and
+/// `finally => …` as the cleanup expression ([EFFECTS-FINALIZATION]).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub(crate) struct MlClauses {
+    /// Normal-completion transformation as a unary lambda.
+    pub return_clause: Option<Box<MlExpr>>,
+    /// Cleanup run once when the activation ends.
+    pub finally: Option<Box<MlExpr>>,
 }
 
 /// One `op param* => body` arm of a `handle` expression ([FLAVOR-ML-EFFECT]).

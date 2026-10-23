@@ -233,6 +233,7 @@ fn walk_value(
             arms,
             body,
             return_clause,
+            finally,
             position,
             ..
         } => {
@@ -241,7 +242,7 @@ fn walk_value(
                 walk_value(&arm.body, pos, None, out);
             }
             walk_value(body, pos, None, out);
-            if let Some(clause) = return_clause {
+            for clause in return_clause.iter().chain(finally) {
                 walk_value(clause, pos, None, out);
             }
         }

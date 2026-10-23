@@ -271,6 +271,8 @@ impl Analyzer<'_> {
                 arms,
                 body,
                 return_clause,
+                // Cleanup returns `Unit`; it never contributes the answer.
+                finally: _,
                 position,
                 stage,
             } => {

@@ -167,6 +167,7 @@ impl Lowering {
             arms,
             body,
             return_clause,
+            finally,
             ..
         } = expression
         else {
@@ -175,7 +176,7 @@ impl Lowering {
         for arm in arms.iter_mut() {
             self.rewrite(&mut arm.body, regions);
         }
-        if let Some(clause) = return_clause {
+        for clause in return_clause.iter_mut().chain(finally.iter_mut()) {
             self.rewrite(clause, regions);
         }
         let mut visible = shadowed_regions(regions, effect, arms);
@@ -190,11 +191,13 @@ impl Lowering {
             arms,
             body,
             return_clause,
+            finally,
             ..
         } = expression
         else {
             return;
         };
+        let cleanup = finally.take();
         self.regions = self.regions.saturating_add(1);
         let mut selected_arms = arms.clone();
         for arm in &mut selected_arms {
@@ -218,7 +221,7 @@ impl Lowering {
         regions.push(region);
         self.rewrite(&mut discharged, regions);
         let _ = regions.pop();
-        *expression = if let Some(mut clause) = return_clause.take() {
+        let answered = if let Some(mut clause) = return_clause.take() {
             self.rewrite(&mut clause, regions);
             Expr::Call {
                 function: clause,
@@ -227,6 +230,13 @@ impl Lowering {
             }
         } else {
             discharged
+        };
+        *expression = match cleanup {
+            Some(mut cleanup) => {
+                self.rewrite(&mut cleanup, regions);
+                crate::handler_value::finalized(answered, *cleanup)
+            }
+            None => answered,
         };
     }
 

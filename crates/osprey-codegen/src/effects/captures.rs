@@ -58,9 +58,13 @@ pub(crate) fn captured_mut_vars_in_stmts(stmts: &[&Stmt]) -> HashSet<String> {
 // other AST passes so new expression variants have one traversal table.
 pub(super) fn scan_expr(e: &Expr, muts: &mut BTreeSet<String>, captured: &mut BTreeSet<String>) {
     match e {
-        Expr::Handler { arms, .. } => {
+        Expr::Handler { arms, finally, .. } => {
             for arm in arms {
                 captured.extend(arm_free_idents(arm));
+            }
+            // A `finally` clause is its own function: what it names is captured.
+            if let Some(cleanup) = finally {
+                free_idents(cleanup, captured);
             }
         }
         Expr::Lambda {

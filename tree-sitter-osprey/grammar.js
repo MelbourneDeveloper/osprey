@@ -459,8 +459,17 @@ module.exports = grammar({
     // handler serves many regions. Implements [EFFECTS-HANDLER-VALUE].
     handler_value_expression: ($) =>
       prec.right(seq('handler', optional(field('stage', $.static_stage)), field('effect', choice($.qualified_path, $.identifier)), optional(field('instantiation', $.type_arguments)), '{', $._handler_clauses, '}')),
-    _handler_clauses: ($) => choice(repeat1($.handler_arm), seq(repeat($.handler_arm), $.handler_return, repeat($.handler_arm))),
+    // Arms plus at most one `return` clause and at most one `finally` clause,
+    // in any order. Implements [EFFECTS-HANDLER-ARMS], [EFFECTS-FINALIZATION].
+    _handler_clauses: ($) =>
+      choice(
+        repeat1($.handler_arm),
+        seq(repeat($.handler_arm), $.handler_return, repeat($.handler_arm), optional(seq($.handler_finally, repeat($.handler_arm)))),
+        seq(repeat($.handler_arm), $.handler_finally, repeat($.handler_arm), optional(seq($.handler_return, repeat($.handler_arm)))),
+      ),
     handler_return: ($) => seq('return', field('parameter', $.identifier), '=>', field('body', $.expression)),
+    // `finally => cleanup` runs once when the activation ends.
+    handler_finally: ($) => seq('finally', '=>', field('body', $.expression)),
     handler_arm: ($) =>
       seq(field('operation', $.identifier), optional($.handler_params), '=>', field('body', $.expression)),
     handler_params: ($) => repeat1($.identifier),

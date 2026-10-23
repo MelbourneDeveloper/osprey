@@ -64,7 +64,7 @@ impl Lowerer<'_> {
                 self.stage(node),
                 self.mentioned_effect(node),
                 self.lower_handler_arms(node),
-                self.lower_handler_return(node),
+                self.lower_handler_clauses(node),
                 Some(self.pos(node)),
             ),
             "kernel_expression" => self.lower_kernel(node),
@@ -322,6 +322,22 @@ impl Lowerer<'_> {
             .collect()
     }
 
+    /// The `return` and `finally` clauses of one handler.
+    fn lower_handler_clauses(&self, node: Node<'_>) -> osprey_ast::Clauses {
+        osprey_ast::Clauses {
+            return_clause: self.lower_handler_return(node),
+            finally: self.lower_handler_finally(node),
+        }
+    }
+
+    /// `finally => cleanup` — the cleanup expression itself. Implements
+    /// [EFFECTS-FINALIZATION].
+    fn lower_handler_finally(&self, node: Node<'_>) -> Option<Box<Expr>> {
+        self.named_of_kind(node, "handler_finally")
+            .first()
+            .map(|clause| Box::new(self.lower_expr_field(*clause, "body")))
+    }
+
     fn lower_handler_return(&self, node: Node<'_>) -> Option<Box<Expr>> {
         self.named_of_kind(node, "handler_return")
             .first()
@@ -485,6 +501,7 @@ impl Lowerer<'_> {
             effect: self.mentioned_effect(handler),
             arms: self.lower_handler_arms(handler),
             return_clause: self.lower_handler_return(handler),
+            finally: self.lower_handler_finally(handler),
             // The rest of the block is the region, not braces the user wrote:
             // a lone trailing value is the body itself, as in ML layout.
             body: Box::new({

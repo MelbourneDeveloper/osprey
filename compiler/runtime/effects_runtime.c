@@ -218,8 +218,79 @@ int __osprey_handler_depth(void) {
     return g_handler_stack->top + 1;
 }
 
+// One pending `finally` clause: the cleanup function, the environment it
+// consumes, and the handler depth of its activation's base, so it runs outside
+// that activation. Implements [EFFECTS-FINALIZATION].
+typedef struct {
+    OspFinalizer run;
+    void *env;
+    int depth;
+} Finalizer;
+
+// This thread's pending finalizers, innermost last. Never part of a handler
+// snapshot: a finalizer belongs to the thread that owns its activation.
+typedef struct {
+    Finalizer *items;
+    int count;
+    int capacity;
+} FinalizerStack;
+
+static __thread FinalizerStack g_finalizers = {NULL, 0, 0};
+
+void __osprey_finalizer_push(OspFinalizer run, void *env) {
+    ensure_handler_stack_initialized();
+    if (g_finalizers.count == g_finalizers.capacity) {
+        int capacity = g_finalizers.capacity == 0 ? 8 : g_finalizers.capacity * 2;
+        Finalizer *grown = realloc(g_finalizers.items, (size_t)capacity * sizeof(Finalizer));
+        if (grown == NULL) {
+            fprintf(stderr, "FATAL: Failed to allocate a handler finalizer\n");
+            abort();
+        }
+        g_finalizers.items = grown;
+        g_finalizers.capacity = capacity;
+    }
+    Finalizer *slot = &g_finalizers.items[g_finalizers.count++];
+    slot->run = run;
+    slot->env = env;
+    slot->depth = g_handler_stack->top + 1;
+}
+
+// Pop this thread's innermost finalizer and run it outside its activation:
+// entries above its base are unlinked first. Popping BEFORE running is what
+// makes a finalizer that itself transfers control never run twice.
+static void run_innermost_finalizer(void) {
+    Finalizer finalizer = g_finalizers.items[--g_finalizers.count];
+    while (g_handler_stack->top + 1 > finalizer.depth) {
+        (void)__osprey_handler_pop();
+    }
+    finalizer.run(finalizer.env);
+}
+
+// Normal completion: the activation's return clause has produced its answer.
+void __osprey_finalizer_finish(void) {
+    ensure_handler_stack_initialized();
+    if (g_finalizers.count == 0) {
+        fprintf(stderr, "FATAL: Handler finalizer stack underflow\n");
+        abort();
+    }
+    run_innermost_finalizer();
+}
+
+// Abandonment: a dropped continuation finalizes every activation it still
+// owns, inner to outer, each exactly once ([MULTI-COST-ABORT]).
+void __osprey_finalizer_unwind(void) {
+    ensure_handler_stack_initialized();
+    while (g_finalizers.count > 0) {
+        run_innermost_finalizer();
+    }
+}
+
 // Cleanup handler stack (call at thread exit)
 void __osprey_handler_stack_cleanup(void) {
+    free(g_finalizers.items);
+    g_finalizers.items = NULL;
+    g_finalizers.count = 0;
+    g_finalizers.capacity = 0;
     if (g_handler_stack != NULL) {
         while (g_handler_stack->suspended != NULL) {
             HandlerScope *scope = g_handler_stack->suspended;

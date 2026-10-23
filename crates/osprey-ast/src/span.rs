@@ -337,6 +337,7 @@ fn offset_expr(expr: &mut Expr, offset: u32) {
             arms,
             body,
             return_clause,
+            finally,
             position,
             ..
         } => {
@@ -346,7 +347,7 @@ fn offset_expr(expr: &mut Expr, offset: u32) {
                 offset_expr(&mut arm.body, offset);
             }
             offset_expr(body, offset);
-            if let Some(clause) = return_clause {
+            for clause in return_clause.iter_mut().chain(finally.iter_mut()) {
                 offset_expr(clause, offset);
             }
         }

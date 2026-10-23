@@ -192,10 +192,24 @@ impl Checker {
                 effect,
                 arms,
                 return_clause,
+                finally,
                 body,
                 position,
                 ..
-            } => self.infer_handler(effect, arms, body, return_clause.as_deref(), *position, env),
+            } => {
+                let answer = self.infer_handler(
+                    effect,
+                    arms,
+                    body,
+                    return_clause.as_deref(),
+                    *position,
+                    env,
+                );
+                if let Some(cleanup) = finally {
+                    self.infer_cleanup(cleanup, *position, env);
+                }
+                answer
+            }
             other => self.infer_expr(other, env),
         }
     }

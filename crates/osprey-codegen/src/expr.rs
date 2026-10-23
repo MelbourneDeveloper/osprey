@@ -138,11 +138,17 @@ fn gen_expr_raw(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
             effect,
             arms,
             return_clause,
+            finally,
             body,
             position,
-        } => {
-            crate::effects::gen_handler(cg, effect, arms, body, return_clause.as_deref(), *position)
-        }
+        } => crate::effects::gen_handler(
+            cg,
+            effect,
+            arms,
+            body,
+            [return_clause.as_deref(), finally.as_deref()],
+            *position,
+        ),
         Expr::Resume(value) => crate::effects::gen_resume(cg, value.as_deref()),
         // A lambda in plain value position (returned, block tail, stored in a
         // field) becomes a closure cell, typed by inference.

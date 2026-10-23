@@ -251,6 +251,7 @@ impl Analyzer<'_> {
                 arms,
                 body,
                 return_clause,
+                finally,
                 position,
                 stage,
             } => {
@@ -296,6 +297,11 @@ impl Analyzer<'_> {
                 if let Some(clause) = return_clause {
                     let callee = self.callable(clause, scope, env).unwrap_or(Callable::Unknown);
                     out.union(self.invoke_with_values(callee, &[self.value(body, scope, &local)]));
+                }
+                // Cleanup runs outside this activation, so its requirements
+                // belong to the enclosing row ([EFFECTS-FINALIZATION]).
+                if let Some(cleanup) = finally {
+                    out.union(self.expression(cleanup, scope, env));
                 }
                 out
             }

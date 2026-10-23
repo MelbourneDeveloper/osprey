@@ -1000,10 +1000,30 @@
           "named": true
         },
         {
+          "type": "handler_finally",
+          "named": true
+        },
+        {
           "type": "handler_return",
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "handler_finally",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -1092,6 +1112,10 @@
       "types": [
         {
           "type": "handler_arm",
+          "named": true
+        },
+        {
+          "type": "handler_finally",
           "named": true
         },
         {
@@ -3464,6 +3488,10 @@
   },
   {
     "type": "false",
+    "named": false
+  },
+  {
+    "type": "finally",
     "named": false
   },
   {

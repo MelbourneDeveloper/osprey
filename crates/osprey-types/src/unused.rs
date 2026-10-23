@@ -247,10 +247,11 @@ impl Analysis {
                 arms,
                 body,
                 return_clause,
+                finally,
                 ..
             } => {
                 self.handler(effect, arms, body, owner);
-                if let Some(clause) = return_clause {
+                for clause in return_clause.iter().chain(finally) {
                     self.expression(clause, owner);
                 }
             }

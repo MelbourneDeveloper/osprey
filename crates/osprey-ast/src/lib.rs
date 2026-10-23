@@ -27,7 +27,7 @@ pub mod symbol;
 mod visit;
 pub use doc::{DocComment, DocExample, DocScope};
 pub use generics::{EffectRef, TypeParam, Variance};
-pub use handler_value::{handler_function, handler_value};
+pub use handler_value::{handler_function, handler_value, Clauses};
 pub use multiplicity::{
     Multiplicity, OperationMode, OperationTable, CONTROL_KEYWORD, REPLAYABLE_KEYWORD,
 };
@@ -992,6 +992,10 @@ pub enum Expr {
         /// Optional normal-completion transformation, represented as a unary
         /// lambda. It executes outside this activation. [EFFECTS-HANDLER-ARMS]
         return_clause: Option<Box<Expr>>,
+        /// Optional `finally => cleanup` clause: a `Unit` expression that runs
+        /// exactly once when the activation ends, after the return clause and
+        /// outside this activation. [EFFECTS-FINALIZATION]
+        finally: Option<Box<Expr>>,
         /// The handled body expression.
         body: Box<Expr>,
         /// Source position — the key under which inference publishes this
