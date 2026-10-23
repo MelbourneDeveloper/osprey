@@ -528,7 +528,7 @@ pub(crate) static LISTS: &[BuiltinDoc] = &[
         "foldList",
         "Reduces a list to a single value by repeatedly applying a function.",
         ["list" => "The list to reduce", "initial" => "The initial value for the accumulator", "function" => "The reduction function that takes (accumulator, current) and returns the new accumulator"],
-        "foldList([1, 2, 3], 0, add)",
+        "foldList([1, 2, 3], 0, fn(acc, n) => acc + n)  // 6",
     ),
     builtin_doc!(
         "listSort",
