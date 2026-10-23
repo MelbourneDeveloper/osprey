@@ -44,9 +44,9 @@ pub(crate) struct Instantiation {
 }
 
 /// Whether `body` references `name` — direct self-recursion, which inlining
-/// cannot specialise. Mutual recursion still trips [`crate::genfn`]'s re-entry
-/// guard and its diagnostic. The free-identifier collector already answers
-/// "which names does this body reach", parameters subtracted
+/// cannot specialise. Mutual recursion re-enters [`crate::genfn`] mid-inline
+/// and is specialised the same way there. The free-identifier collector
+/// already answers "which names does this body reach", parameters subtracted
 /// ([`osprey_ast::freevars`]).
 pub(crate) fn calls_itself(name: &str, body: &Expr) -> bool {
     let mut names = std::collections::BTreeSet::new();
@@ -74,7 +74,11 @@ pub(crate) fn specialize(
         .iter()
         .map(|a| gen_expr(cg, a))
         .collect::<Result<Vec<_>>>()?;
-    let key = instantiation_key(name, &values);
+    let key = format!(
+        "{}{}",
+        instantiation_key(name, &values),
+        declared_spelling(cg, name)
+    );
     let known = cg.monofns.get(&key).cloned();
     let target = match known {
         Some(existing) => existing,
@@ -98,6 +102,28 @@ fn slot_spelling(v: &Value) -> String {
     let owner = v.osp_ty.clone().unwrap_or_default();
     let result = v.result_inner.map_or_else(String::new, |i| i.to_string());
     format!("{}:{owner}:{result}", v.ty.as_str())
+}
+
+/// The callee's declared signature as the CURRENT call's specialization sees
+/// it. A boxed argument value carries no element type (`Tree<int>` and
+/// `Tree<string>` are both a bare handle), so the value spellings alone would
+/// share one emitted body whose first-emission owner tags then type the
+/// second call's payloads wrong. The checker resolves this per call site, so
+/// its view of the signature is the distinguishing spelling (#278).
+fn declared_spelling(cg: &Codegen, name: &str) -> String {
+    let params = cg
+        .prog
+        .param_types(name)
+        .unwrap_or(&[])
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    let ret = cg
+        .prog
+        .return_type(name)
+        .map_or_else(String::new, ToString::to_string);
+    format!("[{params}]->{ret}")
 }
 
 /// Emit `@name$monoN` for one instantiation and register it BEFORE lowering the

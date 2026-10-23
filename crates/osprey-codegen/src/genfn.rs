@@ -185,6 +185,15 @@ fn lower_inline_arg(
     } else {
         relaid_placeholder(cg, v, declared)?
     };
+    // The value an inlined body pattern-matches must know its own INSTANCE of
+    // a generic union: the literal alone carries only the erased layout, so a
+    // `Tree<string>` destructured inside `all@string` bound its payload as the
+    // raw storage word and the string read back as an int (#278). The declared
+    // parameter type — resolved per call site by the checker's application —
+    // is that instance; an emitted function's parameters get the same through
+    // [`crate::monofn`]'s `ParamSig`.
+    let mut v = v;
+    v.inferred_type = v.inferred_type.or_else(|| declared.cloned());
     let function_type = v
         .inferred_type
         .as_ref()

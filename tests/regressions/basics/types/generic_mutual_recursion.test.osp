@@ -5,7 +5,7 @@ type Tree<T> =
     Leaf { item: T }
     | Node { kids: List<Tree<T>> }
 
-fn kid<T>(out: List<T>, kids: List<Tree<T>>, index: int) -> List<T> =
+fn kid<T>(out, kids, index) -> List<T> =
     listConcat(out, all(listGet(kids, index) ?: Node { kids: [] }))
 
 fn all<T>(tree: Tree<T>) -> List<T> = match tree {

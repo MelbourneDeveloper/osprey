@@ -7,6 +7,11 @@
 //! declaration's own body was inferred, and bodies are inferred in file order,
 //! so every call site in an earlier file shared one instantiation.
 
+#![expect(
+    clippy::expect_used,
+    reason = "fixture setup and subprocess failures must fail these tests immediately"
+)]
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
