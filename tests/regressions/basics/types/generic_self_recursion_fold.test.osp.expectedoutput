@@ -1,0 +1,4 @@
+2
+ok 1 - generic self-recursion through a fold lambda flattens a tree
+1..1
+# tests=1 passed=1 failed=0 skipped=0
