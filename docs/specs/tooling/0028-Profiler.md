@@ -116,6 +116,12 @@ A request is one text line (a trailing `\r` is ignored, and a line is at most 25
 
 One CPU session runs per process. `cpu_start` while one runs, including an `OSPREY_PROFILE` session, is refused with `already_profiling`. Closing the connection that started a session ends it. Program exit during a session sends the final batch and `cpu_stopped` with reason `exit`. A connection that cannot take a line within one second is closed, which ends any session it owned instead of stalling the sampler. Errors are `{"kind":"error","code":…,"message":…}` with code `unknown_command`, `bad_argument`, `already_profiling`, `not_profiling`, `attach_failed`, `line_too_long` (the connection is then closed) or `busy`.
 
+## [PROF-LSP-RUNTIME] Language-server runtime
+
+`crates/lsp-profiler-osprey` is the Osprey runtime for lspkit's shared profiler, `lsp-profiler`, which comes from the `lspkit` submodule because it is not published; its build script generates the wire model with the typeDiagram CLI, so a build needs Node.js and `typediagram` on `PATH`. The runtime supplies only what is Osprey's: recognising a process, sampling it, and naming its frames. Sessions, hotspots, exports, the JSON-RPC surface and the editor UI are lspkit's, the same for every language.
+
+A process is an Osprey program when its endpoint answers `hello` [PROF-ATTACH-ENDPOINT], and the reply's runtime version is what the process listing shows. A socket nobody serves, which is a stale file a crash left for a pid the OS has since reused, is not an Osprey program, while an endpoint that never answers marks the program unattachable. A CPU session is one live-attach session [PROF-ATTACH-PROTOCOL]. Each stack is symbolized once, as it arrives ([PROF-SYMBOLIZE-OFFLINE]); a changed image list restarts that cache. The rows of one sampler tick become one sampling tick. Without native frames a stack keeps only its Osprey source frames, so time in the C runtime or the system belongs to the Osprey function that called it; a stack with no source frame at all, from a program built without debug info, keeps every frame instead of vanishing. Source lines need a debug-info build: `--profile` together with `--compile` builds one without running it. Thread trampolines and the loader's entry point are scaffolding. A pid that names no process is `PROCESS_NOT_FOUND`, and a live process without an endpoint is `UNSUPPORTED_RUNTIME`. Windows has no endpoint, so there the runtime recognises nothing and has no CPU backend.
+
 ## [PROF-SYMBOLIZE-OFFLINE] Symbolization
 
 The `osprey-profiler` crate maps each pc to the image whose executable range
@@ -196,6 +202,12 @@ This integration does not claim live process attachment or native heap-retention
   every request and error, batch indices against the tables earlier batches
   built, one session per process, a reader that stopped reading, and an exit
   mid-session.
+- `crates/osprey-cli/tests/live_profiler.rs` compiles a CPU-bound fixture with
+  debug info, runs it as its own process, and drives lspkit's profiler service
+  with the Osprey runtime exactly as the language server does: the listing,
+  the hot function and its lines, native frames only on request, the error
+  codes, a busy program, a duration, a mid-session snapshot, and a program
+  killed mid-session [PROF-LSP-RUNTIME].
 - `osprey-profiler` tests verify parsing, aggregation, symbolization,
   exporters, and terminal formatting.
 - The end-to-end profiler script runs an example under `--profile` and parses

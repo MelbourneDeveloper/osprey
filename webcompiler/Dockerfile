@@ -20,6 +20,9 @@ COPY scripts /workspace/scripts
 COPY crates /workspace/crates
 COPY tree-sitter-osprey /workspace/tree-sitter-osprey
 COPY compiler/runtime /workspace/compiler/runtime
+# lsp-profiler is a path dependency in the lspkit submodule; cargo reads its
+# manifest to resolve the workspace even where it is not compiled.
+COPY lspkit /workspace/lspkit
 # The compiler embeds this shared grammar in generated HTML documentation.
 COPY website/src/js/osprey-grammar.mjs /workspace/website/src/js/osprey-grammar.mjs
 WORKDIR /workspace

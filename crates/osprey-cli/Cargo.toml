@@ -26,3 +26,11 @@ pulldown-cmark = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+# The live-attach end-to-end suite drives lspkit's profiler service with the
+# Osprey runtime against a program this build compiles [PROF-LSP-RUNTIME].
+lsp-profiler = { workspace = true }
+lsp-profiler-osprey = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }

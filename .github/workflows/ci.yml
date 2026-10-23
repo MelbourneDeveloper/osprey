@@ -265,6 +265,10 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        # lsp-profiler is a path dependency in the lspkit submodule, and cargo
+        # reads its manifest to resolve the workspace [PROF-LSP-RUNTIME].
+        with:
+          submodules: true
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -344,6 +348,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        # lsp-profiler is a path dependency in the lspkit submodule, and cargo
+        # reads its manifest to resolve the workspace [PROF-LSP-RUNTIME].
+        with:
+          submodules: true
       - name: Setup Osprey toolchain (no rebuild)
         uses: ./.github/actions/setup-osprey-compiler
         with:
@@ -364,6 +372,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        # lsp-profiler is a path dependency in the lspkit submodule, and cargo
+        # reads its manifest to resolve the workspace [PROF-LSP-RUNTIME].
+        with:
+          submodules: true
       - name: Setup Osprey toolchain (no rebuild)
         uses: ./.github/actions/setup-osprey-compiler
         with:
@@ -384,6 +396,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        # lsp-profiler is a path dependency in the lspkit submodule, and cargo
+        # reads its manifest to resolve the workspace [PROF-LSP-RUNTIME].
+        with:
+          submodules: true
       - name: Setup Osprey toolchain (no rebuild)
         uses: ./.github/actions/setup-osprey-compiler
         with:
@@ -511,6 +527,10 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        # lsp-profiler is a path dependency in the lspkit submodule, and cargo
+        # reads its manifest to resolve the workspace [PROF-LSP-RUNTIME].
+        with:
+          submodules: true
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -580,9 +600,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        # The site's images and videos are Git LFS files.
+        # The site's images and videos are Git LFS files; the Book's examples
+        # build the compiler, whose workspace resolves through lspkit.
         with:
           lfs: true
+          submodules: true
       - uses: ./.github/actions/detect-ci-scope
         id: filter
       - uses: actions/setup-node@v4
@@ -660,6 +682,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        # lsp-profiler is a path dependency in the lspkit submodule, and cargo
+        # reads its manifest to resolve the workspace [PROF-LSP-RUNTIME].
+        with:
+          submodules: true
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -799,6 +825,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        # lsp-profiler is a path dependency in the lspkit submodule, and cargo
+        # reads its manifest to resolve the workspace [PROF-LSP-RUNTIME].
+        with:
+          submodules: true
 
       - name: Install jq
         run: command -v jq >/dev/null || brew install jq

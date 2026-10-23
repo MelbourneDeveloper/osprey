@@ -39,6 +39,10 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        # lsp-profiler is a path dependency in the lspkit submodule, and cargo
+        # reads its manifest to resolve the workspace [PROF-LSP-RUNTIME].
+        with:
+          submodules: true
 
       # No duplication gate here. Deslop measures source text, so its verdict is
       # platform-independent, so running it on a second OS would only duplicate

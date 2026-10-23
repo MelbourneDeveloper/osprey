@@ -24,8 +24,8 @@ const STATE_WAITING: u64 = 1;
 /// image happens to have the nearest lower header. That is how `_xzm_free`
 /// symbolized as `task_get_special_port`. `text`/`text_size` carry the real
 /// executable range so ownership is decided by containment.
-#[derive(Debug, Deserialize)]
-pub(crate) struct Image {
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct Image {
     /// Filesystem path of the image (executable or dylib).
     pub path: String,
     /// Load address of the image in the profiled process (mach header / ELF base).

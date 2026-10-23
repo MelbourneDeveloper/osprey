@@ -15,6 +15,7 @@ members = [
     "crates/osprey-fmt",
     "crates/osprey-lsp",
     "crates/osprey-profiler",
+    "crates/lsp-profiler-osprey",
     "crates/osprey-cli",
 ]
 # The lspkit submodule is its own workspace; its crates are path dependencies.
@@ -41,6 +42,7 @@ osprey-codegen = { path = "crates/osprey-codegen" }
 osprey-fmt = { path = "crates/osprey-fmt" }
 osprey-lsp = { path = "crates/osprey-lsp" }
 osprey-profiler = { path = "crates/osprey-profiler" }
+lsp-profiler-osprey = { path = "crates/lsp-profiler-osprey" }
 tree-sitter-osprey = { path = "tree-sitter-osprey" }
 
 # Grows a recursive compiler pass onto the heap when a deeply nested program
@@ -65,6 +67,13 @@ futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 lsp-types = "0.97"
+# lspkit's shared CPU and memory profiler, from the lspkit submodule: it is not
+# published. Its build script generates the wire model with the typeDiagram
+# CLI, so a build needs Node.js and `typediagram` on PATH [PROF-RUNTIME].
+lsp-profiler = { path = "lspkit/crates/lsp-profiler" }
+# The same version lsp-profiler pins, so the graph carries one sysinfo.
+sysinfo = { version = "0.39.3", default-features = false, features = ["system", "user"] }
+tracing = "0.1"
 
 # Maximum-strictness lints. Every crate opts in with `[lints] workspace = true`.
 # CI runs `cargo clippy --all-targets -- -D warnings`, so every entry below is a

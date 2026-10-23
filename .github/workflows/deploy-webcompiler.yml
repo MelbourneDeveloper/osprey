@@ -15,6 +15,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        # The image builds the compiler, whose workspace resolves through the
+        # lspkit submodule [PROF-LSP-RUNTIME].
+        with:
+          submodules: true
 
       - name: Setup Fly.io CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
