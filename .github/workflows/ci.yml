@@ -617,6 +617,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: website/package-lock.json
 
+      # Building the compiler compiles lspkit's profiler, whose build.rs runs
+      # typeDiagram; without it on PATH the cargo build fails before any test.
+      - name: Install typeDiagram
+        uses: ./.github/actions/typediagram
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
