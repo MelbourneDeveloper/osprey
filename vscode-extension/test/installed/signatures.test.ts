@@ -302,46 +302,49 @@ suite("Installed VSIX compiler warnings and signature edits", () => {
     );
   });
 
-  test("removing an exported signature retains the export on its definition", async () => {
+  // An exported member's signature is the module's API, so it is never
+  // reported as redundant and no removal is offered ([TYPE-ANNOTATION-REDUNDANT]).
+  test("an exported signature is never reported as redundant", async () => {
     const body = '    greet name = "hi " + name\n';
     const source = `namespace warnings\nmodule M\n    export ${greetHeader}\n${body}`;
     const editor = await openSource("exported-header.ospml", source);
-    const [diagnostic] = await diagnostics(editor.document, [
-      signature("warnings::M::greet", "(string) -> string", greetHeader),
-    ]);
-    const fixes = await requiredActions(editor.document, diagnostic.range);
-    assert.strictEqual(fixes.length, 1);
-    assertAction(fixes[0], signatureTitle, diagnostic);
-    const expected = `namespace warnings\nmodule M\n    export ${body.trimStart()}`;
-    assertEdit(fixes[0], editor.document, expected, true);
-    await invokeFix(editor, diagnostic.range, expected);
     await diagnostics(editor.document, []);
-    await save(editor.document);
-  });
-
-  test("module implementation fix preserves the public signature contract", async () => {
-    const contract =
-      "namespace warnings\nsignature Api\n    greet : string -> string\n\nmodule M : Api\n";
-    const header = "    greet : string -> string\n";
-    const body = '    greet name = "hi " + name\n';
-    const editor = await openSource(
-      "module-contract.ospml",
-      contract + header + body,
-    );
-    const warning = {
-      ...signature("warnings::M::greet", "(string) -> string", greetHeader),
-      occurrence: 1,
-    };
-    const [diagnostic] = await diagnostics(editor.document, [warning]);
     assert.deepStrictEqual(
       await actions(editor.document, rangeOf(editor.document, greetHeader, 0)),
       [],
     );
+  });
+
+  // A member the module's signature publishes is held fixed; a private
+  // member's signature is judged as usual and its removal keeps the contract.
+  test("a public module signature is held fixed while a private member's is judged", async () => {
+    const contract =
+      "namespace warnings\nsignature Api\n    greet : string -> string\n\nmodule M : Api\n";
+    const greet = '    greet : string -> string\n    greet name = "hi " + name\n';
+    const helperHeader = "helper : string -> string";
+    const helperBody = '    helper name = "yo " + name\n';
+    const editor = await openSource(
+      "module-contract.ospml",
+      `${contract}${greet}    ${helperHeader}\n${helperBody}`,
+    );
+    const [diagnostic] = await diagnostics(editor.document, [
+      signature("warnings::M::helper", "(string) -> string", helperHeader),
+    ]);
+    for (const occurrence of [0, 1]) {
+      assert.deepStrictEqual(
+        await actions(
+          editor.document,
+          rangeOf(editor.document, greetHeader, occurrence),
+        ),
+        [],
+      );
+    }
     const fixes = await requiredActions(editor.document, diagnostic.range);
     assert.strictEqual(fixes.length, 1);
     assertAction(fixes[0], signatureTitle, diagnostic);
-    assertEdit(fixes[0], editor.document, contract + body);
-    await invokeFix(editor, diagnostic.range, contract + body);
+    const expected = contract + greet + helperBody;
+    assertEdit(fixes[0], editor.document, expected);
+    await invokeFix(editor, diagnostic.range, expected);
     await diagnostics(editor.document, []);
     await save(editor.document);
   });

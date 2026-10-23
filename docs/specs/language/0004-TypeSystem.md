@@ -630,7 +630,7 @@ emitted invalid LLVM and the failure surfaced from `clang` against a temporary
 
 A receiver whose inferred type names a record takes THAT record's layout: for
 a generic record the instantiation's layout follows from the declaration
-([TYPE-GENERICS-DECL](#type-generics-decl)), wherever the value was constructed,
+([TYPE-GENERICS-DECL](#generics-and-variance)), wherever the value was constructed,
 so two records sharing a field name never make the read ambiguous. Choosing a
 record by field name alone is a fallback for an untracked receiver and fails
 loudly when two records declare the name.
