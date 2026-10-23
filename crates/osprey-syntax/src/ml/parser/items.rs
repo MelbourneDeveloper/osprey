@@ -1,5 +1,8 @@
 //! ML items parsing.
-use super::{MlItem, MlModuleKind, MlTypeParam, Parser, Stage, TokKind, STATIC_STAGE_KEYWORD};
+use super::{
+    keyword_spelling, MlItem, MlModuleKind, MlTypeParam, Parser, Stage, TokKind,
+    STATIC_STAGE_KEYWORD,
+};
 
 impl Parser<'_> {
     pub(in crate::ml) fn program(&mut self) -> Vec<MlItem> {
@@ -68,8 +71,44 @@ impl Parser<'_> {
                 self.effect_decl(Stage::Static)
             }
             TokKind::Ident(_) => self.ident_item(),
+            kind if self.at_keyword_named_binding() => {
+                let word = keyword_spelling(kind).unwrap_or_default();
+                self.error(format!(
+                    "`{word}` is a reserved word and cannot name a binding; choose another name"
+                ));
+                None
+            }
             _ => Some(self.expr_item()),
         }
+    }
+
+    /// A line that starts with a keyword and binds with a top-level `=`:
+    /// `send (a, b) = …` names a binding `send`, which a keyword cannot do.
+    /// Reporting it here, at the declaration, stops the line from parsing as
+    /// a `send` expression and cascading into errors at unrelated call sites
+    /// and later `export`s. Implements [FLAVOR-ML-BIND].
+    fn at_keyword_named_binding(&self) -> bool {
+        keyword_spelling(self.peek()).is_some() && self.line_binds_at_top_level()
+    }
+
+    /// Whether the current line holds an `=` outside every bracket, before
+    /// the line ends. `=` inside brackets is a named argument or a field.
+    fn line_binds_at_top_level(&self) -> bool {
+        let mut depth = 0usize;
+        for ahead in 1.. {
+            match self.peek_at(ahead) {
+                TokKind::Newline | TokKind::Indent | TokKind::Dedent | TokKind::Eof => {
+                    return false
+                }
+                TokKind::LParen | TokKind::LBracket | TokKind::LBrace => depth += 1,
+                TokKind::RParen | TokKind::RBracket | TokKind::RBrace => {
+                    depth = depth.saturating_sub(1);
+                }
+                TokKind::Eq if depth == 0 => return true,
+                _ => {}
+            }
+        }
+        false
     }
 
     /// `import target`, optional whole-target alias, and an optional indented

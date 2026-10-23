@@ -1,0 +1,12 @@
+// osprey: flavor=ml
+// [FLAVOR-ML-BIND] A keyword cannot name a binding. `send` is the channel-send
+// keyword ([FLAVOR-ML-CONCURRENCY]), so `send (envelope, event) = …` parsed as
+// a send expression: the error landed at unrelated call sites and every later
+// `export` in the module was misreported. The declaration itself is reported.
+namespace app
+
+module Drive
+    export send (envelope, event) = "${envelope}:${event}"
+    export other value = value
+
+print (Drive::other "ok")

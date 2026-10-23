@@ -33,6 +33,12 @@ comments are ordinary comments, not documentation.
 ## Bindings and Mutation
 
 `[FLAVOR-ML-BIND]` `name = expression` introduces an immutable binding.
+A binding's name is an identifier, never a keyword: `send (envelope, event) = …`
+is rejected at the declaration with
+``"`send` is a reserved word and cannot name a binding; choose another name"``,
+because the line would otherwise parse as a `send` expression
+([FLAVOR-ML-CONCURRENCY](#fibers-and-channels)) and fail at unrelated call
+sites instead.
 `mut name = expression` introduces a **mutable cell**, and `name := expression`
 assigns to it. As in the Default flavor ([Bindings](0003-Syntax.md#bindings)),
 `mut` is **not** a general imperative variable: a `mut` cell exists to back
