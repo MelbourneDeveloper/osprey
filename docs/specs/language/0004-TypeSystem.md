@@ -622,6 +622,13 @@ infer to one, so none of those are rejected here. Without the check, codegen
 emitted invalid LLVM and the failure surfaced from `clang` against a temporary
 `.ll` file instead of the user's source.
 
+A receiver whose inferred type names a record takes THAT record's layout: for
+a generic record the instantiation's layout follows from the declaration
+([TYPE-GENERICS-DECL](#type-generics-decl)), wherever the value was constructed,
+so two records sharing a field name never make the read ambiguous. Choosing a
+record by field name alone is a fallback for an untracked receiver and fails
+loudly when two records declare the name.
+
 ```osprey
 let n = person.name        // ok
 

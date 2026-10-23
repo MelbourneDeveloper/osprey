@@ -41,22 +41,22 @@ pub(crate) fn gen_field_access(cg: &mut Codegen, target: &Expr, field: &str) -> 
 
 /// The receiver's record: the owner codegen tracked, else the record inference
 /// named (a `perform` result carries only its inferred type), else a guess by
-/// field name. Implements [TYPE-FIELD-ACCESS-NON-RECORD].
+/// field name. A row or a generic instantiation inference named registers its
+/// derived layout on first sight, so a read emitted BEFORE any construction
+/// runs — a helper the checker resolved to one concrete type — shares the
+/// layout that construction registers instead of being quarantined by a
+/// field name two records declare (#273). Implements
+/// [TYPE-FIELD-ACCESS-NON-RECORD] [TYPE-GENERICS-DECL].
 fn field_owner(cg: &mut Codegen, target: &Value, field: &str) -> Result<String> {
-    if let Some(ty @ Type::Record { name, .. }) = target.inferred_type.as_ref() {
-        if name.is_empty() {
-            if let Some(owner) = crate::types::owner_name(&cg.prog, ty) {
-                let _ = super::record_block(cg, &owner, Some(ty));
-                return Ok(owner);
-            }
+    let inferred = target.inferred_type.as_ref();
+    let named = inferred.and_then(|ty| crate::types::owner_name(&cg.prog, ty));
+    if let (Some(owner), Some(ty)) = (named.as_deref(), inferred) {
+        let _ = super::record_block(cg, owner, Some(ty));
+        if matches!(ty, Type::Record { name, .. } if name.is_empty()) {
+            return Ok(owner.to_string());
         }
     }
-    derive_record_layout(cg, target.inferred_type.as_ref());
-    let inferred = target
-        .inferred_type
-        .as_ref()
-        .and_then(|ty| crate::types::owner_name(&cg.prog, ty));
-    [target.osp_ty.clone(), inferred]
+    [target.osp_ty.clone(), named]
         .into_iter()
         .flatten()
         .find(|owner| declares_field(cg, owner, field))
@@ -66,30 +66,6 @@ fn field_owner(cg: &mut Codegen, target: &Value, field: &str) -> Result<String> 
 fn declares_field(cg: &Codegen, owner: &str, field: &str) -> bool {
     cg.record_layout(owner)
         .is_some_and(|(_, fields)| fields.iter().any(|(name, _)| name == field))
-}
-
-/// A field read inside a function emitted BEFORE any construction runs — a
-/// recursive helper the checker resolved to one concrete type — must still see
-/// its record's layout. Derive the instantiation from the declaration at the
-/// receiver's inferred type, under the same `Name#shape` key a construction
-/// registers, so both share one layout. Implements [TYPE-GENERICS-DECL]
-/// [TYPE-FIELD-ACCESS-NON-RECORD].
-fn derive_record_layout(cg: &mut Codegen, ty: Option<&Type>) {
-    let Some(Type::Con { name, args }) = ty else {
-        return;
-    };
-    let Some(owner) = crate::types::record_shape(&cg.prog, name, args) else {
-        return;
-    };
-    if cg.obj_layout(&owner).is_some() {
-        return;
-    }
-    let layout = crate::types::record_field_types(&cg.prog, name, args)
-        .into_iter()
-        .flatten()
-        .map(|(field, ty)| (field, shape_of(cg, &ty)))
-        .collect();
-    let _ = cg.register_layout(owner, layout);
 }
 
 /// Broken-code quarantine: a receiver whose record neither codegen tracked nor
@@ -276,6 +252,18 @@ mod tests {
         }
     }
 
+    fn generic_record(owner: &str, fields: &[(&str, Type)]) -> CtorLayout {
+        CtorLayout {
+            owner: owner.to_string(),
+            owner_is_record: true,
+            type_params: vec!["A".to_string()],
+            fields: fields
+                .iter()
+                .map(|(n, t)| ((*n).to_string(), t.clone()))
+                .collect(),
+        }
+    }
+
     fn quarantine(field: &str, receiver: &str) -> CodegenError {
         CodegenError::unsupported(format!(
             "quarantined field access `{field}` on {receiver}: 2 records declare it and the receiver's record was not tracked"
@@ -306,6 +294,41 @@ mod tests {
         assert_eq!(
             guessed_field_owner(&cg, &typed, "x"),
             Err(quarantine("x", "int"))
+        );
+    }
+
+    /// [TYPE-GENERICS-DECL]: a read in a function emitted BEFORE any
+    /// construction runs derives the instantiation's layout from the
+    /// declaration, so two generic records sharing a field name no longer
+    /// quarantine a receiver whose type inference named (#273).
+    #[test]
+    fn a_typed_receiver_derives_its_generic_layout_before_any_construction() {
+        let string = Type::con("string", Vec::new());
+        let ctors = [
+            generic_record("Tab", &[("name", string.clone()), ("child", Type::Var(0))]),
+            generic_record("Row", &[("key", string.clone()), ("child", Type::Var(0))]),
+        ];
+        let mut prog = ProgramTypes::default();
+        prog.ctors
+            .extend(ctors.into_iter().map(|ctor| (ctor.owner.clone(), ctor)));
+        let mut cg = Codegen::with_types(prog);
+        let tab_receiver = Type::con("Tab", vec![string.clone()]);
+        let receiver = Value {
+            inferred_type: Some(tab_receiver),
+            ..Value::new("%receiver", LType::Ptr)
+        };
+        assert_eq!(
+            field_owner(&mut cg, &receiver, "child"),
+            Ok("Tab#i8*,i8*".to_string())
+        );
+        // The Row instantiation derives independently, at its own key.
+        let row = Value {
+            inferred_type: Some(Type::con("Row", vec![string])),
+            ..Value::new("%row", LType::Ptr)
+        };
+        assert_eq!(
+            field_owner(&mut cg, &row, "child"),
+            Ok("Row#i8*,i8*".to_string())
         );
     }
 }

@@ -191,28 +191,6 @@ pub(crate) fn record_shape(prog: &ProgramTypes, name: &str, args: &[Type]) -> Op
     Some(format!("{name}#{}", shape.join(",")))
 }
 
-/// The declared fields of one generic-record instantiation with the type
-/// arguments substituted in — the declaration-side view of the layout a
-/// construction registers ([`crate::aggregate`]). A field read in a function
-/// emitted before any construction runs derives its layout from this.
-pub(crate) fn record_field_types(
-    prog: &ProgramTypes,
-    name: &str,
-    args: &[Type],
-) -> Option<Vec<(String, Type)>> {
-    let layout = prog.ctors.get(name)?;
-    if !layout.owner_is_record || layout.type_params.is_empty() {
-        return None;
-    }
-    Some(
-        layout
-            .fields
-            .iter()
-            .map(|(field, t)| (field.clone(), substituted(t, args)))
-            .collect(),
-    )
-}
-
 fn record_slot_key(prog: &ProgramTypes, ty: &Type) -> String {
     let mut value = crate::llty::Value::new("", ltype_of(ty));
     value.result_inner = result_inner(ty);
