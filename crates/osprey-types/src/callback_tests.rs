@@ -178,14 +178,25 @@ fn assembled_function_names_are_reported_in_source_form() {
     );
 }
 
+/// A function's equality is not decided ([BOOL-EQUALITY]), so no comparison
+/// can observe whether a wrapper was removed: each of these is a compile error
+/// rather than a reason to keep the wrapper.
 #[test]
-fn function_identity_comparisons_keep_the_wrapper() {
+fn comparing_functions_is_rejected_so_no_comparison_observes_a_wrapper() {
     for source in [
         "fn work() = 41\nlet callback = fn() => work()\nlet answer = callback == work\n",
         "fn work() = 41\nfn same(a, b) = a == b\nfn relay(callback) = same(callback, work)\nlet answer = relay(fn() => work())\n",
         "fn work() = 41\nlet callback = fn() => work()\nlet answer = listContains([work], callback)\n",
     ] {
-        assert!(warnings(Flavor::Default, source).is_empty(), "{source}");
+        let parsed = parse_program_with_flavor(source, Flavor::Default);
+        assert!(parsed.errors.is_empty(), "{source}\n{:?}", parsed.errors);
+        let errors = crate::check_program(&parsed.program);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.message.contains("equality is decided only for")),
+            "{source}\n{errors:?}"
+        );
     }
 }
 

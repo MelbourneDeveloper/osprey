@@ -1,0 +1,31 @@
+// osprey: flavor=ml
+// [BOOL-EQUALITY] [BOOL-ORDERING] The ML half of `equality_undecided.ospo`: a
+// comparison whose meaning is not decided is a compile error in this flavor
+// too. Each compared references or declaration order before the rule.
+type Route =
+    tab : string
+    depth : int
+
+type Shape =
+    Dot
+    Circle
+        r : int
+
+type Area =
+    Apps
+    Files
+
+home () = Route(tab = "home", depth = 1)
+same (a, b) = a == b
+work x = x + 1
+
+viaRecord () = home () == home ()
+viaList () = [1, 2] == [1, 2]
+viaPayloadUnion () = same (Circle(r = 2), Circle(r = 2))
+viaFunction () = work == work
+viaGenericCaller () = same (home (), home ())
+viaListContains () = listContains [home ()] (home ())
+viaUnionOrder () = Apps < Files
+viaRecordOrder () = home () >= home ()
+
+print "${viaRecord ()} ${viaList ()} ${viaPayloadUnion ()} ${viaFunction ()} ${viaGenericCaller ()} ${viaListContains ()} ${viaUnionOrder ()} ${viaRecordOrder ()}"

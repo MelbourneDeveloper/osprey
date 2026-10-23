@@ -14,7 +14,10 @@ impl Checker {
                 Some(site) => self.ctx.exposed_at(resolved, site),
                 None => resolved,
             };
-            if let Some(message) = crate::builtin_constraints::invalid_use(&name, &resolved) {
+            let message = self
+                .undecided_comparison(&name, &resolved)
+                .or_else(|| crate::builtin_constraints::invalid_use(&name, &resolved));
+            if let Some(message) = message {
                 self.errors.push(
                     TypeError::new(message)
                         .with_pos(crate::builtin_constraints::source_position(&name)),

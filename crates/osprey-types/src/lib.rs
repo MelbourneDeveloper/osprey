@@ -26,6 +26,7 @@ mod callback;
 #[cfg(test)]
 mod callback_tests;
 mod check;
+mod comparison;
 mod convert;
 mod ctx;
 mod effect_rows;

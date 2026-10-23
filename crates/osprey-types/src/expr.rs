@@ -1155,6 +1155,7 @@ impl Checker {
                 self.builtin_uses.push((name, receiver.clone()));
             }
         }
+        self.constrain_named_comparison(name, &args);
         let fused = self.fuse_gpu_source(name, ft, &args);
         // Preserve unresolved argument variables until the surrounding expression
         // can refine them; the recorded constraint validates the final type.
@@ -1563,6 +1564,8 @@ impl Checker {
                     self.errors.push(TypeError::new(format!(
                         "cannot compare `{l}` with `{r}`: `{op}` needs two operands of one type"
                     )));
+                } else {
+                    self.constrain_comparison(op, [left, right], &l, position);
                 }
                 Type::bool()
             }
@@ -1700,7 +1703,11 @@ impl Checker {
     /// The key of an arithmetic obligation written here. Where the function
     /// reads through an opaque alias, the key remembers that function
     /// ([`Checker::use_sites`]).
-    fn located_use(&mut self, name: &str, position: Option<osprey_ast::Position>) -> String {
+    pub(crate) fn located_use(
+        &mut self,
+        name: &str,
+        position: Option<osprey_ast::Position>,
+    ) -> String {
         let located = crate::builtin_constraints::located_name(name, position);
         if self.ctx.sees_through_aliases() {
             let _ = self.use_sites.insert(located.clone(), self.site.clone());
@@ -1712,7 +1719,7 @@ impl Checker {
     /// Inside a module that owns an opaque alias the key names the function, so
     /// the late validation reads the operand as that function may
     /// ([MODULES-OPAQUE-TYPES]).
-    fn sited_use(&mut self, name: &str) -> String {
+    pub(crate) fn sited_use(&mut self, name: &str) -> String {
         if !self.ctx.sees_through_aliases() {
             return name.to_owned();
         }

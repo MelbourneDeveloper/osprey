@@ -234,6 +234,48 @@ match randomBelow 0
     Error message => 0 - 1       // Error
 ```
 
+## Structural Comparison — [BUILTIN-STRUCTURAL-EQUALS]
+
+### `structuralEquals(a: T, b: T) -> bool`
+
+> **Status: in progress.** The contract below is decided; the built-in itself
+> lands in the next change. Until then the name is not defined.
+
+`structuralEquals` compares two values by their contents. It walks both values
+completely, so its cost grows with their size. It is meant to be rare and
+explicit. `==` deliberately does not do this
+([BOOL-EQUALITY](../language/0009-BooleanOperations.md#what--and--compare-bool-equality)).
+Before reaching for it, compare a key, an id or a revision field instead,
+which answers most "did this change?" questions in constant time.
+
+Two values are equal when:
+
+| Type | Equal when |
+| --- | --- |
+| `int`, `string`, `bool` | `==` says so |
+| `float` | `==` says so, so NaN is unequal to itself and a value holding NaN is unequal to itself |
+| a record or tuple | every field is equal |
+| a union | both are the same variant and every payload field is equal |
+| `List<T>` | both have the same length and equal elements in the same order |
+| `Map<string, V>` | both have the same keys and equal values for each key |
+
+`T` must be a type whose every part has a decided equality. A type that
+contains a function, a runtime handle (a fiber, a channel, an HTTP or file
+handle, a GPU buffer), `any` or `Result` is a compile error. A function's
+equality is not decided, and a handle names an external resource, so neither
+has contents to compare. As with `==`, a generic caller carries the
+requirement to each call site, which is checked at its own type.
+
+```osprey
+type Route = { tab: string, depth: int }
+let same = structuralEquals(Route { tab: "home", depth: 1 }, Route { tab: "home", depth: 1 })   // true
+let differ = structuralEquals([1, 2], [1, 2, 3])                                                 // false
+```
+
+The Default/ML twins `tests/regressions/basics/operators/structural_equals.test.*`
+pin every row; `examples/failscompilation/structural_equals_*.ospo` pin the
+rejected types.
+
 ## String Functions
 
 Strings are immutable, NUL-terminated UTF-8 byte sequences. String operations
@@ -792,8 +834,14 @@ Concatenates two lists. `left + right` is equivalent.
 Returns the elements in reverse order.
 
 #### `listContains(list: List<T>, value: T) -> bool` — [BUILTIN-LIST-CONTAINS]
-Strings compare by content. Scalar values compare by value; managed handles
-such as nested lists and records compare by identity.
+Compares `value` with each element by `==`
+([BOOL-EQUALITY](../language/0009-BooleanOperations.md#what--and--compare-bool-equality)):
+ints, strings and bools by value, floats under [FLOAT-COMPARE] (so NaN is
+never found), and payload-free union values by variant. An element type with
+no decided equality, such as a record, a list, a union that may carry a
+payload, or a function, is a compile error. Use
+`structuralEquals` in a search of your own when a deep comparison is really
+needed.
 
 #### `forEachList(list: List<T>, function: fn(T) -> Unit) -> Unit` — [BUILTIN-LIST-FOREACH]
 Calls `function` once per element in index order.

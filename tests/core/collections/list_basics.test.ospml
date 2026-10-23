@@ -949,20 +949,20 @@ recordListPatternCase () =
         totalWeight (slots + slots) == 8.0
     ]
 
-    // Building `trio` left `slots` untouched, and record membership is by
-    // handle identity, not by field values ([BUILTIN-LIST-CONTAINS]).
-    checkAll "record lists stay persistent and compare by handle identity" [
+    // Building `trio` left `slots` untouched. A record has no decided `==`
+    // ([BOOL-EQUALITY]), so membership is asked of a key, the label.
+    checkAll "record lists stay persistent and are searched by key" [
         listLength slots == 2,
         listLength trio == 3,
         slotLabels slots == "left>right>",
         readySlots slots == 1,
         totalWeight slots == 4.0,
-        listContains oneSlot soloSlot,
-        listContains (listPrepend slots soloSlot) soloSlot,
-        !(listContains slots soloSlot),
-        !(listContains slots missingSlot),
-        !(listContains slots (Slot(label = "left", weight = 1.5, ready = true))),
-        !(listContains noSlots missingSlot),
+        contains (slotLabels oneSlot) "${soloSlot.label}>",
+        contains (slotLabels (listPrepend slots soloSlot)) "${soloSlot.label}>",
+        !(contains (slotLabels slots) "${soloSlot.label}>"),
+        !(contains (slotLabels slots) "${missingSlot.label}>"),
+        contains (slotLabels slots) "left>",
+        !(contains (slotLabels noSlots) "${missingSlot.label}>"),
         listLength (listAppend trio missingSlot) == 4,
         listLength trio == 3,
         (listGet trio 2 ?: missingSlot).label == "extra",
@@ -1046,10 +1046,10 @@ nestedListCase () =
         tailLength oneRow == 0
     ]
 
-    // Appending to a retrieved row builds a NEW row and leaves the matrix alone;
-    // an equal-valued fresh row is not a member, because nested lists compare by
-    // identity ([BUILTIN-LIST-CONTAINS]).
-    checkAll "nested lists stay isolated and compare by handle identity" [
+    // Appending to a retrieved row builds a NEW row and leaves the matrix alone:
+    // the stored row keeps its own contents ([BOOL-EQUALITY] decides no `==`
+    // for lists, so the rows are compared by their sums).
+    checkAll "nested lists stay isolated when a retrieved row grows" [
         listLength rows == 3,
         listLength grown == 4,
         sumInner rows == 45,
@@ -1058,8 +1058,8 @@ nestedListCase () =
         sumList biggerFirstRow == 102,
         sumList firstRow == 3,
         listLength (rowAt (rows, 0)) == 2,
-        !(listContains rows biggerFirstRow),
-        !(listContains rows [1, 2]),
+        sumList (rowAt (rows, 0)) != sumList biggerFirstRow,
+        sumList (rowAt (rows, 0)) == sumList [1, 2],
         sumInner (listReverse rows) == 45,
         sumList (rowAt (listReverse rows, 0)) == 30,
         sumList (rowAt (listReverse rows, 2)) == 3,
