@@ -173,71 +173,6 @@ impl Checker {
         Type::string()
     }
 
-    /// Dispatch the effect expression forms (split out of [`Self::infer_expr`]
-    /// to keep its match within budget). Each resolves its target first: an
-    /// effect declaration or a capability ([EFFECTS-INSTANCE]).
-    fn infer_effect_expr(&mut self, e: &Expr, env: &TypeEnv) -> Type {
-        match e {
-            Expr::Perform {
-                effect,
-                operation,
-                arguments,
-                named_arguments,
-                position,
-            } => match self.effect_target(effect, *position, env) {
-                Some(target) => self.infer_perform(
-                    target,
-                    operation,
-                    arguments,
-                    named_arguments,
-                    *position,
-                    env,
-                ),
-                None => self.ctx.fresh(),
-            },
-            Expr::Mask {
-                effect,
-                body,
-                position,
-            } => self.infer_mask(effect, body, *position, env),
-            Expr::Handler {
-                stage,
-                effect,
-                arms,
-                return_clause,
-                finally,
-                body,
-                position,
-            } => {
-                let Some(target) = self.effect_target(effect, *position, env) else {
-                    return self.ctx.fresh();
-                };
-                if target.instance.is_some() && stage.is_compile_time() {
-                    self.errors.push(
-                        TypeError::new(format!(
-                            "a compile-time handler cannot answer the capability `{effect}`: \
-a capability is a runtime identity"
-                        ))
-                        .with_pos(*position),
-                    );
-                }
-                let answer = self.infer_handler(
-                    target,
-                    arms,
-                    body,
-                    return_clause.as_deref(),
-                    *position,
-                    env,
-                );
-                if let Some(cleanup) = finally {
-                    self.infer_cleanup(cleanup, *position, env);
-                }
-                answer
-            }
-            other => self.infer_expr(other, env),
-        }
-    }
-
     /// Field access retains a relation between the receiver and its field even
     /// when the receiver is a parameter whose record is fixed at a later call.
     fn infer_field_access(&mut self, target: &Expr, field: &str, env: &TypeEnv) -> Type {
@@ -373,7 +308,7 @@ a capability is a runtime identity"
     /// the instantiated parameters, and yield the instantiated result type.
     /// The resolved signature is published per site for the code generator.
     /// Implements [EFFECTS-GENERIC-INSTANTIATION] and [EFFECTS-OP-TYPING].
-    fn infer_perform(
+    pub(crate) fn infer_perform(
         &mut self,
         target: crate::handler_scope::Target<'_>,
         operation: &str,
@@ -465,7 +400,7 @@ a capability is a runtime identity"
     /// resumes answer B; value arms supply their operation's result R.
     /// Implements [EFFECTS-RESUME],
     /// [EFFECTS-GENERIC-INSTANTIATION], and [EFFECTS-OP-TYPING].
-    fn infer_handler(
+    pub(crate) fn infer_handler(
         &mut self,
         target: crate::handler_scope::Target<'_>,
         arms: &[osprey_ast::HandlerArm],

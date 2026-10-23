@@ -13,6 +13,73 @@ use osprey_ast::{Expr, Position};
 use std::collections::HashMap;
 
 impl Checker {
+    /// Dispatch the effect expression forms (split out of [`Self::infer_expr`]
+    /// to keep its match within budget). Each resolves its target first: an
+    /// effect declaration or a capability ([EFFECTS-INSTANCE]).
+    pub(crate) fn infer_effect_expr(&mut self, e: &Expr, env: &TypeEnv) -> Type {
+        match e {
+            Expr::Perform {
+                effect,
+                operation,
+                arguments,
+                named_arguments,
+                position,
+            } => match self.effect_target(effect, *position, env) {
+                Some(target) => self.infer_perform(
+                    target,
+                    operation,
+                    arguments,
+                    named_arguments,
+                    *position,
+                    env,
+                ),
+                None => self.ctx.fresh(),
+            },
+            Expr::Mask {
+                effect,
+                body,
+                position,
+            } => self.infer_mask(effect, body, *position, env),
+            Expr::Handler { .. } => self.infer_handler_form(e, env),
+            other => self.infer_expr(other, env),
+        }
+    }
+
+    /// A handler: its target, then its arms and body, then its cleanup. A
+    /// compile-time handler cannot answer a capability, a runtime identity.
+    fn infer_handler_form(&mut self, e: &Expr, env: &TypeEnv) -> Type {
+        let Expr::Handler {
+            stage,
+            effect,
+            arms,
+            return_clause,
+            finally,
+            body,
+            position,
+        } = e
+        else {
+            return self.ctx.fresh();
+        };
+        let Some(target) = self.effect_target(effect, *position, env) else {
+            return self.ctx.fresh();
+        };
+        if target.instance.is_some() && stage.is_compile_time() {
+            self.errors.push(
+                TypeError::new(format!(
+                    "a compile-time handler cannot answer the capability `{effect}`: \
+a capability is a runtime identity"
+                ))
+                .with_pos(*position),
+            );
+        }
+        let answer =
+            self.infer_handler(target, arms, body, return_clause.as_deref(), *position, env);
+        if let Some(cleanup) = finally {
+            self.infer_cleanup(cleanup, *position, env);
+        }
+        answer
+    }
+
     /// Type `cleanup` in the handler's enclosing environment. It cannot resume
     /// the dropped continuation, so no enclosing arm's `resume` is visible to
     /// it, and it cannot replace the handler's answer, so it must be `Unit`.

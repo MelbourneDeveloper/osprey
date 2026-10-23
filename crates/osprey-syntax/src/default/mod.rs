@@ -17,6 +17,7 @@ use tree_sitter::{Node, Parser, Point, Tree};
 pub(crate) mod binding_ranges;
 mod expr;
 mod handle_rest;
+mod handlers;
 mod inner_doc;
 mod kernel;
 mod lower;
