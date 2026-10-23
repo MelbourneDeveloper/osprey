@@ -338,7 +338,7 @@ async fn a_program_killed_mid_session_keeps_its_samples() {
 async fn live_progress_names_where_the_time_is_spent_not_the_entry_point() {
     let fixture = Fixture::start("lp-progress");
     let recorder = Arc::new(Recorder::default());
-    let service = service_with(&fixture, recorder.clone());
+    let service = service_with(&fixture, Arc::<Recorder>::clone(&recorder));
     let report = profile(&service, &fixture, json!({}), 3).await;
     let tops = recorder.tops();
     let self_samples = |name: &str| {
