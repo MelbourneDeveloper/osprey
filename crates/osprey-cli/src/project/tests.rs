@@ -253,3 +253,33 @@ fn module_aware_source_keeps_the_path_spelling_it_was_given() {
     let _ = std::fs::remove_dir_all(&real);
     assert_eq!(input.debug_path(), path);
 }
+
+#[test]
+fn a_library_exports_only_the_functions_its_entry_source_declares() {
+    // [IOS-HOST-ABI] `lib::Flow::fetch` performs an effect nobody handles and
+    // `shout` looks exportable; both live outside the entry file, so neither
+    // is a C export nor a reason to refuse the build.
+    let root = std::env::temp_dir().join(format!("osprey-entry-exports-{}", std::process::id()));
+    let files = [
+        ("osprey.toml", "[project]\nname = \"exp\"\nsource_roots = [\"src\", \"main.ospml\"]\ndefault_namespace = \"app\"\nentry = \"main.ospml\"\n"),
+        ("src/helpers.ospml", "namespace lib\n\neffect Slices\n    fetch : string => string\n\nmodule Flow\n    export fetch (key : string) = perform Slices.fetch key\n    export shout (text : string) = \"${text}!\"\n"),
+        ("main.ospml", "namespace app\n\nimport lib::Flow\n\nstart (source : string) = Flow::shout source\n"),
+    ];
+    for (path, text) in files {
+        let file = root.join(path);
+        std::fs::create_dir_all(file.parent().expect("parent")).expect("project dir");
+        std::fs::write(file, text).expect("project file");
+    }
+    let input = CompilationInput::load_project(root.to_string_lossy().as_ref()).expect("assembles");
+    let scope = input.export_scope(false);
+    let built = crate::ios::source(
+        input.backend_program(),
+        "main.ospml",
+        crate::ios::Target::Mac,
+        &scope,
+    );
+    std::fs::remove_dir_all(&root).expect("cleanup");
+    let (_, header) = built.expect("entry-only exports");
+    assert!(header.contains("osprey_app_start("), "{header}");
+    assert!(!header.contains("osprey_lib_"), "{header}");
+}

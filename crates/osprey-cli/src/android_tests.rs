@@ -1,4 +1,5 @@
 use super::*;
+use crate::ios_abi::ExportScope;
 
 #[test]
 fn target_slices_match_ndk_and_bool_abi() -> Result<(), String> {
@@ -10,7 +11,12 @@ fn target_slices_match_ndk_and_bool_abi() -> Result<(), String> {
         ("android-x64", Target::X64, "zeroext i1"),
     ] {
         assert_eq!(Target::parse(name), Some(target));
-        let (ir, header) = source(&parsed.program, "flag.osp", target, false)?;
+        let (ir, header) = source(
+            &parsed.program,
+            "flag.osp",
+            target,
+            &ExportScope::EntrySource(None),
+        )?;
         assert!(
             ir.contains(&format!("define {prefix} @osprey_flag(")),
             "{ir}"

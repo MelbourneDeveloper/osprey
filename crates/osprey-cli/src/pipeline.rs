@@ -200,15 +200,15 @@ pub(super) fn app_target_error(
 pub(super) fn target_ir(cli: &Cli, input: &CompilationInput) -> Result<String, String> {
     let program = input.backend_program();
     let path = input.debug_path();
-    let entry_only = cli.exports.entry_only();
+    let scope = input.export_scope(cli.exports.entry_only());
     if cli.target == "python" {
-        return crate::python_target::source(program, path).map(|(ir, _)| ir);
+        return crate::python_target::source(program, path, &scope).map(|(ir, _)| ir);
     }
     if let Some(target) = android::Target::parse(&cli.target) {
-        return android::source(program, path, target, entry_only).map(|(ir, _)| ir);
+        return android::source(program, path, target, &scope).map(|(ir, _)| ir);
     }
     if let Some(target) = ios::Target::parse(&cli.target) {
-        return ios::source(program, path, target, entry_only).map(|(ir, _)| ir);
+        return ios::source(program, path, target, &scope).map(|(ir, _)| ir);
     }
     if cli.target == "wasm32" {
         return wasm::program_ir(program).map_err(|error| error.to_string());
@@ -311,13 +311,13 @@ fn build_mobile(
     if cli.target == "python" {
         return crate::python_target::build(cli, input, out);
     }
-    let entry_only = cli.exports.entry_only();
+    let scope = input.export_scope(cli.exports.entry_only());
     if let Some(target) = android::Target::parse(&cli.target) {
-        return android::build(path, program, out, target, entry_only);
+        return android::build(path, program, out, target, &scope);
     }
     if let Some(target) = ios::Target::parse(&cli.target) {
         ios::validate(cli, target)?;
-        return ios::build(path, program, out, target, entry_only);
+        return ios::build(path, program, out, target, &scope);
     }
     Err(toolchain::fail(&format!(
         "unknown mobile target: {}",

@@ -1,8 +1,8 @@
 //! Select the callable mobile C boundary from the compiled program.
 
 use super::{
-    c_signature, defines, export, reject_clashes, Export, HostAbi, Import, Program, ProgramTypes,
-    Stmt, SOURCE_MAIN,
+    c_signature, defines, export, reject_clashes, Export, ExportScope, HostAbi, Import, Program,
+    ProgramTypes, Stmt, SOURCE_MAIN,
 };
 
 /// Derive the host ABI of `program` from its resolved types and the IR codegen
@@ -22,19 +22,19 @@ pub(super) fn host_abi(
     types: &ProgramTypes,
     ir: &str,
 ) -> Result<HostAbi, String> {
-    host_abi_selected(program, types, ir, true)
+    host_abi_selected(program, types, ir, &ExportScope::EntrySource(None))
 }
 
 pub(super) fn host_abi_selected(
     program: &Program,
     types: &ProgramTypes,
     ir: &str,
-    export_functions: bool,
+    scope: &ExportScope,
 ) -> Result<HostAbi, String> {
     let (exports, undefined): (Vec<_>, Vec<_>) = program
         .statements
         .iter()
-        .filter_map(|statement| function_export(statement, types, export_functions))
+        .filter_map(|statement| function_export(statement, types, scope))
         .partition(|export| defines(ir, &export.symbol));
     reject_undefined(program, &undefined)?;
     let imports = program
@@ -83,14 +83,17 @@ fn export_effect_errors(program: &Program, symbols: &[&str]) -> Vec<String> {
         .collect()
 }
 
-fn function_export(statement: &Stmt, types: &ProgramTypes, enabled: bool) -> Option<Export> {
+fn function_export(statement: &Stmt, types: &ProgramTypes, scope: &ExportScope) -> Option<Export> {
     let Stmt::Function {
-        name, parameters, ..
+        name,
+        parameters,
+        position,
+        ..
     } = statement
     else {
         return None;
     };
-    if !enabled || name == SOURCE_MAIN {
+    if !scope.publishes(*position) || name == SOURCE_MAIN {
         return None;
     }
     let names = parameters.iter().map(|p| p.name.as_str());

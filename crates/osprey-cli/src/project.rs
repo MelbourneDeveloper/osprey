@@ -208,6 +208,21 @@ impl CompilationInput {
         }
     }
 
+    /// The functions a library build publishes as C exports: those the entry
+    /// source declares, or none but the entry with `--entry-only`. A script
+    /// is its own entry source. Implements [IOS-HOST-ABI].
+    pub(crate) fn export_scope(&self, entry_only: bool) -> crate::ios_abi::ExportScope {
+        if entry_only {
+            return crate::ios_abi::ExportScope::EntryOnly;
+        }
+        crate::ios_abi::ExportScope::EntrySource(match &self.unit {
+            CompilationUnit::Project(project) => project
+                .entry()
+                .map(|entry| entry.global_line_start..=entry.global_line_end),
+            CompilationUnit::Script(_) => None,
+        })
+    }
+
     pub(crate) fn project_warnings(&self) -> &[osprey_project::ProjectWarning] {
         match &self.unit {
             CompilationUnit::Project(project) => &project.warnings,

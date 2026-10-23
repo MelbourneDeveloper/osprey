@@ -1,7 +1,8 @@
 //! Every scalar-signature function reaches the library boundary, or the
 //! build fails and names it (#281).
-use super::selection::host_abi;
+use super::selection::{host_abi, host_abi_selected};
 use super::tests::{abi_of, checked};
+use super::ExportScope;
 
 #[test]
 fn a_scalar_function_codegen_did_not_define_is_refused_not_dropped() {
@@ -33,4 +34,18 @@ fn signal_queries_in_the_call_graph_keep_the_export() {
     );
     let names: Vec<&str> = abi.exports.iter().map(|e| e.c_name.as_str()).collect();
     assert_eq!(names, ["osprey_go", "osprey_snap", "osprey_plain"]);
+}
+
+#[test]
+fn only_the_entry_sources_functions_cross_the_boundary() {
+    // [IOS-HOST-ABI] Lines 1-2 stand for the entry source. `helper` belongs to
+    // another file: it is neither exported nor required to have a symbol.
+    let (program, types, ir) = checked(
+        "fn start(n: int) -> int = n\nfn dispatch(s: string) -> string = s\nfn helper(n: int) -> int = n\n",
+    );
+    let inlined = ir.replace(" @helper(", " @helper_inlined(");
+    let entry = ExportScope::EntrySource(Some(1..=2));
+    let abi = host_abi_selected(&program, &types, &inlined, &entry).expect("entry exports");
+    let names: Vec<&str> = abi.exports.iter().map(|e| e.c_name.as_str()).collect();
+    assert_eq!(names, ["osprey_start", "osprey_dispatch"]);
 }

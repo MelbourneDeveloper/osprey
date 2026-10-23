@@ -31,7 +31,7 @@ The compiler resolves the selected SDK with `xcrun`, compiles LLVM IR with Apple
 
 ## C function boundary [IOS-HOST-ABI]
 
-The header is derived from inferred types. Every top-level function with a fully resolved supported scalar signature is exposed as `osprey_<name>`. If the compiler cannot emit such a function, the build fails and names it, with the reason when the effect check has one. The function is never silently missing from the archive and header. Qualified project names use underscores between namespace segments. The application entry is reserved as `osprey_main`. Invalid or colliding generated C names are compile errors.
+The header is derived from inferred types. Every function the entry source declares with a fully resolved supported scalar signature is exposed as `osprey_<name>`. A single-file program is its own entry source. Functions in a project's other source files are internal, whatever their signatures. If the compiler cannot emit an exposed function, the build fails and names it, with the reason when the effect check has one. The function is never silently missing from the archive and header. Qualified project names use underscores between namespace segments. The application entry is reserved as `osprey_main`. Invalid or colliding generated C names are compile errors.
 
 `--entry-only` builds a mobile archive whose host can call only `osprey_main`. Internal functions remain compiled and checked at their call sites, but they are not C exports. The mobile golden harness uses this mode because its host calls only the entry point; ordinary application archives continue to validate every exported function's effect requirements.
 

@@ -22,7 +22,7 @@ Compilation emits the requested `.a` and sibling `.h`; other output extensions f
 
 ## C function boundary [ANDROID-HOST-ABI]
 
-The shared mobile ABI exposes emitted functions with fully resolved scalar signatures as `osprey_<name>`, replacing namespace separators with underscores. The scalar mappings and synchronous borrowing contract are the same as [the iOS C boundary](iOSCodegen.md#c-function-boundary-ios-host-abi): `int64_t`, `double`, C `bool`, UTF-8 `const char *`, and return-only `void` for `Unit`. Boolean attributes follow the selected Android ABI. Invalid names, collisions, unsupported extern signatures, and independently unhandled exported-function effects are compile errors.
+The shared mobile ABI exposes the entry source's functions with fully resolved scalar signatures as `osprey_<name>`, replacing namespace separators with underscores. The scalar mappings and synchronous borrowing contract are the same as [the iOS C boundary](iOSCodegen.md#c-function-boundary-ios-host-abi): `int64_t`, `double`, C `bool`, UTF-8 `const char *`, and return-only `void` for `Unit`. Boolean attributes follow the selected Android ABI. Invalid names, collisions, unsupported extern signatures, and independently unhandled exported-function effects are compile errors.
 
 `--entry-only` exposes only `osprey_main` for a host that does not call any other Osprey function. The corpus harness uses it; application archives still export and check their scalar functions by default.
 

@@ -36,9 +36,13 @@ pub(crate) fn validate(cli: &Cli) -> Result<(), ExitCode> {
     crate::reject_cross_target_options(cli, "Python", Some("Python (python -m osprey)"))
 }
 
-pub(crate) fn source(program: &Program, path: &str) -> Result<(String, HostAbi), String> {
+pub(crate) fn source(
+    program: &Program,
+    path: &str,
+    scope: &ios_abi::ExportScope,
+) -> Result<(String, HostAbi), String> {
     let extend_bool = !cfg!(all(target_os = "linux", target_arch = "aarch64"));
-    let (ir, abi) = ios_abi::source_with_abi(program, path, "python", extend_bool, false)?;
+    let (ir, abi) = ios_abi::source_with_abi(program, path, "python", extend_bool, scope)?;
     validate_boundary(&abi, &ir)?;
     Ok((ir, abi))
 }
@@ -118,7 +122,12 @@ fn bridge_source(abi: &HostAbi) -> Result<String, ExitCode> {
 pub(crate) fn build(cli: &Cli, input: &CompilationInput, out: &Path) -> Result<(), ExitCode> {
     validate(cli)?;
     validate_output(out)?;
-    let (ir, abi) = source(input.backend_program(), input.debug_path()).map_err(|e| fail(&e))?;
+    let (ir, abi) = source(
+        input.backend_program(),
+        input.debug_path(),
+        &input.export_scope(false),
+    )
+    .map_err(|e| fail(&e))?;
     let scratch = Scratch::new(input.debug_path(), "python")?;
     let (ll, bridge) = write_sources(&scratch, &ir, &abi)?;
     let library = scratch.path.join("library.so");
