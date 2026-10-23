@@ -19,6 +19,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include "float_spelling.h"
 #include "string_runtime.h"
 
 char *osp_string_dup_internal(const char *s, size_t n) {
@@ -340,13 +341,8 @@ char *osp_float_to_string(double d) {
      * ".0". Widen only as far as the value needs to survive a round trip, so
      * short decimals keep their short spelling and no printed float ever
      * names a different double than the one held. */
-    int n = -1;
-    for (int precision = 10; precision <= 17; precision++) {
-        n = snprintf(buf, sizeof(buf), "%.*g", precision, d);
-        if (n < 0 || (size_t)n >= sizeof(buf)) break;
-        if (strtod(buf, NULL) == d) break;
-    }
-    if (n < 0) return osp_string_empty_internal();
+    int n = osp_float_spelling(d, buf, sizeof(buf));
+    if (n < 0 || (size_t)n >= sizeof(buf)) return osp_string_empty_internal();
     /* If snprintf produced a representation with none of '.', 'e', 'E',
      * 'n' (NaN), or 'i' (inf), the value lost its float-ness — re-append
      * ".0" so the type distinction survives toString(). */

@@ -8,8 +8,7 @@ repository.workspace = true
 
 [dependencies]
 osprey-ast.workspace = true
-
-[dev-dependencies]
+# The built-in prelude is Osprey source, parsed once on first use.
 osprey-syntax.workspace = true
 
 [lints]

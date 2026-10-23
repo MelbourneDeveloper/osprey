@@ -62,6 +62,8 @@ mod init_order;
 mod methods;
 mod multiplicity;
 mod pattern;
+mod prelude;
+pub use prelude::{is_prelude_line, PRELUDE_LINE_BASE};
 mod redundant;
 mod redundant_sites;
 #[cfg(test)]

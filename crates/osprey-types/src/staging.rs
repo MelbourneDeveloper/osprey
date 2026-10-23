@@ -15,6 +15,10 @@ use osprey_ast::{mutate, walk_program, AstVisitor, Expr, Program, Stmt};
 /// # Errors
 /// Returns source type errors or violations of the staging rules.
 pub fn lower_static_checked(program: &Program) -> Result<Program, Vec<TypeError>> {
+    // The backend lowers what this returns, so the prelude a program uses is
+    // attached here, once, ahead of every later phase ([BUILTIN-JSON-TYPED]).
+    let attached = crate::prelude::with_prelude(program);
+    let program = attached.as_ref();
     // Declaration and syntax rules first: they name the exact defect, where
     // the residual row after inference would only report an unhandled
     // operation ([STAGE-GPU-DIAG], [EFFECTS-GENERIC-DECL]).

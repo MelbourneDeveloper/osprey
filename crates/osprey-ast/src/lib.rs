@@ -15,9 +15,11 @@ mod kernel;
 mod lower_static;
 pub mod multiplicity;
 pub mod mutate;
+pub mod positional;
 mod resume;
 #[cfg(test)]
 mod resume_tests;
+pub mod span;
 mod stack;
 pub mod stage;
 mod stage_rows;

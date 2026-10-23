@@ -335,9 +335,15 @@ pub(crate) fn concat_handles(cg: &mut Codegen, a: &Value, b: &Value) -> Value {
 
 /// `listGet(l, i) -> Result<T, _>` gated on `osprey_list_in_bounds`.
 fn list_get(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
+    let (l, i) = list_get_operands(cg, args)?;
+    runtime_list_get(cg, &l, &i)
+}
+
+/// `listGet`'s list handle and boxed index, evaluated left to right.
+pub(crate) fn list_get_operands(cg: &mut Codegen, args: &[Expr]) -> Result<(Value, Value)> {
     let l = handle_arg(cg, args, 0)?;
     let i = boxed_arg(cg, args, 1)?;
-    runtime_list_get(cg, &l, &i)
+    Ok((l, i))
 }
 
 /// Shared runtime list read → `Result<T, _>`, gated on `osprey_list_in_bounds`.

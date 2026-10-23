@@ -41,9 +41,17 @@ fn collect_stmts(stmts: &[Stmt], lines: &mut BTreeSet<u32>) {
     }
 }
 
+/// The program line a position counts against, or `None` when it has none or
+/// belongs to the built-in prelude rather than the program.
+fn coverable_line(position: Option<Position>) -> Option<u32> {
+    position
+        .map(|p| p.line.max(1))
+        .filter(|line| !osprey_types::is_prelude_line(*line))
+}
+
 fn mark(position: Option<Position>, lines: &mut BTreeSet<u32>) {
-    if let Some(p) = position {
-        let _ = lines.insert(p.line.max(1));
+    if let Some(line) = coverable_line(position) {
+        let _ = lines.insert(line);
     }
 }
 
@@ -169,7 +177,7 @@ impl Codegen {
     /// declare its counter global on first sight and bump it in place. A
     /// no-op unless coverage instrumentation is active.
     pub(crate) fn cov_hit(&mut self, position: Option<Position>) {
-        let Some(line) = position.map(|p| p.line.max(1)) else {
+        let Some(line) = coverable_line(position) else {
             return;
         };
         let first_sight = match self.coverage.as_mut() {
@@ -222,7 +230,7 @@ impl Codegen {
 mod tests {
     use super::coverable_lines;
     use crate::builder::{Codegen, CodegenOptions};
-    use osprey_ast::Position;
+    use osprey_ast::{Expr, Position, Program, Stmt};
 
     const NESTED_SOURCE: &str = "namespace sample {\n\
       module Stats {\n\
@@ -281,6 +289,38 @@ mod tests {
             1
         );
         assert_eq!(module.matches("store i64").count(), 2);
+    }
+
+    /// The built-in prelude is compiler source attached beside the program,
+    /// not the program: its lines are neither coverable nor counted, so a
+    /// program that uses Json reports only its own lines.
+    #[test]
+    fn prelude_lines_are_never_coverable() {
+        let mut cg = coverage_codegen();
+        let prelude = Position {
+            line: osprey_types::PRELUDE_LINE_BASE + 7,
+            column: 0,
+        };
+        cg.begin_function("f", None);
+        cg.cov_hit(Some(prelude));
+        cg.cov_hit(Some(Position { line: 3, column: 0 }));
+        cg.emit("ret i64 0");
+        cg.finish_function("i64", "f", &[]);
+        let program = Program {
+            statements: vec![Stmt::Expr {
+                value: Expr::Integer(1),
+                doc: None,
+                position: Some(prelude),
+            }],
+            doc: None,
+        };
+        cg.cov_seed(&program);
+        let init = cg.cov_render_init().unwrap_or_default();
+        assert!(init.contains("i64 3,"), "{init}");
+        assert!(!init.contains(&format!("i64 {},", prelude.line)), "{init}");
+        assert!(!cg
+            .render()
+            .contains(&format!("@__osp_cov_hits.{}", prelude.line)));
     }
 
     #[test]

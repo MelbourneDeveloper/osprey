@@ -24,6 +24,9 @@ use structural::gen_structural_match;
 use union::{gen_union_match, union_owner};
 
 pub(crate) fn gen_match(cg: &mut Codegen, value: &Expr, arms: &[MatchArm]) -> Result<Value> {
+    if let Some(fused) = result::gen_list_get_match(cg, value, arms)? {
+        return Ok(fused);
+    }
     let disc = gen_expr(cg, value)?;
     if arms.iter().any(|a| is_result_arm(&a.pattern))
         && (disc.result_inner.is_some()
@@ -212,7 +215,7 @@ fn finish_phi(
     });
     let mut out = match result_inner {
         Some(inner) => Value::result(reg, inner),
-        None => Value::new(reg, ty).with_owner(common(|v| v.osp_ty.clone())),
+        None => Value::new(reg, ty).with_owner(merged_owner(cg, &incoming_values)),
     };
     out.result_inner_is_placeholder = result_inner.is_some()
         && incoming_values
@@ -239,6 +242,28 @@ fn finish_phi(
         .collect::<Vec<_>>();
     crate::arc::move_phi_owners(cg, &incoming_ops, &out, mark);
     Ok(out)
+}
+
+/// The owner of the merged handle. Arms naming one owner keep it; arms naming
+/// different owners for one physical block — an object literal's `__obj_N`
+/// beside a row-typed binding's `__row#…` — share the first. Dropping it made
+/// field access after the join guess a record by field name: a hard error, or
+/// another record's slots read silently (#272). Implements [TYPE-RECORD],
+/// [STAGE-SIGNALS-REBUILD].
+fn merged_owner(cg: &mut Codegen, incoming: &[(Value, String)]) -> Option<String> {
+    let (first, _) = incoming.first()?;
+    let owner = first.osp_ty.clone()?;
+    let shape = (owner.as_str(), first.inferred_type.as_ref());
+    incoming
+        .iter()
+        .all(|(value, _)| match value.osp_ty.as_deref() {
+            Some(other) if other == owner => true,
+            Some(other) => {
+                crate::aggregate::same_block(cg, shape, (other, value.inferred_type.as_ref()))
+            }
+            None => false,
+        })
+        .then_some(owner.clone())
 }
 
 /// Resolve the concrete success-slot layout for a Result-valued match.  A bare

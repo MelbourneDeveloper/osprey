@@ -1,0 +1,11 @@
+encoded: {"name":"osprey","tags":["fast","typed"],"version":3,"ratio":0.25,"whole":2.0,"nested":{"empty":[],"none":{}},"flags":[true,false,null]}
+ok 1 - encoding is compact and ordered
+quoted: "quote\" back\\ slash/ tab\t nl\n cr\r esc\u001b del é 😀"
+ok 2 - strings escape exactly
+ok 3 - numbers keep their kind
+ok 4 - malformed text says where
+ok 5 - accessors are typed
+order: {"id":42,"customer":"Grace \"G\" Hopper","total":19.99,"paid":true,"lines":["cable","adapter"]}
+ok 6 - records round trip
+1..6
+# tests=6 passed=6 failed=0 skipped=0

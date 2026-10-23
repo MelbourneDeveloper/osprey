@@ -190,3 +190,56 @@ callableSnapshotsKeepTheirCapturedValues () =
     checkAll "callable snapshots own their captured values" [first.value () == "count=2", idle.value () == "count=2", next.value () == "count=4", first.revision == 1, idle.revision == 1, next.revision == 2]
 
 test "cached callables retain their captured values across rebuilds" callableSnapshotsKeepTheirCapturedValues
+
+(** A rebuild is an ordinary record wherever it flows: passed straight into a
+    call, from either arm of the rebuild, it keeps its layout (#272). *)
+type Region =
+    region : string
+    dependencies : List<string>
+    revision : int
+    json : string
+describeSnapshot next = "${next.value}@${next.revision}"
+named (key, next) = Region(region = key, dependencies = next.dependencies, revision = next.revision, json = next.value)
+blankSnapshot () = { dependencies = ["<unknown>"], revision = 0, value = "" }
+pickRow (cached, flag) =
+    row = match flag
+        true => { revision = 1, value = "fresh" }
+        false => cached
+    describeSnapshot row
+refreshArgumentsKeepTheirLayout () =
+    first =
+        handle static Signal<Count>
+            read => Count(value = 2)
+        signalSnapshot counterLabel
+    direct =
+        handle static Signal<Count>
+            read => Count(value = 3)
+        describeSnapshot (signalRefresh (blankSnapshot ()) [] counterLabel)
+    built =
+        handle static Signal<Count>
+            read => Count(value = 3)
+        named ("list", signalRefresh (blankSnapshot ()) [] counterLabel)
+    kept =
+        handle static Signal<Count>
+            read => Count(value = 9)
+        named ("kept", signalRefresh first [] counterLabel)
+    bound =
+        handle static Signal<Count>
+            read => Count(value = 4)
+        next = signalRefresh (blankSnapshot ()) [] counterLabel
+        describeSnapshot next
+    snapshot =
+        handle static Signal<Count>
+            read => Count(value = 5)
+        describeSnapshot (signalSnapshot counterLabel)
+    print "refresh arguments: ${direct} ${built.region}=${built.json}@${built.revision} ${kept.region}=${kept.json}@${kept.revision} ${bound} ${snapshot} ${describeSnapshot first}"
+    checkAll "refreshed snapshots keep their record layout as call arguments" [
+        direct == "count=3@1", built.region == "list", built.json == "count=3", built.revision == 1,
+        join built.dependencies ";" == join (signalDependencies counterLabel) ";",
+        kept.region == "kept", kept.json == "count=2", kept.revision == 1,
+        join kept.dependencies ";" == join first.dependencies ";",
+        bound == "count=4@1", snapshot == "count=5@1", describeSnapshot first == "count=2@1",
+        pickRow ({ revision = 9, value = "cached" }, false) == "cached@9", pickRow ({ revision = 9, value = "cached" }, true) == "fresh@1",
+    ]
+
+test "refreshed snapshots keep their layout as call arguments" refreshArgumentsKeepTheirLayout

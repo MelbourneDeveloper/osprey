@@ -1,98 +1,89 @@
-// JSON runtime - a compact, self-contained recursive-descent JSON parser with
-// path-based accessors. Implements [BUILTIN-JSON].
+// JSON runtime - the strict RFC 8259 recursive-descent parser every JSON
+// entry point shares: the handle API (jsonParse) and the typed Json decoder
+// both read documents through json_parse_doc, so they accept and reject
+// exactly the same texts. String literals decode in json_text.c; handles,
+// the decode accessors and the writer live in json_codec.c. Implements
+// [BUILTIN-JSON], [BUILTIN-JSON-LIMITS].
 //
-// Surface (all handle-based; handles are 1-based ints):
-//   json_parse(s)            -> handle (>=1) or negative error
-//   json_get(h, path)        -> scalar value as a string, or NULL if not a scalar
-//   json_length(h, path)     -> element count for arrays/objects, or -1
-//   json_free(h)             -> 0 on success, -1 on invalid/double free
-//
-// Path syntax: "a.b[0].c". Keys containing '.' or '[' are not addressable in v1.
+// A document is built flat, in four growable arrays -- nodes, child slots,
+// one text arena and a scratch stack of the open containers' children --
+// so parsing costs a handful of allocations however large the document is,
+// and freeing it costs four [BUILTIN-JSON-TYPED].
 
-#ifndef __wasm__
-#include <pthread.h>
-#endif
-#include <stdbool.h>
+#include "io_error.h"
+#include "json_internal.h"
+
+#include <errno.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_JSON_DOCS 1024
-
-typedef enum { J_NULL, J_BOOL, J_NUM, J_STR, J_ARR, J_OBJ } JType;
-
-typedef struct JVal {
-  JType type;
-  bool bval;          // J_BOOL
-  char *str;          // J_STR (decoded value) / J_NUM (raw token text)
-  struct JVal **items; // J_ARR
-  size_t count;        // J_ARR length
-  char **keys;         // J_OBJ keys
-  struct JVal **vals;  // J_OBJ values
-  size_t nmemb;        // J_OBJ pair count
-} JVal;
-
-static JVal *g_json_docs[MAX_JSON_DOCS];
-
-// Every fiber shares the document table, so each access holds this lock.
-// wasm32-wasip1 runs one thread — the fiber runtime is not in its archive —
-// and the WASI SDK that CI pins ships no pthread mutex, so a JSON program
-// could not link there. The lock compiles away on that target. [WASM-TARGET]
-#ifdef __wasm__
-static void json_table_lock(void) {}
-static void json_table_unlock(void) {}
-#else
-static pthread_mutex_t g_json_mutex = PTHREAD_MUTEX_INITIALIZER;
-static void json_table_lock(void) { pthread_mutex_lock(&g_json_mutex); }
-static void json_table_unlock(void) { pthread_mutex_unlock(&g_json_mutex); }
-#endif
-
-// ---- value construction / teardown ----------------------------------------
-
-static JVal *jval_new(JType type) {
-  JVal *v = calloc(1, sizeof(JVal));
-  if (v) {
-    v->type = type;
-  }
-  return v;
-}
-
-static void jval_free(JVal *v) {
-  if (!v) {
-    return;
-  }
-  switch (v->type) {
-  case J_STR:
-  case J_NUM:
-    free(v->str);
-    break;
-  case J_ARR:
-    for (size_t i = 0; i < v->count; i++) {
-      jval_free(v->items[i]);
-    }
-    free(v->items);
-    break;
-  case J_OBJ:
-    for (size_t i = 0; i < v->nmemb; i++) {
-      free(v->keys[i]);
-      jval_free(v->vals[i]);
-    }
-    free(v->keys);
-    free(v->vals);
-    break;
-  default:
-    break;
-  }
-  free(v);
-}
-
-// ---- parser ----------------------------------------------------------------
-
 typedef struct {
-  const char *p;
-  bool ok;
-} Cursor;
+  Cursor c;
+  JDoc *doc;
+  size_t *pending; // children of the containers still open, innermost last
+  size_t npending;
+  size_t pending_cap;
+  const char **names; // scratch for checking a large object's names
+  size_t names_cap;
+  bool typed;
+} Parser;
+
+#define JSON_NO_NODE SIZE_MAX
+
+void json_doc_free(JDoc *doc) {
+  if (doc) {
+    free(doc->nodes);
+    free(doc->slots);
+    free(doc->text.data);
+    free(doc);
+  }
+}
+
+const JNode *json_slot(const JDoc *doc, size_t slot) {
+  return slot < doc->nslots ? &doc->nodes[doc->slots[slot]] : NULL;
+}
+
+// Room for one more element in a doubling array; false when it cannot grow.
+static bool reserve(void **items, size_t *cap, size_t used, size_t size) {
+  if (used < *cap) {
+    return true;
+  }
+  size_t grown = *cap ? *cap * 2 : 64;
+  void *moved = realloc(*items, grown * size);
+  if (!moved) {
+    return false;
+  }
+  *items = moved;
+  *cap = grown;
+  return true;
+}
+
+void json_reject(Cursor *c, const char *why) {
+  if (c->ok) {
+    c->ok = false;
+    c->why = why;
+    c->at = c->p;
+  }
+}
+
+static size_t out_of_memory(Parser *ps) {
+  json_reject(&ps->c, "out of memory");
+  return JSON_NO_NODE;
+}
+
+// A fresh node of `type`; the caller fills the rest. Nodes are addressed by
+// id, never by pointer, because the array moves as it grows.
+static size_t new_node(Parser *ps, JType type) {
+  JDoc *doc = ps->doc;
+  if (!reserve((void **)&doc->nodes, &doc->cap, doc->count, sizeof(JNode))) {
+    return out_of_memory(ps);
+  }
+  doc->nodes[doc->count] = (JNode){.type = (uint8_t)type, .key = JSON_NO_KEY};
+  return doc->count++;
+}
 
 static void skip_ws(Cursor *c) {
   while (*c->p == ' ' || *c->p == '\t' || *c->p == '\n' || *c->p == '\r') {
@@ -100,285 +91,18 @@ static void skip_ws(Cursor *c) {
   }
 }
 
-static JVal *parse_value(Cursor *c);
+static size_t parse_value(Parser *ps);
 
-// Encodes a Unicode code point as UTF-8 into out (up to 4 bytes); returns count.
-static size_t utf8_encode(unsigned long cp, char *out) {
-  if (cp <= 0x7F) {
-    out[0] = (char)cp;
-    return 1;
+static size_t parse_string(Parser *ps) {
+  size_t at = ps->doc->text.len;
+  if (!json_decode_string(&ps->c, &ps->doc->text)) {
+    return JSON_NO_NODE;
   }
-  if (cp <= 0x7FF) {
-    out[0] = (char)(0xC0 | (cp >> 6));
-    out[1] = (char)(0x80 | (cp & 0x3F));
-    return 2;
+  size_t id = new_node(ps, J_STR);
+  if (id != JSON_NO_NODE) {
+    ps->doc->nodes[id].at = at;
   }
-  if (cp <= 0xFFFF) {
-    out[0] = (char)(0xE0 | (cp >> 12));
-    out[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
-    out[2] = (char)(0x80 | (cp & 0x3F));
-    return 3;
-  }
-  out[0] = (char)(0xF0 | (cp >> 18));
-  out[1] = (char)(0x80 | ((cp >> 12) & 0x3F));
-  out[2] = (char)(0x80 | ((cp >> 6) & 0x3F));
-  out[3] = (char)(0x80 | (cp & 0x3F));
-  return 4;
-}
-
-// Out of band for a 4-bit value, so a non-hex character is reported rather
-// than folded into the digit set. Returning 0 for one silently decoded
-// "\uZZZZ" as U+0000 — malformed JSON accepted as an embedded NUL, which then
-// truncates the very string the caller reads back [BUILTIN-JSON].
-#define HEX_NIBBLE_INVALID 16u
-
-static unsigned hex_nibble(char ch) {
-  if (ch >= '0' && ch <= '9') {
-    return (unsigned)(ch - '0');
-  }
-  if (ch >= 'a' && ch <= 'f') {
-    return (unsigned)(ch - 'a' + 10);
-  }
-  if (ch >= 'A' && ch <= 'F') {
-    return (unsigned)(ch - 'A' + 10);
-  }
-  return HEX_NIBBLE_INVALID;
-}
-
-// Consume the four hex digits of a \u escape, advancing the cursor over them.
-// False — leaving the cursor where it stopped — when any is missing or is not
-// a hex digit. The terminating NUL is not a hex digit either, so a truncated
-// escape stops here instead of walking off the end of the text.
-static bool parse_hex4(Cursor *c, unsigned long *out) {
-  unsigned long cp = 0;
-  for (int i = 0; i < 4; i++) {
-    c->p++;
-    unsigned nibble = hex_nibble(*c->p);
-    if (nibble == HEX_NIBBLE_INVALID) {
-      return false;
-    }
-    cp = (cp << 4) | nibble;
-  }
-  *out = cp;
-  return true;
-}
-
-// The complete escape alphabet of RFC 8259. Anything outside it -- `\q`,
-// `\x41`, a backslash before the closing quote -- is malformed input. Dropping
-// the backslash and keeping the letter turned every one of them into a
-// plausible-looking string no other JSON reader agrees with
-// [BUILTIN-JSON-STRING].
-static bool simple_escape(char ch, char *out) {
-  switch (ch) {
-  case '"': *out = '"'; return true;
-  case '\\': *out = '\\'; return true;
-  case '/': *out = '/'; return true;
-  case 'b': *out = '\b'; return true;
-  case 'f': *out = '\f'; return true;
-  case 'n': *out = '\n'; return true;
-  case 'r': *out = '\r'; return true;
-  case 't': *out = '\t'; return true;
-  default: return false;
-  }
-}
-
-// Surrogate halves are not code points: they exist only as the two-unit
-// spelling of one code point above U+FFFF. Encoding a half on its own emits
-// CESU-8, which no UTF-8 reader accepts, and combining a high half with
-// something that is not a low half underflows `lo - 0xDC00` through zero and
-// lands the result somewhere in the millions [BUILTIN-JSON-STRING].
-#define SURROGATE_HIGH_FIRST 0xD800UL
-#define SURROGATE_HIGH_LAST 0xDBFFUL
-#define SURROGATE_LOW_FIRST 0xDC00UL
-#define SURROGATE_LOW_LAST 0xDFFFUL
-#define SURROGATE_PAIR_BASE 0x10000UL
-#define SURROGATE_HIGH_SHIFT 10
-
-static bool is_high_surrogate(unsigned long cp) {
-  return cp >= SURROGATE_HIGH_FIRST && cp <= SURROGATE_HIGH_LAST;
-}
-
-static bool is_low_surrogate(unsigned long cp) {
-  return cp >= SURROGATE_LOW_FIRST && cp <= SURROGATE_LOW_LAST;
-}
-
-// Decode one `\uXXXX` escape with the cursor on its `u`, leaving the cursor on
-// the last consumed character. False for every malformed spelling.
-static bool decode_unicode_escape(Cursor *c, char *buf, size_t *n) {
-  unsigned long cp = 0;
-  if (!parse_hex4(c, &cp)) {
-    return false;
-  }
-  if (cp == 0) {
-    // Every scalar leaves this unit as a NUL-terminated C string, so a decoded
-    // U+0000 does not embed a NUL -- it TRUNCATES the value, and the document
-    // {"k":"a\\u0000b"} reads back as "a" with no error reported anywhere
-    // [BUILTIN-JSON-STRING].
-    return false;
-  }
-  if (is_low_surrogate(cp)) {
-    return false; // a low half with no high half in front of it
-  }
-  if (is_high_surrogate(cp)) {
-    if (c->p[1] != '\\' || c->p[2] != 'u') {
-      return false; // a high half with no escape at all after it
-    }
-    c->p += 2;
-    unsigned long lo = 0;
-    if (!parse_hex4(c, &lo) || !is_low_surrogate(lo)) {
-      return false; // ... or an escape that is not the other half
-    }
-    cp = SURROGATE_PAIR_BASE +
-         ((cp - SURROGATE_HIGH_FIRST) << SURROGATE_HIGH_SHIFT) +
-         (lo - SURROGATE_LOW_FIRST);
-  }
-  *n = utf8_encode(cp, buf);
-  return true;
-}
-
-// The LITERAL path. JSON text is UTF-8 by definition and every scalar leaves
-// this unit as a string the rest of the runtime reads as UTF-8, so copying
-// whatever bytes arrived would carry an overlong form, a surrogate spelled in
-// UTF-8, a truncated sequence or a stray continuation byte straight into a
-// value that no downstream reader agrees about -- while the escape path next
-// to it rejects the very same characters [BUILTIN-JSON-STRING].
-#define UTF8_CONTINUATION_MASK 0xC0u
-#define UTF8_CONTINUATION_MARK 0x80u
-#define UNICODE_MAX 0x10FFFFUL
-
-// How many bytes the sequence a lead byte introduces occupies; 0 when the byte
-// is not a lead byte at all (a continuation byte, or 0xF8..0xFF).
-static size_t utf8_sequence_length(unsigned char lead) {
-  if ((lead & 0xE0u) == 0xC0u) {
-    return 2;
-  }
-  if ((lead & 0xF0u) == 0xE0u) {
-    return 3;
-  }
-  if ((lead & 0xF8u) == 0xF0u) {
-    return 4;
-  }
-  return 0;
-}
-
-// The smallest code point each length may legally spell. Anything below is an
-// overlong form: a second spelling of a character that already has one, and
-// the classic way past a filter that only looked at the short one.
-static const unsigned long UTF8_MIN_FOR_LENGTH[] = {0, 0, 0x80UL, 0x800UL,
-                                                    0x10000UL};
-
-static bool copy_utf8_sequence(Cursor *c, char *buf, size_t *n) {
-  unsigned char lead = (unsigned char)*c->p;
-  size_t len = utf8_sequence_length(lead);
-  if (len == 0) {
-    return false;
-  }
-  unsigned long cp = lead & (0xFFu >> (len + 1));
-  for (size_t i = 1; i < len; i++) {
-    unsigned char next = (unsigned char)c->p[i];
-    if ((next & UTF8_CONTINUATION_MASK) != UTF8_CONTINUATION_MARK) {
-      return false; // truncated -- the terminating NUL stops here too
-    }
-    cp = (cp << 6) | (next & 0x3Fu);
-  }
-  if (cp < UTF8_MIN_FOR_LENGTH[len] || cp > UNICODE_MAX ||
-      is_high_surrogate(cp) || is_low_surrogate(cp)) {
-    return false;
-  }
-  memcpy(buf, c->p, len);
-  *n = len;
-  c->p += len;
-  return true;
-}
-
-// RFC 8259 requires U+0000..U+001F to be escaped inside a string. Taking a raw
-// one literally makes this parser disagree with every other reader about where
-// the string ends [BUILTIN-JSON-STRING].
-#define JSON_LAST_CONTROL_CHAR 0x1F
-
-// Free the half-built buffer and mark the document malformed. Returns NULL so
-// each rejection inside the decode loop is a single statement and none of them
-// can drift out of step with the others.
-static char *string_rejected(Cursor *c, char *out) {
-  free(out);
-  c->ok = false;
-  return NULL;
-}
-
-// Decode the one character at the cursor into `buf`/`*n`, advancing past it.
-// False when the input is not a well-formed JSON string character.
-static bool decode_string_char(Cursor *c, char *buf, size_t *n) {
-  if ((unsigned char)*c->p <= JSON_LAST_CONTROL_CHAR) {
-    return false;
-  }
-  if ((unsigned char)*c->p >= UTF8_CONTINUATION_MARK) {
-    return copy_utf8_sequence(c, buf, n);
-  }
-  if (*c->p != '\\') {
-    buf[0] = *c->p;
-    c->p++;
-    return true;
-  }
-  c->p++;
-  bool ok = *c->p == 'u' ? decode_unicode_escape(c, buf, n)
-                         : simple_escape(*c->p, buf);
-  c->p++;
-  return ok;
-}
-
-// Parses a JSON string literal (cursor positioned at the opening quote) into a
-// freshly allocated, decoded, NUL-terminated C string.
-static char *parse_string_raw(Cursor *c) {
-  if (*c->p != '"') {
-    c->ok = false;
-    return NULL;
-  }
-  c->p++;
-  size_t cap = 16;
-  size_t len = 0;
-  char *out = malloc(cap);
-  if (!out) {
-    c->ok = false;
-    return NULL;
-  }
-  while (*c->p && *c->p != '"') {
-    char buf[4];
-    size_t n = 1;
-    if (!decode_string_char(c, buf, &n)) {
-      return string_rejected(c, out);
-    }
-    if (len + n + 1 > cap) {
-      cap = (len + n + 1) * 2;
-      char *nb = realloc(out, cap);
-      if (!nb) {
-        return string_rejected(c, out);
-      }
-      out = nb;
-    }
-    memcpy(out + len, buf, n);
-    len += n;
-  }
-  if (*c->p != '"') {
-    return string_rejected(c, out);
-  }
-  c->p++;
-  out[len] = '\0';
-  return out;
-}
-
-static JVal *parse_string(Cursor *c) {
-  char *s = parse_string_raw(c);
-  if (!s) {
-    return NULL;
-  }
-  JVal *v = jval_new(J_STR);
-  if (!v) {
-    free(s);
-    c->ok = false;
-    return NULL;
-  }
-  v->str = s;
-  return v;
+  return id;
 }
 
 // One or more digits; false when there were none.
@@ -392,13 +116,14 @@ static bool scan_digits(Cursor *c) {
 
 // RFC 8259's number grammar exactly: an optional minus, an integer part whose
 // leading zero stands alone, an optional fraction of at least one digit, and
-// an optional exponent of at least one digit.
+// an optional exponent of at least one digit. `*integer` says whether the
+// fraction and exponent were both absent.
 //
 // The scanner this replaces took any run of [0-9.eE+-], so `-`, `1.`, `1e`,
 // `1+2`, `--1` and `1e+` all parsed -- and since a number is STORED as its
 // source text, every one of them came straight back out of jsonGet as a
 // "number" no other reader would ever produce [BUILTIN-JSON-NUMBER].
-static bool scan_number(Cursor *c) {
+static bool scan_number(Cursor *c, bool *integer) {
   if (*c->p == '-') {
     c->p++;
   }
@@ -407,6 +132,7 @@ static bool scan_number(Cursor *c) {
   } else if (!scan_digits(c)) {
     return false;
   }
+  *integer = *c->p != '.' && *c->p != 'e' && *c->p != 'E';
   if (*c->p == '.') {
     c->p++;
     if (!scan_digits(c)) {
@@ -423,347 +149,333 @@ static bool scan_number(Cursor *c) {
   return scan_digits(c);
 }
 
-static JVal *parse_number(Cursor *c) {
-  const char *start = c->p;
-  if (!scan_number(c)) {
-    c->ok = false;
-    return NULL;
+// Up to 18 digits cannot overflow int64, so the common integer is read in
+// one pass; a longer one goes through strtoll for its exact range check.
+static const char *read_integer(const char *lexeme, size_t len, int64_t *out) {
+  bool negative = lexeme[0] == '-';
+  size_t digits = len - (negative ? 1 : 0);
+  if (digits > 18) {
+    errno = 0;
+    *out = strtoll(lexeme, NULL, 10);
+    return errno == ERANGE ? "integer outside the 64-bit range" : NULL;
   }
-  size_t len = (size_t)(c->p - start);
-  JVal *v = jval_new(J_NUM);
-  if (!v) {
-    c->ok = false;
-    return NULL;
+  int64_t value = 0;
+  for (const char *d = lexeme + (negative ? 1 : 0); d < lexeme + len; d++) {
+    value = value * 10 + (*d - '0');
   }
-  v->str = malloc(len + 1);
-  if (!v->str) {
-    jval_free(v);
-    c->ok = false;
-    return NULL;
-  }
-  memcpy(v->str, start, len);
-  v->str[len] = '\0';
-  return v;
-}
-
-static JVal *parse_array(Cursor *c) {
-  c->p++; // consume '['
-  JVal *v = jval_new(J_ARR);
-  if (!v) {
-    c->ok = false;
-    return NULL;
-  }
-  skip_ws(c);
-  if (*c->p == ']') {
-    c->p++;
-    return v;
-  }
-  for (;;) {
-    JVal *item = parse_value(c);
-    if (!c->ok) {
-      jval_free(v);
-      return NULL;
-    }
-    JVal **ni = realloc(v->items, (v->count + 1) * sizeof(JVal *));
-    if (!ni) {
-      jval_free(item);
-      jval_free(v);
-      c->ok = false;
-      return NULL;
-    }
-    v->items = ni;
-    v->items[v->count++] = item;
-    skip_ws(c);
-    if (*c->p == ',') {
-      c->p++;
-      skip_ws(c);
-      continue;
-    }
-    if (*c->p == ']') {
-      c->p++;
-      return v;
-    }
-    jval_free(v);
-    c->ok = false;
-    return NULL;
-  }
-}
-
-static JVal *parse_object(Cursor *c) {
-  c->p++; // consume '{'
-  JVal *v = jval_new(J_OBJ);
-  if (!v) {
-    c->ok = false;
-    return NULL;
-  }
-  skip_ws(c);
-  if (*c->p == '}') {
-    c->p++;
-    return v;
-  }
-  for (;;) {
-    skip_ws(c);
-    char *key = parse_string_raw(c);
-    if (!key) {
-      jval_free(v);
-      c->ok = false;
-      return NULL;
-    }
-    skip_ws(c);
-    if (*c->p != ':') {
-      free(key);
-      jval_free(v);
-      c->ok = false;
-      return NULL;
-    }
-    c->p++;
-    JVal *val = parse_value(c);
-    if (!c->ok) {
-      free(key);
-      jval_free(v);
-      return NULL;
-    }
-    // Each block is published into `v` the instant it exists. realloc has
-    // already freed the old one, so holding a new block in a local while the
-    // NEXT allocation runs leaves `v` pointing at freed memory — and the
-    // cleanup below then walks it. That was a use-after-free reached by
-    // nothing worse than a second realloc saying no.
-    char **nk = realloc(v->keys, (v->nmemb + 1) * sizeof(char *));
-    if (nk != NULL) {
-      v->keys = nk;
-    }
-    JVal **nv = realloc(v->vals, (v->nmemb + 1) * sizeof(JVal *));
-    if (nv != NULL) {
-      v->vals = nv;
-    }
-    if (nk == NULL || nv == NULL) {
-      free(key);
-      jval_free(val);
-      jval_free(v);
-      c->ok = false;
-      return NULL;
-    }
-    v->keys[v->nmemb] = key;
-    v->vals[v->nmemb] = val;
-    v->nmemb++;
-    skip_ws(c);
-    if (*c->p == ',') {
-      c->p++;
-      continue;
-    }
-    if (*c->p == '}') {
-      c->p++;
-      return v;
-    }
-    jval_free(v);
-    c->ok = false;
-    return NULL;
-  }
-}
-
-static JVal *parse_value(Cursor *c) {
-  skip_ws(c);
-  switch (*c->p) {
-  case '"':
-    return parse_string(c);
-  case '{':
-    return parse_object(c);
-  case '[':
-    return parse_array(c);
-  case 't':
-    if (strncmp(c->p, "true", 4) == 0) {
-      c->p += 4;
-      JVal *v = jval_new(J_BOOL);
-      if (v) {
-        v->bval = true;
-      } else {
-        c->ok = false;
-      }
-      return v;
-    }
-    break;
-  case 'f':
-    if (strncmp(c->p, "false", 5) == 0) {
-      c->p += 5;
-      JVal *v = jval_new(J_BOOL);
-      if (v) {
-        v->bval = false;
-      } else {
-        c->ok = false;
-      }
-      return v;
-    }
-    break;
-  case 'n':
-    if (strncmp(c->p, "null", 4) == 0) {
-      c->p += 4;
-      JVal *v = jval_new(J_NULL);
-      if (!v) {
-        c->ok = false;
-      }
-      return v;
-    }
-    break;
-  default:
-    if (*c->p == '-' || (*c->p >= '0' && *c->p <= '9')) {
-      return parse_number(c);
-    }
-    break;
-  }
-  c->ok = false;
+  *out = negative ? -value : value;
   return NULL;
 }
 
-// ---- path navigation -------------------------------------------------------
+// A typed document holds every number as the value the Json type gives it:
+// an integer lexeme must fit int64 and any other must be a finite double, so
+// nothing is rounded or clamped behind the program's back.
+static const char *read_number(JNode *n, const char *lexeme, size_t len) {
+  if (n->flag) {
+    return read_integer(lexeme, len, &n->number.i);
+  }
+  n->number.f = strtod(lexeme, NULL);
+  return isfinite(n->number.f) ? NULL : "number outside the float range";
+}
 
-static const JVal *navigate(const JVal *cur, const char *path) {
-  const char *p = path;
-  while (cur && *p) {
-    if (*p == '.') {
-      p++;
-      continue;
-    }
-    if (*p == '[') {
-      p++;
-      long idx = 0;
-      bool any = false;
-      while (*p >= '0' && *p <= '9') {
-        idx = idx * 10 + (*p - '0');
-        p++;
-        any = true;
-      }
-      if (!any || *p != ']') {
-        return NULL;
-      }
-      p++;
-      if (cur->type != J_ARR || idx < 0 || (size_t)idx >= cur->count) {
-        return NULL;
-      }
-      cur = cur->items[idx];
-    } else {
-      const char *start = p;
-      while (*p && *p != '.' && *p != '[') {
-        p++;
-      }
-      size_t klen = (size_t)(p - start);
-      if (cur->type != J_OBJ) {
-        return NULL;
-      }
-      const JVal *next = NULL;
-      for (size_t i = 0; i < cur->nmemb; i++) {
-        if (strlen(cur->keys[i]) == klen &&
-            strncmp(cur->keys[i], start, klen) == 0) {
-          next = cur->vals[i];
-          break;
-        }
-      }
-      if (!next) {
-        return NULL;
-      }
-      cur = next;
+static size_t number_node(Parser *ps, const char *start, bool integer) {
+  size_t len = (size_t)(ps->c.p - start);
+  size_t at = ps->doc->text.len;
+  if (!json_buf_append(&ps->doc->text, start, len) ||
+      !json_buf_append(&ps->doc->text, "", 1)) {
+    return out_of_memory(ps);
+  }
+  size_t id = new_node(ps, J_NUM);
+  if (id == JSON_NO_NODE) {
+    return id;
+  }
+  JNode *n = &ps->doc->nodes[id];
+  n->at = at;
+  n->flag = integer;
+  const char *bad = ps->typed ? read_number(n, ps->doc->text.data + at, len)
+                              : NULL;
+  if (bad) {
+    ps->c.p = start; // name the number, not the byte after it
+    json_reject(&ps->c, bad);
+    return JSON_NO_NODE;
+  }
+  return id;
+}
+
+static size_t parse_number(Parser *ps) {
+  const char *start = ps->c.p;
+  bool integer = true;
+  if (!scan_number(&ps->c, &integer)) {
+    ps->c.p = start; // name the number, not the byte the scan stopped on
+    json_reject(&ps->c, "invalid number");
+    return JSON_NO_NODE;
+  }
+  return number_node(ps, start, integer);
+}
+
+static bool push_pending(Parser *ps, size_t id) {
+  if (!reserve((void **)&ps->pending, &ps->pending_cap, ps->npending,
+               sizeof(size_t))) {
+    out_of_memory(ps);
+    return false;
+  }
+  ps->pending[ps->npending++] = id;
+  return true;
+}
+
+// Move the children pushed since `base` into the document's slots as the
+// container's one contiguous run.
+static size_t close_container(Parser *ps, size_t id, size_t base) {
+  JDoc *doc = ps->doc;
+  size_t count = ps->npending - base;
+  while (doc->slots_cap < doc->nslots + count) {
+    if (!reserve((void **)&doc->slots, &doc->slots_cap, doc->slots_cap,
+                 sizeof(size_t))) {
+      return out_of_memory(ps);
     }
   }
-  return cur;
+  memcpy(doc->slots + doc->nslots, ps->pending + base, count * sizeof(size_t));
+  doc->nodes[id].at = doc->nslots;
+  doc->nodes[id].count = count;
+  doc->nslots += count;
+  ps->npending = base;
+  return id;
 }
 
-static bool valid_doc_handle(int64_t handle) {
-  return handle >= 1 && handle < MAX_JSON_DOCS;
+// After an element: true to read another, false once the closing bracket is
+// consumed or the container is malformed (then `c->ok` is false).
+static bool another(Cursor *c, char close, const char *why) {
+  skip_ws(c);
+  if (*c->p == ',') {
+    c->p++;
+    return true;
+  }
+  if (*c->p == close) {
+    c->p++;
+  } else {
+    json_reject(c, why);
+  }
+  return false;
 }
 
-static const JVal *lookup(int64_t handle, const char *path) {
-  if (!valid_doc_handle(handle) || !g_json_docs[handle]) {
+static size_t parse_array(Parser *ps) {
+  ps->c.p++; // consume '['
+  size_t id = new_node(ps, J_ARR);
+  size_t base = ps->npending;
+  skip_ws(&ps->c);
+  bool more = id != JSON_NO_NODE && *ps->c.p != ']';
+  if (!more && id != JSON_NO_NODE) {
+    ps->c.p++;
+  }
+  while (more) {
+    size_t item = parse_value(ps);
+    more = item != JSON_NO_NODE && push_pending(ps, item) &&
+           another(&ps->c, ']', "expected ',' or ']' in array");
+  }
+  return ps->c.ok ? close_container(ps, id, base) : JSON_NO_NODE;
+}
+
+static int compare_keys(const void *left, const void *right) {
+  return strcmp(*(char *const *)left, *(char *const *)right);
+}
+
+static const char *member_name(const Parser *ps, size_t member) {
+  return ps->doc->text.data + ps->doc->nodes[ps->pending[member]].key;
+}
+
+// Objects this small compare every pair: cheaper than sorting, and no
+// allocation at all.
+#define JSON_PAIRWISE_MEMBERS 8
+
+static bool repeats_pairwise(const Parser *ps, size_t base) {
+  for (size_t i = base; i < ps->npending; i++) {
+    for (size_t j = i + 1; j < ps->npending; j++) {
+      if (strcmp(member_name(ps, i), member_name(ps, j)) == 0) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Whether two of the members pushed since `base` share a name. A large
+// object sorts its names in a scratch array the parse reuses, so a huge
+// object cannot turn the check into a denial of service.
+static bool repeats_a_name(Parser *ps, size_t base, bool *failed) {
+  size_t n = ps->npending - base;
+  if (n <= JSON_PAIRWISE_MEMBERS) {
+    return repeats_pairwise(ps, base);
+  }
+  while (ps->names_cap < n) {
+    if (!reserve((void **)&ps->names, &ps->names_cap, ps->names_cap,
+                 sizeof(char *))) {
+      *failed = true;
+      return false;
+    }
+  }
+  for (size_t i = 0; i < n; i++) {
+    ps->names[i] = member_name(ps, base + i);
+  }
+  qsort(ps->names, n, sizeof(char *), compare_keys);
+  for (size_t i = 1; i < n; i++) {
+    if (strcmp(ps->names[i - 1], ps->names[i]) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Two members with one name make every lookup a guess about which one the
+// author meant -- first-wins here, last-wins in most other readers -- and
+// hostile input exploits exactly that disagreement. A document that repeats a
+// name is rejected whole, at the object's opening brace [BUILTIN-JSON-LIMITS].
+static size_t close_object(Parser *ps, size_t id, size_t base,
+                           const char *open) {
+  bool oom = false;
+  if (ps->npending - base > 1 && repeats_a_name(ps, base, &oom)) {
+    ps->c.p = open;
+    json_reject(&ps->c, "duplicate member name");
+    return JSON_NO_NODE;
+  }
+  return oom ? out_of_memory(ps) : close_container(ps, id, base);
+}
+
+// One `"name": value` member, its name recorded on the value's node.
+static size_t parse_member(Parser *ps) {
+  skip_ws(&ps->c);
+  size_t key = ps->doc->text.len;
+  if (!json_decode_string(&ps->c, &ps->doc->text)) {
+    json_reject(&ps->c, "expected a member name");
+    return JSON_NO_NODE;
+  }
+  skip_ws(&ps->c);
+  if (*ps->c.p != ':') {
+    json_reject(&ps->c, "expected ':' after a member name");
+    return JSON_NO_NODE;
+  }
+  ps->c.p++;
+  size_t value = parse_value(ps);
+  if (value != JSON_NO_NODE) {
+    ps->doc->nodes[value].key = key;
+  }
+  return value;
+}
+
+static size_t parse_object(Parser *ps) {
+  const char *open = ps->c.p;
+  ps->c.p++; // consume '{'
+  size_t id = new_node(ps, J_OBJ);
+  size_t base = ps->npending;
+  skip_ws(&ps->c);
+  bool more = id != JSON_NO_NODE && *ps->c.p != '}';
+  if (!more && id != JSON_NO_NODE) {
+    ps->c.p++;
+  }
+  while (more) {
+    size_t member = parse_member(ps);
+    more = member != JSON_NO_NODE && push_pending(ps, member) &&
+           another(&ps->c, '}', "expected ',' or '}' in object");
+  }
+  return ps->c.ok ? close_object(ps, id, base, open) : JSON_NO_NODE;
+}
+
+#define JSON_STRINGIFY(x) #x
+#define JSON_DEPTH_TEXT(x) "nesting deeper than " JSON_STRINGIFY(x) " levels"
+
+// Every container costs one parser frame, and the typed decoder another, so
+// depth is bounded before the frame is pushed [BUILTIN-JSON-LIMITS].
+static size_t parse_nested(Parser *ps, size_t (*container)(Parser *)) {
+  if (ps->c.depth >= JSON_MAX_DEPTH) {
+    json_reject(&ps->c, JSON_DEPTH_TEXT(JSON_MAX_DEPTH));
+    return JSON_NO_NODE;
+  }
+  ps->c.depth++;
+  size_t id = container(ps);
+  ps->c.depth--;
+  return id;
+}
+
+// `true`, `false` or `null` at the cursor.
+static size_t parse_literal(Parser *ps, const char *word, JType type,
+                            bool flag) {
+  size_t len = strlen(word);
+  if (strncmp(ps->c.p, word, len) != 0) {
+    json_reject(&ps->c, "unexpected character");
+    return JSON_NO_NODE;
+  }
+  ps->c.p += len;
+  size_t id = new_node(ps, type);
+  if (id != JSON_NO_NODE) {
+    ps->doc->nodes[id].flag = flag;
+  }
+  return id;
+}
+
+static size_t parse_value(Parser *ps) {
+  skip_ws(&ps->c);
+  char lead = *ps->c.p;
+  switch (lead) {
+  case '"': return parse_string(ps);
+  case '{': return parse_nested(ps, parse_object);
+  case '[': return parse_nested(ps, parse_array);
+  case 't': return parse_literal(ps, "true", J_BOOL, true);
+  case 'f': return parse_literal(ps, "false", J_BOOL, false);
+  case 'n': return parse_literal(ps, "null", J_NULL, false);
+  default: break;
+  }
+  if (lead == '-' || (lead >= '0' && lead <= '9')) {
+    return parse_number(ps);
+  }
+  json_reject(&ps->c, lead ? "unexpected character" : "unexpected end of text");
+  return JSON_NO_NODE;
+}
+
+// Slot 0 names the root, so it is reserved before any container claims one.
+static bool parse_root(Parser *ps) {
+  JDoc *doc = ps->doc;
+  if (!reserve((void **)&doc->slots, &doc->slots_cap, 0, sizeof(size_t)) ||
+      !json_buf_append(&doc->text, "", 0)) {
+    out_of_memory(ps);
+    return false;
+  }
+  doc->nslots = 1;
+  size_t root = parse_value(ps);
+  doc->slots[0] = root;
+  skip_ws(&ps->c);
+  return root != JSON_NO_NODE;
+}
+
+static void record_rejection(const Cursor *c, const char *op) {
+  char where[32];
+  snprintf(where, sizeof(where), "byte %zu", (size_t)(c->at - c->base));
+  osp_io_error_text(op, where, c->why);
+}
+
+// One complete value and nothing after it but whitespace. The reason names
+// the byte where the text stopped being JSON, so `Error { message }` says why
+// -- "jsonParse: byte 7: expected ',' or ']' in array" -- instead of the
+// placeholder word "Error" [BUILTIN-JSON-STRING].
+JDoc *json_parse_doc(const char *text, const char *op, bool typed,
+                     int64_t *status) {
+  if (!text) {
+    *status = JSON_ERR_NULL;
+    osp_io_error_text(op, "document", "no text");
     return NULL;
   }
-  return navigate(g_json_docs[handle], path);
-}
-
-// ---- public API ------------------------------------------------------------
-
-int64_t json_parse(char *s) {
-  if (!s) {
-    return -1;
+  Parser ps = {.c = {.p = text, .base = text, .ok = true}, .typed = typed};
+  ps.doc = calloc(1, sizeof(JDoc));
+  bool parsed = ps.doc ? parse_root(&ps) : (out_of_memory(&ps), false);
+  bool trailing = parsed && *ps.c.p != '\0';
+  if (trailing) {
+    json_reject(&ps.c, "trailing text after the value");
   }
-  Cursor c = {.p = s, .ok = true};
-  JVal *root = parse_value(&c);
-  if (!c.ok || !root) {
-    jval_free(root);
-    return -2;
+  free(ps.pending);
+  free(ps.names);
+  if (ps.c.ok) {
+    return ps.doc;
   }
-  skip_ws(&c);
-  if (*c.p != '\0') {
-    jval_free(root);
-    return -3; // trailing garbage
-  }
-
-  json_table_lock();
-  int64_t handle = -1;
-  for (int64_t i = 1; i < MAX_JSON_DOCS; i++) {
-    if (!g_json_docs[i]) {
-      g_json_docs[i] = root;
-      handle = i;
-      break;
-    }
-  }
-  json_table_unlock();
-
-  if (handle < 0) {
-    jval_free(root);
-    return -4; // document table full
-  }
-  return handle;
-}
-
-char *json_get(int64_t handle, char *path) {
-  json_table_lock();
-  const JVal *v = lookup(handle, path ? path : "");
-  char *out = NULL;
-  if (v) {
-    switch (v->type) {
-    case J_STR:
-    case J_NUM:
-      out = strdup(v->str);
-      break;
-    case J_BOOL:
-      out = strdup(v->bval ? "true" : "false");
-      break;
-    case J_NULL:
-      out = strdup("null");
-      break;
-    default:
-      out = NULL; // arrays/objects are not scalars
-      break;
-    }
-  }
-  json_table_unlock();
-  return out;
-}
-
-int64_t json_length(int64_t handle, char *path) {
-  json_table_lock();
-  const JVal *v = lookup(handle, path ? path : "");
-  int64_t len = -1;
-  if (v) {
-    if (v->type == J_ARR) {
-      len = (int64_t)v->count;
-    } else if (v->type == J_OBJ) {
-      len = (int64_t)v->nmemb;
-    }
-  }
-  json_table_unlock();
-  return len;
-}
-
-int64_t json_free(int64_t handle) {
-  if (!valid_doc_handle(handle)) {
-    return -1;
-  }
-  json_table_lock();
-  int64_t rc = -1;
-  if (g_json_docs[handle]) {
-    jval_free(g_json_docs[handle]);
-    g_json_docs[handle] = NULL;
-    rc = 0;
-  }
-  json_table_unlock();
-  return rc;
+  json_doc_free(ps.doc);
+  *status = trailing ? JSON_ERR_TRAILING : JSON_ERR_MALFORMED;
+  record_rejection(&ps.c, op);
+  return NULL;
 }
