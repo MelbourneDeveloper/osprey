@@ -66,10 +66,16 @@ impl TypeEnv {
 
     /// This scope's own frame, for writing. A frame another scope still shares
     /// is not copied: this scope becomes a child of its own snapshot instead,
-    /// so the write costs one empty frame however large the shared one is.
+    /// so the write costs one empty frame however large the shared one is. A
+    /// scope that many such writes have deepened is flattened once, here, so
+    /// the scopes opened from it stay shallow.
     fn frame(&mut self) -> &mut Frame {
         if Arc::get_mut(&mut self.local).is_none() {
-            *self = self.child();
+            *self = if self.depth < MAX_DEPTH {
+                self.child()
+            } else {
+                self.flattened()
+            };
         }
         Arc::make_mut(&mut self.local)
     }
@@ -423,6 +429,22 @@ mod tests {
         assert!(env.depth <= MAX_DEPTH + 1);
         assert!(env.get("base").is_some() && env.get("v0").is_some());
         assert_eq!(env.bound_names().len(), MAX_DEPTH * 2 + 1);
+    }
+
+    #[test]
+    fn a_scope_written_under_many_snapshots_stays_shallow() {
+        let mut env = TypeEnv::new();
+        let mut snapshots = Vec::new();
+        for index in 0..(MAX_DEPTH * 3) {
+            snapshots.push(env.clone());
+            env.insert(format!("v{index}"), Scheme::mono(Type::int()));
+        }
+        assert!(env.depth <= MAX_DEPTH && env.child().depth <= MAX_DEPTH + 1);
+        assert_eq!(env.bound_names().len(), MAX_DEPTH * 3);
+        assert!(snapshots
+            .iter()
+            .enumerate()
+            .all(|(i, s)| s.bound_names().len() == i));
     }
 
     #[test]
