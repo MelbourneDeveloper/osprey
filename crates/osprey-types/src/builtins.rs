@@ -261,6 +261,10 @@ fn lists(e: &mut TypeEnv) {
     poly(e, "listLength", vec![0], vec![Type::list(t())], i());
     poly(e, "listGet", vec![0], vec![Type::list(t()), i()], res(t()));
     poly(e, "listContains", vec![0], vec![Type::list(t()), t()], b());
+    // Deep content comparison [BUILTIN-STRUCTURAL-EQUALS]: both operands are
+    // the one type variable, and the operand type is validated as an
+    // obligation (`structural_equals.rs`), the way a comparison's is.
+    poly(e, "structuralEquals", vec![0], vec![t(), t()], b());
     // Eager list traversal [BUILTIN-LIST-FOREACH].
     poly(
         e,

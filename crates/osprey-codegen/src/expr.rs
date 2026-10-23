@@ -30,38 +30,42 @@ mod identifier;
 use block::gen_block;
 pub(crate) use block::{gen_block_with, gen_body};
 
-pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
-    let inferred = match expr {
-        Expr::Integer(_) => Some(osprey_types::Type::con(
-            osprey_types::names::INT,
-            Vec::new(),
-        )),
-        Expr::Float(_) => Some(osprey_types::Type::con(
-            osprey_types::names::FLOAT,
-            Vec::new(),
-        )),
-        Expr::Bool(_) => Some(osprey_types::Type::con(
-            osprey_types::names::BOOL,
-            Vec::new(),
-        )),
-        Expr::Str(_) | Expr::InterpolatedStr(_) => Some(osprey_types::Type::con(
-            osprey_types::names::STRING,
-            Vec::new(),
-        )),
-        Expr::Call { function, .. } => cg.callee_fn_type(function).and_then(|ty| match ty {
-            osprey_types::Type::Fun { ret, .. } => Some(*ret),
-            _ => None,
-        }),
-        Expr::List(_, position) => cg
-            .prog
-            .list_elem_type(cg.source_function.as_deref(), *position)
-            .cloned()
-            .map(|element| osprey_types::Type::con(osprey_types::names::LIST, vec![element])),
+/// The Osprey type an expression has before it is generated, where the
+/// checker published it or the expression's form decides it; `None` when
+/// only generating the value can tell.
+pub(crate) fn static_type(cg: &Codegen, expr: &Expr) -> Option<osprey_types::Type> {
+    let scalar = |name: &str| Some(osprey_types::Type::con(name, Vec::new()));
+    match expr {
+        Expr::Integer(_) => scalar(osprey_types::names::INT),
+        Expr::Float(_) => scalar(osprey_types::names::FLOAT),
+        Expr::Bool(_) => scalar(osprey_types::names::BOOL),
+        Expr::Str(_) | Expr::InterpolatedStr(_) => scalar(osprey_types::names::STRING),
+        Expr::Call { function, .. } => call_return_type(cg, function),
+        Expr::List(_, position) => list_type(cg, *position),
         Expr::Perform { position, .. } => position
             .and_then(|p| cg.prog.performs.get(&(p.line, p.column)))
             .map(|site| site.op.ret.clone()),
         _ => None,
-    };
+    }
+}
+
+fn call_return_type(cg: &Codegen, function: &Expr) -> Option<osprey_types::Type> {
+    match cg.callee_fn_type(function)? {
+        osprey_types::Type::Fun { ret, .. } => Some(*ret),
+        _ => None,
+    }
+}
+
+/// A list literal's type, from the element type inference published for it.
+fn list_type(cg: &Codegen, position: Option<Position>) -> Option<osprey_types::Type> {
+    cg.prog
+        .list_elem_type(cg.source_function.as_deref(), position)
+        .cloned()
+        .map(|element| osprey_types::Type::con(osprey_types::names::LIST, vec![element]))
+}
+
+pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
+    let inferred = static_type(cg, expr);
     let folded = osprey_types::fold_arithmetic(expr).map_err(CodegenError::invalid)?;
     let mut value = gen_expr_raw(cg, folded.as_ref().map_or(expr, |value| value))?;
     if let Some(ty) = inferred.filter(|ty| !osprey_types::has_type_var(ty)) {

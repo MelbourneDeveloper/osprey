@@ -238,9 +238,6 @@ match randomBelow 0
 
 ### `structuralEquals(a: T, b: T) -> bool`
 
-> **Status: in progress.** The contract below is decided; the built-in itself
-> lands in the next change. Until then the name is not defined.
-
 `structuralEquals` compares two values by their contents. It walks both values
 completely, so its cost grows with their size. It is meant to be rare and
 explicit. `==` deliberately does not do this

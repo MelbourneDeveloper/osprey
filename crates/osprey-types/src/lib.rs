@@ -74,6 +74,7 @@ mod redundant_tests;
 #[cfg(test)]
 mod redundant_window_tests;
 mod staging;
+mod structural_equals;
 #[cfg(test)]
 #[path = "../../testkit.rs"]
 mod testkit;

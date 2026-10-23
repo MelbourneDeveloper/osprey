@@ -1,0 +1,15 @@
+// [BUILTIN-STRUCTURAL-EQUALS] A runtime handle names an external resource, so
+// it has no contents to compare: a fiber or a channel anywhere in a
+// `structuralEquals` operand is a compile error.
+fn work(n) = n
+
+let fiberA = spawn work(1)
+let fiberB = spawn work(1)
+let channelA = Channel(1)
+let channelB = Channel(1)
+
+fn viaFiber() = structuralEquals(fiberA, fiberB)
+fn viaChannel() = structuralEquals(channelA, channelB)
+fn viaField() = structuralEquals({ task: fiberA }, { task: fiberB })
+
+print("${viaFiber()} ${viaChannel()} ${viaField()}")

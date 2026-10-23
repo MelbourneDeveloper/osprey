@@ -52,6 +52,7 @@ mod result;
 mod runtime;
 mod stmt;
 mod strings;
+mod structural_equals;
 mod testing;
 #[cfg(test)]
 #[path = "../../testkit.rs"]

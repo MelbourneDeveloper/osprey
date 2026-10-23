@@ -16,6 +16,7 @@ impl Checker {
             };
             let message = self
                 .undecided_comparison(&name, &resolved)
+                .or_else(|| self.undecided_structural_equals(&name, &resolved))
                 .or_else(|| crate::builtin_constraints::invalid_use(&name, &resolved));
             if let Some(message) = message {
                 self.errors.push(

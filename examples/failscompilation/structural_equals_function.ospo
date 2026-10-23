@@ -1,0 +1,16 @@
+// [BUILTIN-STRUCTURAL-EQUALS] A function's equality is not decided, so a
+// `structuralEquals` operand that contains one is a compile error — the
+// built-in may only walk types whose every part has a decided equality. The
+// function sits in a record field, in a list element, and in a map value; a
+// generic caller carries the requirement to each call site.
+type Widget = { tab: string, onClick: fn(int) -> int }
+fn same(a, b) = structuralEquals(a, b)
+fn inc(n) = n + 1
+
+fn widget() = Widget { tab: "home", onClick: inc }
+fn viaField() = structuralEquals(widget(), widget())
+fn viaList() = structuralEquals([inc], [inc])
+fn viaMap() = structuralEquals(Map() |> mapSet("go", inc), Map() |> mapSet("go", inc))
+fn viaGenericCaller() = same(widget(), widget())
+
+print("${viaField()} ${viaList()} ${viaMap()} ${viaGenericCaller()}")

@@ -188,9 +188,9 @@ fn gen_result_ctor(cg: &mut Codegen, name: &str, fields: &[FieldAssignment]) -> 
 /// The heap block an update rebuilds: struct spelling, ordered slots, the
 /// discriminant and the allocation meta word.
 #[derive(PartialEq)]
-struct RecordBlock {
-    struct_ty: String,
-    fields: Vec<(String, LType)>,
+pub(crate) struct RecordBlock {
+    pub(crate) struct_ty: String,
+    pub(crate) fields: Vec<(String, LType)>,
     tag: Option<i64>,
     meta: i64,
 }
@@ -203,7 +203,7 @@ struct RecordBlock {
 /// instantiation nothing in this module has built yet is derived from the
 /// value's inferred record type and registered, exactly as construction would.
 /// Implements [TYPE-RECORD-UPDATE].
-fn record_block(
+pub(crate) fn record_block(
     cg: &mut Codegen,
     owner: &str,
     inferred: Option<&osprey_types::Type>,

@@ -115,6 +115,7 @@ pub(crate) fn gen(
         "listSort" => one_list_handle(cg, "osprey_list_sort", args)?,
         "listGet" => list_get(cg, args)?,
         "listContains" => list_contains(cg, args)?,
+        "structuralEquals" => crate::structural_equals::structural_equals(cg, args)?,
         "Map" => map_empty(cg),
         "mapLength" => one_list_i64(cg, "osprey_map_length", args)?,
         "mapSet" => map_set(cg, args)?,

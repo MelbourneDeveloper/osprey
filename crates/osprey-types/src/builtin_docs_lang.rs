@@ -507,6 +507,12 @@ pub(crate) static LISTS: &[BuiltinDoc] = &[
         "listContains([1, 2, 3], 2)  // true",
     ),
     builtin_doc!(
+        "structuralEquals",
+        "Compares two values by their contents, walking both completely, so its cost grows with their size; `==` deliberately does not do this. Both operands must be one type whose every part has a decided equality — a function, a runtime handle, `any` or `Result` anywhere inside is a compile error. NaN stays unequal to itself, including inside a record, list, map or union.",
+        ["a" => "The first value", "b" => "The second value, of the same type"],
+        "type Route = { tab: string, depth: int }\nlet same = structuralEquals(Route { tab: \"home\", depth: 1 }, Route { tab: \"home\", depth: 1 })  // true\nlet differ = structuralEquals([1, 2], [1, 2, 3])  // false",
+    ),
+    builtin_doc!(
         "forEachList",
         "Applies function to every list element in index order.",
         ["list" => "The list", "function" => "Function applied per element"],
