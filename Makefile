@@ -48,6 +48,18 @@ test: build
 	$(MAKE) _coverage_check_vscode_extension
 	$(MAKE) _test_bench_tools
 
+## registry-test: Osprey package-system suites (registry/tests) under the
+##                registry/core arithmetic policy. Excluded from `test` and
+##                CI until the package system stabilises (maintainer decision).
+registry-test: build
+	$(MAKE) _test_registry
+
+## registry-blockers: Probe the host capabilities plan 0020 still needs
+##                    (argv, exit status, binary-safe reads, ...). Expected to
+##                    FAIL until each capability lands; never part of `test`.
+registry-blockers: build
+	$(MAKE) _test_registry_blockers
+
 ## bank: Rebuild and run the Talon Bank showcase for manual testing.
 ##       Opens http://127.0.0.1:18790 (dashboard) / /api/accounts (JSON API).
 ##       The hold marker keeps the server up; Ctrl-C removes it and exits.

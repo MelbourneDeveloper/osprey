@@ -1,5 +1,12 @@
 # Package Evidence and Fair Discovery
 
+> **ALL OSPREY, and A WORKING API THAT SERVES WORKING PACKAGES COMES FIRST.**
+> Every executable part of the package system is Osprey, with no exceptions
+> (`[PACKAGE-IMPLEMENTATION-LANGUAGE]`). The first deliverable is the
+> database-free folder registry of `[PACKAGE-FOLDER-REGISTRY]` in
+> [spec 0029](0029-PackageManagement.md); everything in this document layers
+> onto that running service.
+
 **Status:** normative target. This specification makes the maintenance and
 discovery rules in [Registry Trust and Discovery](0030-PackageRegistryTrustAndDiscovery.md)
 reproducible. A conforming implementation MUST produce the same integer scores,

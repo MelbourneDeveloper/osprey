@@ -38,7 +38,7 @@ The [effects specification](specs/language/0017-AlgebraicEffects.md) defines sem
 - Integer arithmetic uses explicit `Arith` policies. Wrapping/saturating helpers name their behavior; `checkedAdd`, `checkedSub`, and `checkedMul` return `Result`. See [arithmetic effects](specs/language/0037-ArithmeticEffects.md).
 - Native memory modes are default, GC, and ARC. The default allocator retains general allocations. Strict static-memory checking and tail-call optimization are not implemented.
 - Mobile C ABI targets use the default allocator and do not expose a stable returned-string release API. Platform networking belongs to the native host.
-- Project modules and cross-flavor imports work; the package manager remains roadmap work.
+- Project modules and cross-flavor imports work. The package manager is early work in progress under `registry/` (plan 0020): package names, release identities, canonical path rules and a `doctor` command exist in Osprey; publishing, dependency resolution and a registry do not.
 - GPU is vendor-neutral; optional CUDA interop is separate. [GPT-2](../examples/gpt2/README.md) loads published weights; one static `Tensor` effect has host-list and GPU handlers. The handler decides where arithmetic runs. GPU operations execute on Metal or OpenCL with software binary64; buffers stay device-resident. Tokenization, loading, and readback remain on the host; kernels are not fused. Correctly rounded device transcendentals can differ from host libm in the last digit. Never claim automatic offloading, universal acceleration, or bit-for-bit transcendental parity. See the [GPU contract](specs/runtime/0034-GPUComputation.md).
 - Calling C crosses Osprey's memory-safety boundary.
 

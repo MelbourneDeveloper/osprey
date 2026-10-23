@@ -1,6 +1,22 @@
 # Osprey Package Registry and Manager
 
-**Status:** normative target; implementation has not started. Delivery is fixed by [plan 0020](../../plans/0020-package-manager.md); evidence is in [Package-manager research](../../package-manager-research.md).
+> **Two rules govern everything below.**
+>
+> 1. **ALL OSPREY.** Every executable part of the package system is written in
+>    Osprey: server, CLI, host effects, tests, oracles, and tooling. No Rust, no
+>    shim, no other language, no exceptions. `[PACKAGE-IMPLEMENTATION-LANGUAGE]`
+> 2. **A WORKING API THAT SERVES WORKING PACKAGES COMES FIRST.** The first
+>    deliverable is an Osprey registry server that serves package source from a
+>    plain folder, with no database, and a client that downloads and verifies
+>    it. Anyone can stand one up on any host or network and point a client at
+>    it. Every other feature in this spec layers onto that running service.
+>    `[PACKAGE-FOLDER-REGISTRY]`
+>
+> Supabase, with GCP for services that must sit beside it, is the later hosted
+> data plane. It is not needed to build, run, or use a registry, and it never
+> replaces the folder registry.
+
+**Status:** normative target; implementation is in progress under [`registry/`](../../../registry/README.md), whose README states what runs. Delivery is fixed by [plan 0020](../../plans/0020-package-manager.md); evidence is in [Package-manager research](../../package-manager-research.md).
 
 This specification defines a source-derived, content-addressed package system.
 It deliberately rejects uploaded archives, publisher binaries, lifecycle hooks,
@@ -34,7 +50,8 @@ evidence record; this specification states only the resulting rules.
 | Release resolution | Every source, dependency, toolchain, target, policy, and system input is digest-pinned, and each package key occurs exactly once. Local overlays are forbidden. |
 | Upgrades | The solver proposes eligible candidates; contract analysis, compilation, client-impact analysis, tests, and security policy decide whether the new lock activates. |
 | Implementation language | The entire package system is Osprey: CLI, parser, resolver, host effects, cryptography, adapters, registry, web UI, tests, and operational tools. There is no Rust host or other implementation-language exception. |
-| Initial platform | Supabase supplies Postgres, authentication, and object-storage replicas. It is never a cryptographic trust root. |
+| First registry | A folder registry: an Osprey API that serves every release found under one directory, with no database. Anyone can run one on any host or network and point a client at it. See `[PACKAGE-FOLDER-REGISTRY]`. |
+| Hosted platform | Supabase later supplies Postgres, authentication, and object-storage replicas behind the same API. It is never a cryptographic trust root, and the folder registry remains a supported deployment. |
 | AI | Every submission receives AI review, but AI can only add evidence or quarantine for confirmation. It cannot approve or permanently reject a release by itself. |
 | Discovery | Default rank excludes downloads, dependents, stars, impressions, publisher revenue, and sponsorship. Merit plus measured exposure determines order. |
 
@@ -134,6 +151,12 @@ database directly. All authorization passes through the Osprey API. Signing
 keys live in offline custody or external HSM/KMS services, not Postgres or
 Supabase environment variables. Replacing Supabase cannot change a package ID.
 
+The diagram shows the complete hosted system. The first deployment is far
+smaller: the Osprey REST API reading releases from a folder, and the Osprey CLI
+downloading from it (`[PACKAGE-FOLDER-REGISTRY]`). The data plane is replaceable
+by design, and a directory on disk is its first and permanent implementation.
+Supabase is an additional implementation, not a prerequisite.
+
 Osprey implements every package-system component. Osprey effect handlers provide cryptography, filesystem transactions, HSM access, forge protocols, sandbox control, and compiler invocation. There is one shared Osprey package-core implementation across server, CLI, and WASM.
 
 ## Implementation language `[PACKAGE-IMPLEMENTATION-LANGUAGE]`
@@ -149,6 +172,104 @@ The canonical typeDiagram model, TOML manifests, JSON fixtures, declarative data
 If Osprey cannot express or safely perform a required operation, implementation MUST record the missing capability and an Osprey regression case as a delivery blocker. It MUST NOT substitute another language, invent an unverified security primitive, weaken the contract, or report the blocked feature as complete. Cryptography and host operations retain every audit, conformance, and platform requirement in specs 0029–0032.
 
 Conformance MUST verify this language requirement over the complete package-system source and build graph. An implementation that moves any package component, test, oracle, host handler, or operational tool into another language is non-conforming.
+
+## Folder registry `[PACKAGE-FOLDER-REGISTRY]`
+
+**This is the first deliverable and the delivery priority of the whole
+package system.** No other phase may delay it. The first deliverable is a
+working registry API that serves working packages. It needs no database, no account, and no hosted
+service. An operator drops package source trees into one directory, starts the
+Osprey registry server on any host, and points clients at its base URL. The
+same server stays a supported deployment after the hosted platform exists, so
+any team can run a private or offline registry on its own network.
+
+The server, the client, and every test MUST be Osprey under
+`[PACKAGE-IMPLEMENTATION-LANGUAGE]`. A folder registry MUST NOT require a
+database, an account, a hosted service, or any component outside the Osprey
+server and the files under its root.
+
+### Layout
+
+```text
+<registry-root>/
+  @scope/name/<epoch>.<ordinal>/    one release: its complete source tree
+    osprey.toml
+    src/...
+```
+
+- A release directory holds the package's source exactly as published: the
+  manifest plus every source and declared data file.
+- `@scope/name` follows `[PACKAGE-NAMES]`. `<epoch>.<ordinal>` are the
+  non-negative integers of `[PACKAGE-IDENTITY]`, written in decimal without
+  leading zeros.
+- A release directory is immutable once served. A new release is a new
+  `<epoch>.<ordinal>` directory; editing a served release is an operator error
+  that the server reports as a digest change, never silently serves.
+- Files and directories that `[PACKAGE-SOURCE-CANONICAL]` excludes or rejects
+  make the release invalid. The server lists the reason and does not serve it.
+
+### Operation
+
+The server takes its root directory, bind address, and port from one JSON
+configuration file. It MUST serve on any address the host can bind, including
+non-loopback addresses, so one registry can serve a whole network. Running a
+registry needs only the Osprey toolchain, the server, and the folder.
+
+### Catalog
+
+At startup the server walks the root, validates each release, and computes its
+`SourceDigest` with the shared core. The catalog is the set of valid releases
+keyed by digest. A restart rebuilds it; there is no other state.
+
+### Endpoints
+
+The folder registry implements the public-read subset of `[PACKAGE-API]` at the
+same paths:
+
+| Request | Response |
+| --- | --- |
+| `GET /v1/health` | Server status and catalog counts. |
+| `GET /v1/packages` | Every package key with its releases, ordered by key then epoch then ordinal. |
+| `GET /v1/packages/{scope}/{name}` | One key's releases: epoch, ordinal, digest. |
+| `GET /v1/releases/{digest}` | One release's key, epoch, ordinal, digest, and file list. |
+| `GET /v1/releases/{digest}/source` | The release's source bundle. |
+
+Every body is RFC 8785 canonical JSON. A release response carries its digest as
+a strong `ETag`. Errors are `application/problem+json` with a stable `code`.
+
+### Source bundle
+
+The download format is one canonical JSON document:
+
+```json
+{"digest":"<SourceDigest hex>","epoch":0,"files":[{"path":"osprey.toml","text":"..."}],"key":"@scope/name","ordinal":3}
+```
+
+`files` is sorted by unsigned path bytes and holds every file of the release
+as UTF-8 text. The client MUST recompute `SourceDigest` from `files` and
+reject the bundle unless it equals both `digest` and the digest it requested.
+Transport is therefore untrusted: a proxy or mirror can serve the bytes
+without being believed.
+
+A bundle carries text only because the runtime cannot yet send or read bytes
+containing NUL (`files.binary-read` in the registry blockers). Binary declared
+assets are served once that blocker is resolved; until then a release that
+declares one is invalid in a folder registry.
+
+### Client
+
+The package command frontend fetches a release by key and epoch, or by digest,
+from a configured registry base URL. It verifies the bundle, then writes the
+tree under `.osprey/packages/@scope/name/<digest>/`. A later phase may expose
+the same command through the `osprey` binary; any such entry point dispatches
+to the Osprey frontend and adds no package logic to the compiler.
+
+### Trust
+
+A folder registry proves integrity, not authority: the digest shows that the
+bytes match what was requested, not who published them. The TUF metadata,
+transparency log, and provenance of `[PACKAGE-REGISTRY]` layer onto these same
+endpoints in Milestone B without changing the layout, the bundle, or the paths.
 
 ## Names and ownership `[PACKAGE-NAMES]`
 
@@ -240,8 +361,12 @@ capability = "sqlite/c-api"
 min_revision = 3045000
 ```
 
-A threshold-signed registry/enterprise catalog—not the publisher—maps a system
-capability to approved providers, artifacts, native closures and provenance.
+A system capability name is one or more segments of `[a-z0-9][a-z0-9.-]{0,63}`
+joined by single `/` characters, at most 128 bytes in all, such as
+`sqlite/c-api`; `min_revision` is a non-negative integer and each capability
+appears once per manifest. A threshold-signed registry/enterprise catalog—not
+the publisher—maps a system capability to approved providers, artifacts, native
+closures and provenance.
 `osprey doctor` uses an authorized read-only host effect and prints that guidance;
 it never invokes an installer. SQLite can stay outside the Osprey registry.
 

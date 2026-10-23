@@ -1,0 +1,51 @@
+namespace registry_host;
+import registry_host::Host
+
+/// Operating-system handlers for `Host`, built only on Osprey builtins.
+/// Process output is captured through shell redirection into `.osprey/scratch`
+/// because `spawnProcess` streams chunks to a callback and Osprey has no
+/// mutable accumulator outside handler arms.
+module Native {
+    let scratch = ".osprey/scratch"
+
+    fn relay(result) = match result {
+        Success { value } => Success { value: value }
+        Error { message } => Error { message: message }
+    }
+
+    /// Files answered by `readFile`/`writeFile`.
+    export fn files() = handler Host::Files {
+        read path => relay(readFile(path))
+        write path content => relay(writeFile(path, content))
+    }
+
+    fn quiet(_pid, _kind, text) = {
+        let _dropped = text
+    }
+
+    fn status(spawned) = match spawned {
+        Success { value } => awaitProcess(value)
+        Error => -1
+    }
+
+    fn capture(command) = {
+        let tag = "${random()}"
+        let out = "${scratch}/${tag}.out"
+        let err = "${scratch}/${tag}.err"
+        let code = status(spawnProcess("mkdir -p ${scratch} && ( ${command} ) >${out} 2>${err}", quiet))
+        Host::Run { status: code, stdout: readFile(out) ?: "", stderr: readFile(err) ?: "" }
+    }
+
+    /// Process answered by the system shell.
+    export fn process() = handler Host::Process {
+        run command => capture(command)
+    }
+
+    /// Console answered by standard output.
+    export fn console() = handler Host::Console {
+        line text => print(text)
+    }
+
+    /// Run `body` with every native handler installed.
+    export fn session(body) = files()(fn() => process()(fn() => console()(body)))
+}

@@ -392,6 +392,24 @@ _bank_test:
 	@echo "==> Bank native tests (osprey test)..."
 	./$(BIN) test examples/projects/modules/test
 
+# Osprey package system (registry/): one process runs every suite from the
+# registry/tests project with core, host and CLI sources assembled together,
+# because `osprey test` compiles suites in isolation and cannot import them.
+# The build-plan/lock/resolver fixtures under registry/tests/fixtures are read
+# by those suites. Run only through `make registry-test`: excluded from
+# `make test` and CI until the package system stabilises.
+_test_registry:
+	@echo "==> Registry (Osprey package system) tests..."
+	./$(BIN) registry/tests --run
+
+# Blocked host capabilities, each asserted as the behavior the package system
+# needs. Red is the documented state until the capability lands in Osprey;
+# a probe turning green is the signal to delete its entry from
+# registry/core/src/capabilities.osp.
+_test_registry_blockers:
+	@echo "==> Registry blocked-capability probes (expected red until each lands)..."
+	./$(BIN) registry/blockers --run
+
 # _language-test: Run the assertion-driven Default + ML core language corpus.
 _language-test: build
 	$(MAKE) _test_language_corpus

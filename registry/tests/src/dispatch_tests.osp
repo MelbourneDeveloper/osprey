@@ -1,0 +1,103 @@
+namespace registry_tests;
+import registry_host::Host
+import registry_cli::Dispatch
+import registry::Capabilities
+
+/// The frontend against fixture hosts: no process, file or terminal is touched.
+module DispatchTests {
+    fn healthyProcess() = handler Host::Process {
+        run command => match command {
+            "printf ok" => Host::Run { status: 0, stdout: "ok", stderr: "" }
+            "command -v osprey" => Host::Run { status: 0, stdout: "/usr/local/bin/osprey\n", stderr: "" }
+            _ => Host::Run { status: 127, stdout: "", stderr: "not found" }
+        }
+    }
+
+    let manifest = "[project]\nname = \"ledger\"\n[package]\nname = \"@finch/ledger\"\nlicense = \"MIT\"\nsummary = \"s\"\nkeywords = [\"a\"]\n"
+
+    fn healthyFiles() = handler Host::Files {
+        read path => if path == "osprey.toml" { Success { value: manifest } } else { Success { value: "osprey doctor probe" } }
+        write _path content => Success { value: byteLength(content) }
+    }
+
+    fn badManifestFiles() = handler Host::Files {
+        read path => if path == "osprey.toml" { Success { value: "[project]\nname = \"x\"\n[dependencies]\n\"@a/b\" = \"^1\"\n" } } else { Success { value: "osprey doctor probe" } }
+        write _path content => Success { value: byteLength(content) }
+    }
+
+    fn brokenProcess() = handler Host::Process {
+        run _command => Host::Run { status: 1, stdout: "", stderr: "denied" }
+    }
+
+    fn brokenFiles() = handler Host::Files {
+        read _path => Error { message: "readFile: denied" }
+        write _path _content => Error { message: "writeFile: denied" }
+    }
+
+    fn doctor() = Dispatch::run(["doctor"])
+
+    /// `Dispatch::run` may perform host effects on any argument, so every call
+    /// runs under fixture handlers even when the command touches none.
+    fn onHealthyHost(body) = healthyFiles()(fn() => healthyProcess()(body))
+
+    fn line(report, i) = listGet(report.lines, i) ?: ""
+
+    fn helpAndUnknown() = {
+        let help = onHealthyHost(fn() => Dispatch::run([]))
+        let explicit = onHealthyHost(fn() => Dispatch::run(["help"]))
+        let unknown = onHealthyHost(fn() => Dispatch::run(["frobnicate"]))
+        let planned = onHealthyHost(fn() => Dispatch::run(["add", "@finch/ledger"]))
+        let release = onHealthyHost(fn() => Dispatch::run(["build", "--release"]))
+        checkAll("help is the default, unknown commands are usage errors, specified ones say not implemented", [
+            help.status == 0,
+            line(help, 0) == "usage: osprey-pkg <command>",
+            explicit.status == 0,
+            length(explicit.lines) == length(help.lines),
+            unknown.status == 2,
+            line(unknown, 0) == "unknown command: frobnicate",
+            line(unknown, 1) == "usage: osprey-pkg <command>",
+            planned.status == 3,
+            line(planned, 0) == "not implemented: add (plan 0020, Milestone A)",
+            release.status == 3,
+            line(release, 0) == "not implemented: build (plan 0020, Milestone A)"
+        ])
+    }
+
+    fn doctorHealthy() = {
+        let report = onHealthyHost(doctor)
+        checkAll("doctor reports a healthy host and every blocked capability", [
+            report.status == 0,
+            line(report, 0) == "process: ok",
+            line(report, 1) == "files: ok",
+            line(report, 2) == "compiler: /usr/local/bin/osprey",
+            line(report, 3) == "manifest: ok (ledger)",
+            length(report.lines) == 4 + length(Capabilities::blocked()),
+            startsWith(line(report, 4), "blocked: process.argv")
+        ])
+    }
+
+    fn doctorManifests() = {
+        let bad = badManifestFiles()(fn() => healthyProcess()(doctor))
+        let none = brokenFiles()(fn() => healthyProcess()(doctor))
+        checkAll("doctor reports the manifest verdict from the Osprey manifest core", [
+            line(bad, 3) == "manifest: manifest.dependency.version at 4:1",
+            line(none, 3) == "manifest: none (no osprey.toml in the working directory)"
+        ])
+    }
+
+    fn doctorBroken() = {
+        let report = brokenFiles()(fn() => brokenProcess()(doctor))
+        checkAll("doctor names each failing probe", [
+            line(report, 0) == "process: failed (status 1)",
+            line(report, 1) == "files: write failed: writeFile: denied",
+            line(report, 2) == "compiler: missing (osprey is not on PATH)"
+        ])
+    }
+
+    export fn run() = {
+        test("dispatch: help and unknown commands", helpAndUnknown)
+        test("dispatch: doctor on a healthy host", doctorHealthy)
+        test("dispatch: doctor on a broken host", doctorBroken)
+        test("dispatch: doctor manifest verdicts", doctorManifests)
+    }
+}

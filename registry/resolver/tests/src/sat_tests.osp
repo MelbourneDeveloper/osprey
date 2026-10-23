@@ -1,0 +1,200 @@
+namespace registry_tests;
+import registry::Sat
+import registry::SatClauses
+
+/// Tests of the deterministic CDCL core under [PACKAGE-RESOLUTION]: trivial
+/// formulas, canonical models checked by the oracle, pigeonhole refutations
+/// with replayed cores, learned-clause implication, assumption cores,
+/// determinism under clause permutation, rejection of malformed literals,
+/// and a fixed-seed random 3-SAT instance near the phase transition.
+module SatTests {
+    fn ints(xs) = join(mapList(xs, fn(x) => "${x}"), ",")
+    fn intLists(xss) = join(mapList(xss, fn(xs) => ints(xs)), ";")
+
+    fn outcome(r) = match r {
+        Error { message } => "error:" + message
+        Success { value } => match value {
+            Sat::Satisfiable { model } => "sat:" + ints(model)
+            Sat::Unsatisfiable { core, learned } => "unsat:" + ints(core) + ":" + intLists(learned)
+        }
+    }
+
+    fn satKind(r) = match substring(outcome(r), 0, 3) ?: "?" {
+        "sat" => "sat"
+        "uns" => "unsat"
+        _ => "error"
+    }
+
+    fn modelOf(r) = match r {
+        Success { value } => match value { Sat::Satisfiable { model } => model  _ => [] }
+        Error => []
+    }
+
+    fn learnedOf(r) = match r {
+        Success { value } => match value { Sat::Unsatisfiable { learned } => learned  _ => [] }
+        Error => []
+    }
+
+    fn canonicalModel(vars, model) = length(model) == vars &&
+        fold(range(0, vars), true, fn(ok, i) => ok && SatClauses::absLit(listGet(model, i) ?: 0) == i + 1)
+
+    fn passesOracle(vars, f) = match Sat::solve(vars, f) {
+        Error => false
+        Success { value } => match value {
+            Sat::Satisfiable { model } => canonicalModel(vars, model) && Sat::check(model, f)
+            _ => true
+        }
+    }
+
+    // ---- pigeonhole formulas: v(p,h) is 1-based ----
+
+    fn flattenAll(xss) = foldList(xss, [], fn(acc, xs) => listConcat(acc, xs))
+
+    fn cell(pigeon, hole, holes) = pigeon * holes + hole + 1
+
+    fn atLeastOne(pigeon, holes) = range(0, holes) |> map(fn(h) => cell(pigeon, h, holes)) |> toList
+
+    fn shareBans(pigeons, hole, holes) = flattenAll(range(0, pigeons) |> map(fn(p) =>
+        range(p + 1, pigeons) |> map(fn(q) => [SatClauses::neg(cell(p, hole, holes)), SatClauses::neg(cell(q, hole, holes))]) |> toList) |> toList)
+
+    fn php(pigeons, holes) = listConcat(
+        range(0, pigeons) |> map(fn(p) => atLeastOne(p, holes)) |> toList,
+        flattenAll(range(0, holes) |> map(fn(h) => shareBans(pigeons, h, holes)) |> toList))
+
+    fn coreClauses(clauses, core) = foldList(core, [], fn(acc, i) =>
+        if i >= 0 { listAppend(acc, listGet(clauses, i) ?: []) } else { acc })
+
+    fn inRange(core, count) = foldList(core, true, fn(ok, i) => ok && i >= 0 && i < count)
+
+    /// A learned clause is implied when conjoining its negation refutes.
+    fn implied(vars, clauses, learned) = foldList(learned, true, fn(ok, c) => ok &&
+        satKind(Sat::solve(vars, listConcat(clauses, SatClauses::negated(c)))) == "unsat")
+
+    fn refutedWithCore(pigeons, holes) = {
+        let f = php(pigeons, holes)
+        let vars = pigeons * holes
+        match Sat::solve(vars, f) {
+            Error => false
+            Success { value } => match value {
+                Sat::Unsatisfiable { core, learned } => inRange(core, length(f)) &&
+                    implied(vars, f, learned) &&
+                    satKind(Sat::solve(vars, coreClauses(f, core))) == "unsat"
+                _ => false
+            }
+        }
+    }
+
+    // ---- fixed-seed random 3-SAT: LCG, no clock, no host randomness ----
+
+    let lcgMul = 6364136223846793005
+    let lcgAdd = 1442695040888963407
+    let seedOrigin = 20250926
+    let bigVars = 200
+    let bigCount = 800
+
+    type Gen = { seed: int, lits: List<int> }
+    type Batch = { seed: int, clauses: List<List<int>> }
+
+    fn norm(x) = if x < 0 { wrapSub(0, x) } else { x }
+
+    fn drawLit(u, vars) = if u % 2 == 0 { 1 + u % vars } else { SatClauses::neg(1 + u % vars) }
+
+    fn genLit(g, vars, _i) = {
+        let u = norm(wrapAdd(wrapMul(g.seed, lcgMul), lcgAdd))
+        Gen { seed: u, lits: listAppend(g.lits, drawLit(u, vars)) }
+    }
+
+    fn takeClause(b, vars, _i) = {
+        let g = foldList(range(0, 3) |> toList, Gen { seed: b.seed, lits: [] }, fn(gg, i) => genLit(gg, vars, i))
+        Batch { seed: g.seed, clauses: listAppend(b.clauses, g.lits) }
+    }
+
+    fn randomClauses(seed, vars, count) = foldList(range(0, count) |> toList, Batch { seed: seed, clauses: [] }, fn(b, i) => takeClause(b, vars, i)).clauses
+
+    fn bigInstance() = randomClauses(seedOrigin, bigVars, bigCount)
+
+    fn randomSat() = {
+        let f = bigInstance()
+        let a = Sat::solve(bigVars, f)
+        let b = Sat::solve(bigVars, listReverse(f))
+        checkAll("200 variables, 800 fixed-seed random 3-clauses", [
+            outcome(a) == outcome(Sat::solve(bigVars, f)),
+            satKind(a) == satKind(b),
+            match a {
+                Error => false
+                Success { value } => match value {
+                    Sat::Satisfiable { model } => canonicalModel(bigVars, model) && Sat::check(model, f)
+                    Sat::Unsatisfiable { core } => satKind(Sat::solve(bigVars, coreClauses(f, core))) == "unsat"
+                }
+            }
+        ])
+    }
+
+    fn trivial() = checkAll("trivial satisfiable and unsatisfiable formulas", [
+        outcome(Sat::solve(2, [[1], [-2]])) == "sat:1,-2",
+        outcome(Sat::solve(1, [[1], [-1]])) == "unsat:0,1:",
+        outcome(Sat::solve(3, [])) == "sat:-1,-2,-3",
+        outcome(Sat::solve(2, [[]])) == "unsat:0:",
+        outcome(Sat::solve(2, [[1, 2]])) == "sat:-1,2",
+        outcome(Sat::solve(2, [[1], [-1], []])) == "unsat:0,1:"
+    ])
+
+    fn oracle() = checkAll("every model is canonical and passes the oracle", [
+        passesOracle(2, [[1], [-2]]),
+        passesOracle(3, []),
+        passesOracle(2, [[1, 2]]),
+        passesOracle(4, [[2, 3, 4], [-4]]),
+        passesOracle(3, [[-1, 2], [-2, 3], [1, 2, 3], [-3]]),
+        passesOracle(3, [[1, 2], [2, 3]])
+    ])
+
+    fn pigeonholes() = checkAll("pigeonhole formulas refute with honest cores", [
+        refutedWithCore(3, 2),
+        refutedWithCore(4, 3),
+        outcome(Sat::solve(6, php(3, 2))) == outcome(Sat::solve(6, php(3, 2)))
+    ])
+
+    fn learning() = {
+        let xor = [[1, 2], [1, -2], [-1, 2], [-1, -2]]
+        checkAll("conflicts learn clauses implied by the input", [
+            outcome(Sat::solve(2, xor)) == "unsat:0,1,2,3:1",
+            length(learnedOf(Sat::solve(2, xor))) > 0,
+            implied(2, xor, learnedOf(Sat::solve(2, xor))),
+            implied(4, [[2, 3, 4], [-4]], [[2, 3]]),
+            outcome(Sat::solve(4, [[2, 3, 4], [-4]])) == "sat:-1,-2,3,-4"
+        ])
+    }
+
+    fn assumptions() = checkAll("assumption units join cores as negative indexes", [
+        outcome(Sat::assume(1, [], [1, -1])) == "unsat:-2,-1:",
+        outcome(Sat::assume(2, [[1]], [-1])) == "unsat:-1,0:",
+        outcome(Sat::assume(2, [[1, 2]], [-1])) == "sat:-1,2",
+        outcome(Sat::assume(3, [[-1, 2], [-2, 3]], [1])) == "sat:1,2,3"
+    ])
+
+    fn determinism() = checkAll("deterministic and stable under clause permutation", [
+        satKind(Sat::solve(3, [[1, 2], [2, 3]])) == satKind(Sat::solve(3, [[2, 3], [1, 2]])),
+        passesOracle(3, [[1, 2], [2, 3]]),
+        passesOracle(3, [[2, 3], [1, 2]]),
+        outcome(Sat::solve(1, [[1]])) == outcome(Sat::solve(1, [[1]]))
+    ])
+
+    fn rejects() = checkAll("malformed literals are rejected", [
+        match Sat::solve(2, [[3]]) { Error { message } => message == "sat.bad-literal"  Success => false },
+        match Sat::solve(2, [[1, 0]]) { Error { message } => message == "sat.bad-literal"  Success => false },
+        match Sat::solve(2, [[-3]]) { Error { message } => message == "sat.bad-literal"  Success => false },
+        match Sat::assume(2, [[1]], [3]) { Error { message } => message == "sat.bad-literal"  Success => false },
+        match Sat::assume(2, [], [0]) { Error { message } => message == "sat.bad-literal"  Success => false }
+    ])
+
+    export fn run() = {
+        test("sat: trivial formulas", trivial)
+        test("sat: canonical models pass oracle", oracle)
+        test("sat: pigeonhole refutations", pigeonholes)
+        test("sat: learning and backjumping", learning)
+        test("sat: assumption cores", assumptions)
+        test("sat: determinism", determinism)
+        test("sat: bad literals rejected", rejects)
+        test("sat: random 3-sat instance", randomSat)
+    }
+}

@@ -1,0 +1,8 @@
+[project]
+name = "registry-core"
+source_roots = ["src"]
+default_namespace = "registry"
+
+[modules]
+allow_wildcard_imports = false
+published_library = true
