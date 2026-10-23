@@ -1,6 +1,7 @@
 /// [BUILTIN-LIST-MAP], [BUILTIN-LIST-FILTER] and [BUILTIN-LIST-FOLD] traverse a
 /// runtime list eagerly in index order; [BUILTIN-LIST-SORT] returns a new list
-/// sorted ascending by the elements' natural order.
+/// sorted ascending by the elements' natural order; [BUILTIN-LIST-SORT-BY]
+/// sorts any element type by a comparator, stably.
 
 fn double(n) = satMul(n, 2)
 
@@ -66,5 +67,35 @@ fn sortCase() = {
     ])
 }
 
+type Evidence = { title: string, at: int }
+
+fn order(a, b) = if a < b { -1 } else { if a > b { 1 } else { 0 } }
+
+fn byTitle(x, y) = order(x.title, y.title)
+
+fn titles(items) = join(mapList(items, fn(item) => item.title), ",")
+
+fn scrambled(i) = "w${toString(satMul(i, 7919) % 1009)}"
+
+/// listSortBy orders by any comparator, a named function or a lambda that
+/// captures its scope; equal elements keep their order ([BUILTIN-LIST-SORT-BY]).
+fn sortByCase() = {
+    let evidence = [Evidence { title: "crash", at: 3 }, Evidence { title: "alert", at: 1 },
+        Evidence { title: "boot", at: 1 }, Evidence { title: "disk", at: 2 }]
+    let newestFirst = -1
+    let words = range(0, 200) |> map(scrambled) |> toList
+
+    checkAll("listSortBy sorts stably by the comparator", [
+        titles(listSortBy(evidence, byTitle)) == "alert,boot,crash,disk",
+        titles(listSortBy(evidence, fn(x, y) => order(x.at, y.at))) == "alert,boot,disk,crash",
+        titles(listSortBy(evidence, fn(x, y) => satMul(newestFirst, order(x.at, y.at)))) == "crash,disk,alert,boot",
+        join(mapList(listSortBy([2.5, -1.0, 0.5], order), toString), ",") == "-1.0,0.5,2.5",
+        join(listSortBy(words, order), ",") == join(listSort(words), ","),
+        listLength(listSortBy(List(), order)) == 0,
+        titles(listSortBy([Evidence { title: "only", at: 0 }], byTitle)) == "only"
+    ])
+}
+
 test("list map/filter/fold traverse eagerly", fn() => eagerCombinatorsCase())
 test("listSort orders int and string lists ascending", fn() => sortCase())
+test("listSortBy sorts any element type stably", fn() => sortByCase())

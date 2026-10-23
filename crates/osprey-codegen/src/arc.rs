@@ -175,11 +175,18 @@ pub(crate) fn consume_fresh(cg: &mut Codegen, v: &Value) {
         return;
     }
     if let Some(e) = cg.arc.frames.last_mut().and_then(Vec::pop) {
-        cg.add_extern(RELEASE_UNIQUE_DECL);
         let ptr = as_i8ptr(cg, v);
-        cg.emit(format!("call void @osp_release_unique(i8* {ptr})"));
+        release_unique(cg, &ptr);
         cg.emit(format!("store i8* null, i8** {}", e.slot));
     }
+}
+
+/// Drop the `i8*` block `ptr`, which codegen proves is the only reference:
+/// default frees it, ARC releases it and tracing GC leaves it to the
+/// collector [MEM-BACKENDS].
+pub(crate) fn release_unique(cg: &mut Codegen, ptr: &str) {
+    cg.add_extern(RELEASE_UNIQUE_DECL);
+    cg.emit(format!("call void @osp_release_unique(i8* {ptr})"));
 }
 
 /// Perceus "move into constructor" (TR §2.3, the *own* argument rule): a store

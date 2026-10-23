@@ -1,6 +1,6 @@
 //! Iterator builtins: integer `range`, the stream-fused higher-order operations
 //! (`map`/`filter`/`forEach`/`fold`/`toList`) and the eager list operations
-//! (`forEachList`/`mapList`/`filterList`/`foldList`). A range is a stack
+//! (`forEachList`/`mapList`/`filterList`/`foldList`/`listSortBy`). A range is a stack
 //! `{ i64, i64 }` (start, end); `map`/`filter` record a stage on the iterator
 //! they are applied to ([`stages`]); the consuming `forEach`/`fold`/`toList`
 //! emits one counted loop replaying those stages, so no intermediate
@@ -17,6 +17,7 @@ use crate::llty::{LType, Value};
 use crate::loops::{close_list_loop, close_range_loop, open_list_loop, open_range_loop, ListLoop};
 use osprey_ast::{Expr, NamedArgument, Parameter, Position};
 
+mod sort_by;
 mod stages;
 use stages::{branch_on_predicate, record};
 pub(crate) use stages::{reject_escape, replay, stage_aliases, stages_of};
@@ -109,6 +110,7 @@ pub(crate) fn gen(
         "mapList" => list_builder(cg, args, false)?,
         "filterList" => list_builder(cg, args, true)?,
         "foldList" => fold_list(cg, args)?,
+        "listSortBy" => sort_by::gen(cg, args)?,
         _ => return Ok(None),
     };
     Ok(Some(v))

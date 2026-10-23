@@ -1,6 +1,7 @@
 /// [BUILTIN-LIST-MAP], [BUILTIN-LIST-FILTER] and [BUILTIN-LIST-FOLD] traverse a
 /// runtime list eagerly in index order; [BUILTIN-LIST-SORT] returns a new list
-/// sorted ascending by the elements' natural order.
+/// sorted ascending by the elements' natural order; [BUILTIN-LIST-SORT-BY]
+/// sorts any element type by a comparator, stably.
 
 double n = satMul n 2
 
@@ -64,5 +65,42 @@ sortCase () =
         join (listSort ["same", "same"]) "," == "same,same"
     ]
 
+type Evidence =
+    title : string
+    at : int
+
+after (a, b) = match a > b
+    true => 1
+    false => 0
+
+order (a, b) = match a < b
+    true => -1
+    false => after (a, b)
+
+byTitle (x, y) = order (x.title, y.title)
+
+titles items = join (mapList items (\item => item.title)) ","
+
+scrambled i = "w${toString (satMul i 7919 % 1009)}"
+
+/// listSortBy orders by any comparator, a named function or a lambda that
+/// captures its scope; equal elements keep their order ([BUILTIN-LIST-SORT-BY]).
+sortByCase () =
+    evidence = [Evidence(title = "crash", at = 3), Evidence(title = "alert", at = 1),
+        Evidence(title = "boot", at = 1), Evidence(title = "disk", at = 2)]
+    newestFirst = -1
+    words = range 0 200 |> map scrambled |> toList
+
+    checkAll "listSortBy sorts stably by the comparator" [
+        titles (listSortBy evidence byTitle) == "alert,boot,crash,disk",
+        titles (listSortBy evidence (\(x, y) => order (x.at, y.at))) == "alert,boot,disk,crash",
+        titles (listSortBy evidence (\(x, y) => satMul newestFirst (order (x.at, y.at)))) == "crash,disk,alert,boot",
+        join (mapList (listSortBy [2.5, -1.0, 0.5] order) toString) "," == "-1.0,0.5,2.5",
+        join (listSortBy words order) "," == join (listSort words) ",",
+        listLength (listSortBy (List ()) order) == 0,
+        titles (listSortBy [Evidence(title = "only", at = 0)] byTitle) == "only"
+    ]
+
 test "list map/filter/fold traverse eagerly" (\() => eagerCombinatorsCase ())
 test "listSort orders int and string lists ascending" (\() => sortCase ())
+test "listSortBy sorts any element type stably" (\() => sortByCase ())

@@ -855,6 +855,15 @@ Reduces a list to a single value by repeatedly applying `function`, starting fro
 #### `listSort(list: List<T>) -> List<T>` — [BUILTIN-LIST-SORT]
 Returns a new list sorted in ascending order by the elements' natural order: integers compare by value and strings by byte content. The sort is stable. `T` must be `int` or `string`; any other element type is a compile-time type error, never a runtime crash.
 
+#### `listSortBy(list: List<T>, compare: fn(T, T) -> int) -> List<T>` — [BUILTIN-LIST-SORT-BY]
+Returns a new list sorted by `compare`, for any element type. `compare(a, b)` returns a negative number when `a` comes first, a positive number when `b` comes first, and zero to keep the two in their original order: the sort is stable. It performs O(n log n) comparisons. `compare` may be a lambda that captures its scope, a named function or a function value, and its effects are those of the call.
+
+```osprey
+type Evidence = { title: string, at: int }
+fn order(a, b) = if a < b { -1 } else { if a > b { 1 } else { 0 } }
+listSortBy(evidence, fn(x, y) => order(x.title, y.title))
+```
+
 ### `Map<string, V>` — [BUILTIN-MAP]
 
 `Map()` and map literals create string-keyed maps. Map iteration order is

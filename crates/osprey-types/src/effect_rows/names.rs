@@ -63,7 +63,7 @@ pub(super) fn expression_site(expression: &Expr) -> usize {
 pub(super) fn eager_callback_slots(name: &str) -> &'static [usize] {
     match name {
         "test" | "forEach" | "forEachList" | "httpListen" | "spawnProcess" | "mapList"
-        | "filterList" => &[1],
+        | "filterList" | "listSortBy" => &[1],
         "fold" | "foldList" | "signalRefresh" => &[2],
         "signalSnapshot" => &[0],
         _ => &[],

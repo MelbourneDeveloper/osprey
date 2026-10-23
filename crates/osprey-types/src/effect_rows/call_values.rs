@@ -151,7 +151,7 @@ impl Analyzer<'_> {
                 }
                 aggregate(merged)
             }
-            "listReverse" | "mapRemove" => arguments
+            "listReverse" | "listSortBy" | "mapRemove" => arguments
                 .first()
                 .and_then(|argument| self.value(argument, scope, env))
                 .unwrap_or_default(),

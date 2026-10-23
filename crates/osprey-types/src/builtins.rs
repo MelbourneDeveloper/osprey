@@ -296,6 +296,15 @@ fn lists(e: &mut TypeEnv) {
         vec![Type::list(t()), v(), Type::fun(vec![v(), t()], v())],
         v(),
     );
+    // Stable sort by a comparator: negative orders the first argument first,
+    // zero keeps the two in their original order [BUILTIN-LIST-SORT-BY].
+    poly(
+        e,
+        "listSortBy",
+        vec![0],
+        vec![Type::list(t()), Type::fun(vec![t(), t()], Type::int())],
+        Type::list(t()),
+    );
     // Natural-order sort over the two element types the runtime can compare
     // without a callback [BUILTIN-LIST-SORT]. `builtin_constraints` rejects
     // every other element type before codegen.

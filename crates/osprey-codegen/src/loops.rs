@@ -8,7 +8,8 @@
 
 use crate::builder::Codegen;
 
-/// The counter frame behind every counted loop: an `i64` slot initialised to
+/// The counter frame behind every counted loop: an entry-block `i64` slot,
+/// so a loop nested in another reuses it, initialised on entry to
 /// `start`, a `cond` block that loads it and tests `< bound`, with the body
 /// already open and the loaded index in [`Counter::i`]. [`close_counter`] emits
 /// the increment + back-edge.
@@ -21,7 +22,7 @@ pub(crate) struct Counter {
 }
 
 fn open_counter(cg: &mut Codegen, start: &str, bound: &str) -> Counter {
-    let slot = cg.emit_reg("alloca i64");
+    let slot = cg.hoist_slot("i64");
     cg.emit(format!("store i64 {start}, i64* {slot}"));
     let cond = cg.fresh_label();
     let body = cg.fresh_label();
@@ -44,10 +45,10 @@ fn open_counter(cg: &mut Codegen, start: &str, bound: &str) -> Counter {
     }
 }
 
-fn close_counter(cg: &mut Codegen, c: &Counter) {
+fn close_counter(cg: &mut Codegen, c: &Counter, step: &str) {
     cg.emit(format!("br label %{}", c.incr));
     cg.start_block(&c.incr);
-    let next = cg.emit_reg(format!("add i64 {}, 1", c.i));
+    let next = cg.emit_reg(format!("add i64 {}, {step}", c.i));
     cg.emit(format!("store i64 {next}, i64* {}", c.slot));
     cg.emit(format!("br label %{}", c.cond));
     cg.start_block(&c.endl);
@@ -68,7 +69,7 @@ pub(crate) fn open_list_loop(cg: &mut Codegen, l: &str) -> ListLoop {
 }
 
 pub(crate) fn close_list_loop(cg: &mut Codegen, lp: &ListLoop) {
-    close_counter(cg, &lp.counter);
+    close_counter(cg, &lp.counter, "1");
 }
 
 /// A counted loop over a half-open `[start, end)`, step 1 — a bare [`Counter`],
@@ -78,5 +79,11 @@ pub(crate) fn open_range_loop(cg: &mut Codegen, start: &str, end: &str) -> Count
 }
 
 pub(crate) fn close_range_loop(cg: &mut Codegen, lp: &Counter) {
-    close_counter(cg, lp);
+    close_counter(cg, lp, "1");
+}
+
+/// Close a range loop whose counter advances by `step`, an `i64` operand
+/// that dominates the loop's increment block, instead of by one.
+pub(crate) fn close_range_loop_by(cg: &mut Codegen, lp: &Counter, step: &str) {
+    close_counter(cg, lp, step);
 }

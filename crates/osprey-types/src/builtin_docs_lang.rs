@@ -542,6 +542,12 @@ pub(crate) static LISTS: &[BuiltinDoc] = &[
         ["list" => "The list to sort"],
         "listSort([3, 1, 2])  // [1, 2, 3]",
     ),
+    builtin_doc!(
+        "listSortBy",
+        "Returns a new list sorted by a comparator, for any element type. The comparator returns a negative int when its first argument comes first, a positive int when it comes second and zero to keep the two in their original order: the sort is stable.",
+        ["list" => "The list to sort", "compare" => "Orders two elements: negative, zero or positive"],
+        "listSortBy([\"bb\", \"a\"], fn(x, y) => length(x) - length(y))  // [\"a\", \"bb\"]",
+    ),
 ];
 
 /// `maps` built-in documentation. Prose only — types come from the
