@@ -138,7 +138,9 @@ genericCallerRow () =
 (** A constructor written straight into the call carries no published type of
     its own; its generic fields are instantiated from what is written into them. *)
 constructorOperandsRow () =
-    print "constructors ${toString (structuralEquals (Box(content = 1), Box(content = 1)))} ${toString (structuralEquals (Filled(label = "a", act = Go), Filled(label = "a", act = Stop)))}"
+    boxes = structuralEquals (Box(content = 1), Box(content = 1))
+    slots = structuralEquals (Filled(label = "a", act = Go), Filled(label = "a", act = Stop))
+    print "constructors ${toString boxes} ${toString slots}"
     checkAll "constructor operands instantiate their generic fields" [
         structuralEquals (Box(content = 1), Box(content = 1)),
         !(structuralEquals (Box(content = [1, 2]), Box(content = [2, 1]))),

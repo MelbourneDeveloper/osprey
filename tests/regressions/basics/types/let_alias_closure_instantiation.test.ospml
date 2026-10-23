@@ -20,13 +20,12 @@ type Row A =
     rowKey : string
     cell : Node<A>
 
-module Lists
-    step (out, items, f, index) = match listGet items index
-        Success item => listAppend out (f item)
-        Error _ => out
+step (out, items, f, index) = match listGet items index
+    Success item => listAppend out (f item)
+    Error _ => out
 
-    export mapOver<T, U> : (List<T>, (T) -> U) -> List<U>
-    mapOver (items, f) = range (0, length items) |> fold [] (\(out, index) => step (out, items, f, index))
+mapOver<T, U> : (List<T>, (T) -> U) -> List<U>
+mapOver (items, f) = range (0, length items) |> fold [] (\(out, index) => step (out, items, f, index))
 
 label<A> : string -> Node<A>
 label text = Text(content = text)
@@ -42,12 +41,12 @@ type Found =
     warnings : int
 
 plainSidebar () =
-    entries = Lists::mapOver (["startup", "files"], \key => entry (key, label key))
+    entries = mapOver (["startup", "files"], \key => entry (key, label key))
     rows (entries, Navigate, 7)
 
 stagedSidebar () =
     found = perform Signal<Found>.read ()
-    entries = Lists::mapOver (["startup", "files"], \key => entry (key, label key))
+    entries = mapOver (["startup", "files"], \key => entry (key, label key))
     rows (entries, Navigate, found.warnings)
 
 plainCase () = match plainSidebar ()

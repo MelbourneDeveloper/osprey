@@ -191,8 +191,8 @@ callableSnapshotsKeepTheirCapturedValues () =
 
 test "cached callables retain their captured values across rebuilds" callableSnapshotsKeepTheirCapturedValues
 
-(** A rebuild is an ordinary record wherever it flows: passed straight into a
-    call, from either arm of the rebuild, it keeps its layout (#272). *)
+(** A rebuild is an ordinary record wherever it flows: passed into a call, from
+    either arm of a match, it keeps its layout (#272). *)
 type Region =
     region : string
     dependencies : List<string>

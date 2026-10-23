@@ -19,20 +19,19 @@ type Section =
 type Focus =
     picked : string
 
-module Lists
-    export find<T> : (List<T>, (T) -> bool) -> Result<T, Error>
-    find (xs, p) = match xs
-        [] => Error(message = "missing")
-        [head, ...tail] => match p head
-            true => Success(value = head)
-            false => find (tail, p)
+find<T> : (List<T>, (T) -> bool) -> Result<T, Error>
+find (xs, p) = match xs
+    [] => Error(message = "missing")
+    [head, ...tail] => match p head
+        true => Success(value = head)
+        false => find (tail, p)
 
 detail : Unit -> Result<Evidence, Error>
 detail () =
     focus = perform Signal<Focus>.read ()
     match perform Signal<Result<Section, Error>>.read ()
         Error _ => Error(message = "no section")
-        Success section => match Lists::find (section.records, \record => record.evidenceId == focus.picked)
+        Success section => match find (section.records, \record => record.evidenceId == focus.picked)
             Success record => Success(value = record)
             Error _ => Error(message = "not found")
 

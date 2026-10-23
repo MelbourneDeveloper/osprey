@@ -4,24 +4,21 @@
 // element owner tag. Losing it made `listGet` answer a bare `i64` storage
 // word and the `?:` default beside it disagreed on type (#279).
 // Implements [TYPE-UNION-REC], [BUILTIN-LIST-GET], [TYPE-GENERICS-FN].
-namespace demo
-
 type Tree T =
     Leaf
         item : T
     Node
         kids : List<Tree<T>>
 
-module Walk
-    export all<T> : Tree<T> -> List<T>
-    all tree = match tree
-        Leaf item => [item]
-        Node kids => range (0, length kids) |> fold [] (\(out, index) => listConcat out (all (listGet kids index ?: Node(kids = []))))
+all<T> : Tree<T> -> List<T>
+all tree = match tree
+    Leaf item => [item]
+    Node kids => range (0, length kids) |> fold [] (\(out, index) => listConcat out (all (listGet kids index ?: Node(kids = []))))
 
-print "${length (Walk::all (Node(kids = [Leaf(item = 1), Leaf(item = 2)])))}"
+print (toString (length (all (Node(kids = [Leaf(item = 1), Leaf(item = 2)])))))
 
 genericSelfRecursionFoldCase () =
-    leaves = Walk::all (Node(kids = [Leaf(item = 1), Leaf(item = 2), Leaf(item = 3)]))
+    leaves = all (Node(kids = [Leaf(item = 1), Leaf(item = 2), Leaf(item = 3)]))
     checkAll "generic self-recursion through a fold lambda" [
         length leaves == 3,
         (listGet leaves 0 ?: 0) == 1,
