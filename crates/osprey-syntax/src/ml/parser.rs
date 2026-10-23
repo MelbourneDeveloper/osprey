@@ -274,8 +274,13 @@ fn record_head(head: &MlExpr) -> Option<String> {
     }
 }
 
+/// A capitalised name is a constructor; a qualified path (`lib::Done`) is one
+/// when its last segment is, so another namespace's constructors can be
+/// matched by their path [FLAVOR-ML-MATCH].
 pub(super) fn is_constructor(name: &str) -> bool {
-    osprey_ast::is_constructor_name(name)
+    name.rsplit("::")
+        .next()
+        .is_some_and(osprey_ast::is_constructor_name)
 }
 
 /// A parsed `handle Effect` and its arms, waiting for the region it handles.

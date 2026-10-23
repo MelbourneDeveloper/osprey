@@ -1,0 +1,30 @@
+/// Default surface for [MODULES-RESOLUTION]: a union declared in one namespace
+/// is taken apart in another through its qualified constructors, so a library
+/// can expose a union for callers to match (issue #282).
+
+namespace lib {
+    type Outcome = Done { result: string } | Failed { reason: string }
+
+    fn attempt(flag) = match flag {
+        true => Done { result: "yes" }
+        false => Failed { reason: "no" }
+    }
+}
+
+namespace app {
+    fn show(outcome) = match outcome {
+        lib::Done { result } => result
+        lib::Failed { reason } => reason
+    }
+
+    fn describe(flag) = show(lib::attempt(flag))
+}
+
+print("${app::show(lib::Done { result: "yes" })} ${app::describe(false)}")
+
+test("qualified constructors match across namespaces", fn() => checkAll("cross-namespace patterns", [
+    app::show(lib::Done { result: "a" }) == "a",
+    app::show(lib::Failed { reason: "b" }) == "b",
+    app::describe(true) == "yes",
+    app::describe(false) == "no"
+]))
