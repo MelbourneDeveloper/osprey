@@ -270,7 +270,7 @@ fn substituted(definition: &mut Stmt, name: &str, bound: &BTreeMap<usize, String
         index += 1;
         !bound.contains_key(&(index - 1))
     });
-    *own = name.to_owned();
+    name.clone_into(own);
     *doc = None;
 }
 

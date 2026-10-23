@@ -84,9 +84,15 @@ The compiler honors the version contract ([SWR-VERSION-CLI-OUTPUT]):
 ```text
 $ osprey --version
 osprey 1.2.3
+commit 5ccded97
 $ osprey --version --json
-{"manifestVersion":1,"name":"osprey","version":"1.2.3","kind":"cli","product":"osprey"}
+{"manifestVersion":1,"name":"osprey","version":"1.2.3","kind":"cli","product":"osprey","commit":"5ccded97"}
 ```
+
+The first line stays exactly `name version`, which is what a version probe
+parses. The commit comes from `OSPREY_COMMIT` (a release or clean cut) or
+`GITHUB_SHA` (CI); a binary built from a working tree reports
+`<sha>-worktree`, because it may contain uncommitted changes.
 
 ## Required secrets / variables
 
