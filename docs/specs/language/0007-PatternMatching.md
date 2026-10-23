@@ -62,8 +62,11 @@ ML drops the payload delimiters (`Some value`, `Node left _`). It has only the
 one form, and that form is the positional one — ML `Some value` is the same
 constructor pattern as Default `Some(value)`, so an ML binder always takes its
 column and may be renamed freely. `Success`/`Error` are the single exception:
-their payload binds by role (`value`, `message`), so ML spells them by name like
-Default's `Success { value }`.
+each has one payload that binds by ROLE, not by spelling — ML `Success section`
+and `Error reason` bind the success value and the error message under the
+chosen names, exactly as Default's `Success { value }` and `Error { message }`
+do — so the binder's type is the payload's type wherever it is used, including
+as the argument of a generic call.
 
 ## Wildcard patterns
 
