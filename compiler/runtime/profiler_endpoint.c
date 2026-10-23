@@ -163,13 +163,28 @@ static bool diag_dir(char *out, size_t cap) {
 
 // A real directory the user owns that nobody else can enter. Anything else
 // disables the endpoint rather than being repaired: it may be someone's trap.
+static bool private_dir(const char *dir) {
+  struct stat st;
+  return lstat(dir, &st) == 0 && S_ISDIR(st.st_mode) &&
+         st.st_uid == getuid() && (st.st_mode & 077) == 0;
+}
+
 static bool ensure_private_dir(const char *dir) {
   if (mkdir(dir, 0700) != 0 && errno != EEXIST) {
     return false;
   }
-  struct stat st;
-  return lstat(dir, &st) == 0 && S_ISDIR(st.st_mode) &&
-         st.st_uid == getuid() && (st.st_mode & 077) == 0;
+  return private_dir(dir);
+}
+
+// The directory of this process's socket: `g_diag.path` up to its last slash.
+static bool socket_dir(char *dir, size_t cap) {
+  memcpy(dir, g_diag.path, cap);
+  char *slash = strrchr(dir, '/');
+  if (slash == NULL) {
+    return false;
+  }
+  *slash = '\0';
+  return true;
 }
 
 // A socket whose process is gone was left by a crash or a SIGKILL.
@@ -200,15 +215,33 @@ static void sweep_stale(const char *dir) {
   (void)closedir(d);
 }
 
+// An existing directory must be the user's private one; a missing one is
+// created by the bind that first needs it (bind_listener).
 static bool prepare_path(void) {
   char dir[sizeof(g_diag.path)];
-  if (!diag_dir(dir, sizeof(dir)) || !ensure_private_dir(dir)) {
+  if (!diag_dir(dir, sizeof(dir)) ||
+      (access(dir, F_OK) == 0 && !private_dir(dir))) {
     return false;
   }
   sweep_stale(dir);
   int n = snprintf(g_diag.path, sizeof(g_diag.path), "%s/%lld.sock", dir,
                    (long long)getpid());
   return n > 0 && (size_t)n < sizeof(g_diag.path);
+}
+
+// A bind that finds no directory creates it and binds again: the user has
+// none before their first program, and the last program out removes it
+// (remove_empty_dir), possibly between prepare_path and this bind.
+static bool bind_listener(int fd, const struct sockaddr_un *addr) {
+  if (bind(fd, (const struct sockaddr *)addr, sizeof(*addr)) == 0) {
+    return true;
+  }
+  char dir[sizeof(g_diag.path)];
+  if (errno != ENOENT || !socket_dir(dir, sizeof(dir)) ||
+      !ensure_private_dir(dir)) {
+    return false;
+  }
+  return bind(fd, (const struct sockaddr *)addr, sizeof(*addr)) == 0;
 }
 
 static int listen_on(const char *path) {
@@ -220,12 +253,21 @@ static int listen_on(const char *path) {
   }
   set_cloexec(fd);
   (void)unlink(path); // a dead process that had this pid left it behind
-  if (bind(fd, (const struct sockaddr *)&addr, sizeof(addr)) != 0 ||
-      listen(fd, OSP_DIAG_MAX_CLIENTS) != 0) {
+  if (!bind_listener(fd, &addr) || listen(fd, OSP_DIAG_MAX_CLIENTS) != 0) {
     (void)close(fd);
     return -1;
   }
   return fd;
+}
+
+// The last program out takes the per-user directory with it, so a scratch
+// TMPDIR is left as it was found. A neighbour's socket keeps it: rmdir refuses
+// a directory that is not empty, and that is the only failure expected here.
+static void remove_empty_dir(void) {
+  char dir[sizeof(g_diag.path)];
+  if (socket_dir(dir, sizeof(dir))) {
+    (void)rmdir(dir);
+  }
 }
 
 static bool open_wake_pipe(void) {
@@ -286,6 +328,7 @@ static bool run_listener(void) {
   g_running = false;
   close_fds();
   (void)unlink(g_diag.path);
+  remove_empty_dir();
   return false;
 }
 
@@ -331,6 +374,7 @@ void osp_diag_stop(void) {
   pthread_join(g_diag.thread, NULL);
   close_fds();
   (void)unlink(g_diag.path);
+  remove_empty_dir();
 }
 
 #elif !defined(_WIN32) && !defined(__wasm__)

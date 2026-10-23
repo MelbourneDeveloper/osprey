@@ -5,6 +5,7 @@
 // user's real diagnostics directory.
 #include "profiler_stream_test_support.h"
 
+#include <fcntl.h>
 #include <signal.h>
 #include <stdatomic.h>
 #include <sys/socket.h>
@@ -210,13 +211,25 @@ static void test_ninth_connection_is_busy(void) {
   }
 }
 
-// [PROF-ATTACH-ENDPOINT] a stopped endpoint removes its socket.
-static void test_stop_removes_socket(void) {
+// [PROF-ATTACH-ENDPOINT] a stopped endpoint removes its socket; the last
+// process out removes the directory too, and a neighbour's socket keeps it.
+static void test_stop_removes_socket_and_empty_directory(void) {
   char path[512];
   test_socket_path(path, sizeof(path));
+  char dir[512];
+  memcpy(dir, path, sizeof(dir));
+  *strrchr(dir, '/') = '\0';
+  char neighbour[600];
+  assert(snprintf(neighbour, sizeof(neighbour), "%s/1.sock", dir) > 0);
+  int fd = open(neighbour, O_WRONLY | O_CREAT | O_EXCL, 0600);
+  assert(fd >= 0 && close(fd) == 0);
+  osp_diag_stop();
+  assert(access(path, F_OK) != 0 && access(dir, F_OK) == 0); // kept for 1.sock
+  assert(unlink(neighbour) == 0);
+  assert(osp_diag_start()); // reuses the directory it was handed
   osp_diag_stop();
   osp_diag_stop(); // idempotent
-  assert(access(path, F_OK) != 0);
+  assert(access(path, F_OK) != 0 && access(dir, F_OK) != 0);
 }
 
 int main(void) {
@@ -233,7 +246,7 @@ int main(void) {
   TEST_RUN(test_labels_never_break_framing);
   TEST_RUN(test_long_line_closes_connection);
   TEST_RUN(test_ninth_connection_is_busy);
-  TEST_RUN(test_stop_removes_socket);
+  TEST_RUN(test_stop_removes_socket_and_empty_directory);
   run_stream_lifecycle_tests();
   test_remove_private_tmpdirs();
   printf("profiler_stream_tests: all tests passed (sink=%f)\n", g_spin_sink);
