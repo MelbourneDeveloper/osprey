@@ -46,16 +46,17 @@ impl Checker {
     }
 
     /// A handler: its target, then its arms and body, then its cleanup. A
-    /// compile-time handler cannot answer a capability, a runtime identity.
+    /// compile-time handler of a capability never reaches here: the stage
+    /// validator rejects it first, since it names no effect declaration.
     fn infer_handler_form(&mut self, e: &Expr, env: &TypeEnv) -> Type {
         let Expr::Handler {
-            stage,
             effect,
             arms,
             return_clause,
             finally,
             body,
             position,
+            ..
         } = e
         else {
             return self.ctx.fresh();
@@ -63,15 +64,6 @@ impl Checker {
         let Some(target) = self.effect_target(effect, *position, env) else {
             return self.ctx.fresh();
         };
-        if target.instance.is_some() && stage.is_compile_time() {
-            self.errors.push(
-                TypeError::new(format!(
-                    "a compile-time handler cannot answer the capability `{effect}`: \
-a capability is a runtime identity"
-                ))
-                .with_pos(*position),
-            );
-        }
         let answer =
             self.infer_handler(target, arms, body, return_clause.as_deref(), *position, env);
         if let Some(cleanup) = finally {

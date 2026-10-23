@@ -364,7 +364,7 @@ fn undeclared_region(stage: Stage, base: &str) -> String {
     if base == crate::ARITH_EFFECT {
         format!("`{region} Arith` is not available: `Arith` has runtime policies only; install one with `handle Arith`")
     } else {
-        format!("{region} names unknown effect `{base}`")
+        format!("{region} names unknown effect `{base}`: a compile-time region needs an effect declaration, and a capability made by `instance` is a runtime identity it cannot answer")
     }
 }
 

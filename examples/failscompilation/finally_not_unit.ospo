@@ -1,0 +1,14 @@
+// [EFFECTS-FINALIZATION]: cleanup runs after the answer is decided and returns
+// `Unit`, so a `finally` clause that produces a value is rejected.
+effect Log {
+    /// Record one line.
+    write: fn(string) -> Unit
+}
+
+fn main() = {
+    handle Log {
+        write m => print(m)
+        finally => 7
+    }
+    perform Log.write("hi")
+}

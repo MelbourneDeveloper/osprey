@@ -1,0 +1,10 @@
+// osprey: flavor=ml
+// [EFFECTS-FINALIZATION]: the ML twin of `finally_not_unit.ospo`.
+effect Log
+    write : string => Unit
+
+answer =
+    handle Log
+        write m => print m
+        finally => 7
+    perform Log.write "hi"

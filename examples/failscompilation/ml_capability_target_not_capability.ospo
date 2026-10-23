@@ -1,0 +1,10 @@
+// osprey: flavor=ml
+// [EFFECTS-INSTANCE]: the ML twin of `capability_target_not_capability.ospo`.
+effect Log
+    write : string => Unit
+
+log2 = 3
+answer =
+    handle Log
+        write m => print m
+    perform log2.write "hi"

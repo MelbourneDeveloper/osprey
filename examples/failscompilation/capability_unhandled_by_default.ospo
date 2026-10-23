@@ -1,0 +1,14 @@
+// [EFFECTS-INSTANCE]: a handler of the default identity does not answer a
+// capability, so the capability's operation reaches program entry unhandled.
+effect Log {
+    /// Record one line.
+    write: fn(string) -> Unit
+}
+
+fn main() = {
+    let audit = instance Log
+    handle Log {
+        write m => print(m)
+    }
+    perform audit.write("hi")
+}
