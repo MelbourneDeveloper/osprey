@@ -209,8 +209,10 @@ fn pair_args<'a>(
 }
 
 /// When an argument is a bare name that is a callee (a function/builtin) rather
-/// than a bound value or a nullary constructor, return that name so the
-/// parameter can redirect calls to it.
+/// than a bound value or a nullary constructor, return the callee it stands for
+/// so the parameter can redirect calls to it. A forwarded parameter of an
+/// enclosing inline is itself an alias: it resolves to that callee, not to its
+/// own name, which no symbol defines (#280).
 fn alias_target(cg: &Codegen, arg: &Expr) -> Option<String> {
     match arg {
         Expr::Identifier(n)
@@ -218,7 +220,7 @@ fn alias_target(cg: &Codegen, arg: &Expr) -> Option<String> {
                 && !cg.is_ctor(n)
                 && (cg.lambda_def(n).is_some() || !value_binding(cg, n)) =>
         {
-            Some(n.clone())
+            Some(cg.call_aliases.get(n).cloned().unwrap_or_else(|| n.clone()))
         }
         _ => None,
     }

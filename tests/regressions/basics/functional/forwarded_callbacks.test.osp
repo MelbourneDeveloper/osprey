@@ -1,0 +1,49 @@
+/// A generic function forwarding one of its callable parameters to another
+/// generic function calls the callable it was given, under any parameter
+/// name, through any depth, and inside a staged function (#280).
+/// Implements [TYPE-GENERICS-FN].
+
+static effect Signal<T> { read: fn() -> T }
+
+type Query = { text: string }
+
+fn applied(saved, f) = f(saved)
+fn sameName(saved, decode) = decode(saved)
+fn twoDeep(saved, g) = applied(saved, g)
+
+fn run(saved, render, decode) = {
+    let old = applied(saved, decode)
+    render(old)
+}
+
+fn query() = (perform Signal<Query>.read()).text
+fn listView() = "list:${query()}"
+fn cached() = { dependencies: ["<unknown>"], revision: 0, value: "" }
+
+fn regions(store) = {
+    handle static Signal<Query> { read => store }
+    let list = signalRefresh(cached(), ["<unknown>"], listView)
+    list.value
+}
+
+fn load(text) = Query { text: text }
+fn shown(query) = "shown:${query.text}"
+fn forwardRenamed(decode) = applied("a", decode)
+fn forwardSame(decode) = sameName("b", decode)
+fn forwardDeep(decode) = twoDeep("c", decode)
+
+fn forwardedByAnyName() = checkAll("the forwarded callable is the one passed", [
+    forwardRenamed(load).text == "a",
+    forwardSame(load).text == "b",
+    forwardDeep(load).text == "c",
+    run("d", shown, load) == "shown:d"
+])
+
+fn forwardedIntoStagedRender() = {
+    let rendered = run("abc", regions, load)
+    print(rendered)
+    checkAll("a staged render receives the decoded store", [rendered == "list:abc"])
+}
+
+test("forwarded by any name", forwardedByAnyName)
+test("forwarded into a staged render", forwardedIntoStagedRender)

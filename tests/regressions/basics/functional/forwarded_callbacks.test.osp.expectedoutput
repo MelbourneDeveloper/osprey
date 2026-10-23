@@ -1,0 +1,5 @@
+ok 1 - forwarded by any name
+list:abc
+ok 2 - forwarded into a staged render
+1..2
+# tests=2 passed=2 failed=0 skipped=0
