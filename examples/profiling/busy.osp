@@ -1,0 +1,35 @@
+// A busy program to profile: two kinds of work, one far hotter than the other.
+
+fn fib(n) = match n {
+    0 => 0
+    1 => 1
+    _ => fib(n - 1) + fib(n - 2)
+}
+
+fn collatz(n, steps) = match n {
+    1 => steps
+    _ => match n % 2 {
+        0 => collatz(intDiv(n, 2), steps + 1)
+        _ => collatz(3 * n + 1, steps + 1)
+    }
+}
+
+fn longer(a, b) = match a > b {
+    true => a
+    false => b
+}
+
+fn longest(n, best) = match n {
+    0 => best
+    _ => longest(n - 1, longer(collatz(n, 0), best))
+}
+
+fn round(k) -> int = {
+    print("round ${k}: fib ${fib(30)}, longest chain ${longest(20000, 0)}")
+    round(k + 1)
+}
+
+fn main() = {
+    handle Arith { overflow _ _ _ wrapped => wrapped }
+    round(1)
+}
