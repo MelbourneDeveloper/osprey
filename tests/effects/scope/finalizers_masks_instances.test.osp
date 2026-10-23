@@ -66,6 +66,9 @@ fn halting() = {
     0
 }
 
+/// Two guarded regions abandoned together by an outer halt.
+fn abandonedInside() = guarded("x")(fn() => guarded("y")(halting))
+
 /// Finalizers run after normal completion, inner to outer, and on abandonment.
 fn finalizerCase() = {
     let reused = guarded("a")
@@ -73,6 +76,7 @@ fn finalizerCase() = {
         recording(fn() => guarded("a")(noted)) == "a:4=>body;a closed;",
         recording(outerOfInner) == "outer:7=>body;inner closed;outer closed;",
         recording(fn() => stopper(halting)) == "halted=>before;stopper closed;",
+        recording(fn() => stopper(abandonedInside)) == "halted=>before;y closed;x closed;stopper closed;",
         recording(fn() => "${reused(lookup)}/${reused(lookup)}") == "a:4/a:4=>a closed;a closed;"
     ])
 }

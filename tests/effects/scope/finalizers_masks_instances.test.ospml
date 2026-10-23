@@ -58,6 +58,9 @@ halting () =
     perform Log.note "after"
     0
 
+(** Two guarded regions abandoned together by an outer halt. *)
+abandonedInside () = guarded "x" (\() => guarded "y" halting)
+
 (** Finalizers run after normal completion, inner to outer, and on abandonment. *)
 finalizerCase () =
     reused = guarded "a"
@@ -65,6 +68,7 @@ finalizerCase () =
         recording (\() => guarded "a" noted) == "a:4=>body;a closed;",
         recording outerOfInner == "outer:7=>body;inner closed;outer closed;",
         recording (\() => stopper halting) == "halted=>before;stopper closed;",
+        recording (\() => stopper abandonedInside) == "halted=>before;y closed;x closed;stopper closed;",
         recording (\() => "${reused lookup}/${reused lookup}") == "a:4/a:4=>a closed;a closed;"
     ]
 
