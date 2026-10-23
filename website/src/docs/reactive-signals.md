@@ -49,6 +49,47 @@ Supply every changed signal identity together in one refresh to batch an update.
 
 Dependencies are conservative **may-read** sets. Both arms of a runtime choice contribute possible reads, including an arm not taken on this execution. A resolved callback keeps its actual requirements. An unresolved callback, generic instance or open remainder contributes `<unknown>`, which forces refresh rather than risk retaining a stale value. Builtin I/O is still checked as an effect obligation; metadata queries do not make their argument expressions pure.
 
+## The built-in signals layer
+
+Every reactive app used to declare the same reader effect and hand-roll the same frame cache. Both are standard now: the `Signal<T>` reader effect, `SignalFrame`, `KeyedSnapshot<T>`, and the keyed refresh functions are prelude source attached on demand, so a program that names them stops declaring its own. A program that declares its own `Signal` keeps it and gets none of the standard layer.
+
+A render keeps one frame per keyed region, refreshes each region through `signalRefreshKeyed`, and derives the changed identities from the slice encodings with `signalChanges`. The revision each region kept survives a JSON round trip of the frames.
+
+```osprey
+type Route = { tab: string }
+fn tab() = (perform Signal<Route>.read()).tab
+fn encode(route) = JsonString(route.tab)
+fn render(route, frames, changed) = {
+    handle static Signal<Route> { read => Route { tab: route } }
+    [signalFrame(signalRefreshKeyed(frames, "nav", changed, "", tab))]
+}
+let home = Route { tab: "home" }
+let away = Route { tab: "away" }
+let first = render("home", [], [])
+let second = render("away", first, signalChanges(home, away, encode, signalDependencies(tab)))
+let across = signalFramesFromJson(jsonDecode(jsonEncode(signalFramesJson(second)) ?: "") ?: JsonNull)
+print("nav@${toString(signalRevisionOf(second, "nav"))} kept@${toString(signalRevisionOf(across, "nav"))}")
+```
+
+```ospml
+type Route =
+    tab : string
+tab () = (perform Signal<Route>.read ()).tab
+encode route = JsonString route.tab
+render (route, frames, changed) =
+    handle static Signal<Route>
+        read => Route(tab = route)
+    [signalFrame (signalRefreshKeyed frames "nav" changed "" tab)]
+home = Route(tab = "home")
+away = Route(tab = "away")
+first = render ("home", [], [])
+second = render ("away", first, signalChanges home away encode (signalDependencies tab))
+across = signalFramesFromJson (jsonDecode (jsonEncode (signalFramesJson second) ?: "") ?: JsonNull)
+print "nav@${toString (signalRevisionOf second "nav")} kept@${toString (signalRevisionOf across "nav")}"
+```
+
+This prints `nav@2 kept@2`: the region rebuilt because `Route` changed, and the frames read back from JSON keep that revision for the next render. `signalRetained` supplies the snapshot to refresh for a key — an unseen or forced key carries `<unknown>` dependencies and therefore rebuilds, and its placeholder value is never reused unless nothing the region read changed. `signalForced(frames, key)` rebuilds one key at its next refresh whatever changed, and `signalRevisionOf(frames, key)` reads a key's kept revision.
+
 Run the [complete dashboard examples](https://github.com/Nimblesite/osprey/tree/main/examples/handlers), in Default and ML, with `python3 examples/handlers/run.py all --demo staged-rows --check`. They update counter and cursor views independently, rebuild a combined status view for either change, and retain all three on an idle update. Native programs can also rebuild computations that use fibers and deep one-shot continuations.
 
 The [effects specification](/spec/0017-algebraiceffects/#reactive-signals--stage-signals) defines the contract.

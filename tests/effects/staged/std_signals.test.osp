@@ -1,0 +1,82 @@
+/// The built-in signals layer: this program declares no `Signal` effect and
+/// no frame cache of its own — the prelude attaches both for a program that
+/// names them. Two keyed regions refresh across renders in which only one
+/// slice changes, a forced key rebuilds alone, and frames survive a JSON
+/// round trip. Implements [STAGE-SIGNALS-STD], [STAGE-SIGNALS-CACHE].
+
+type Route = { tab: string }
+type Panel = { title: string }
+type Store = { route: Route, panel: Panel }
+
+fn firstStore() = Store { route: Route { tab: "home" }, panel: Panel { title: "main" } }
+fn secondStore() = Store { route: Route { tab: "away" }, panel: Panel { title: "main" } }
+fn routeLabel() = "route:${(perform Signal<Route>.read()).tab}"
+fn panelLabel() = "panel:${(perform Signal<Panel>.read()).title}"
+fn encodeRoute(route) = JsonString(route.tab)
+
+fn render(store, frames, changed) = {
+    handle static Signal<Route> { read => store.route }
+    handle static Signal<Panel> { read => store.panel }
+    [
+        signalFrame(signalRefreshKeyed(frames, "route", changed, "", routeLabel)),
+        signalFrame(signalRefreshKeyed(frames, "panel", changed, "", panelLabel))
+    ]
+}
+
+fn revisions(frames) = "route@${toString(signalRevisionOf(frames, "route"))} panel@${toString(signalRevisionOf(frames, "panel"))}"
+
+fn keyedRegionsRebuildOnlyTheChangedSlice() = {
+    let first = render(firstStore(), [], [])
+    let routeChanged = signalChanges(firstStore().route, secondStore().route, encodeRoute, signalDependencies(routeLabel))
+    let second = render(secondStore(), first, routeChanged)
+    let sameSlice = signalChanges(firstStore().route, firstStore().route, encodeRoute, signalDependencies(routeLabel))
+    print("first: ${revisions(first)} second: ${revisions(second)}")
+    checkAll("a keyed region keeps its revision until its slice changes", [
+        signalRevisionOf(first, "route") == 1, signalRevisionOf(first, "panel") == 1,
+        signalRevisionOf(second, "route") == 2, signalRevisionOf(second, "panel") == 1,
+        listLength(sameSlice) == 0
+    ])
+}
+
+fn aForcedKeyRebuildsWhileOthersRetain() = {
+    let first = render(firstStore(), [], [])
+    let idle = render(firstStore(), first, [])
+    let forced = render(firstStore(), signalForced(first, "route"), [])
+    print("idle: ${revisions(idle)} forced: ${revisions(forced)}")
+    checkAll("forcing one key rebuilds only that region", [
+        signalRevisionOf(idle, "route") == 1, signalRevisionOf(idle, "panel") == 1,
+        signalRevisionOf(forced, "route") == 2, signalRevisionOf(forced, "panel") == 1
+    ])
+}
+
+fn anUnseenKeyHasAnUnknownDependencySet() = {
+    let blank = signalRetained([], "route", "seed")
+    checkAll("an unseen key rebuilds and never reuses the placeholder", [
+        join(blank.dependencies, ",") == "<unknown>",
+        blank.revision == 0,
+        blank.value == "seed"
+    ])
+}
+
+fn framesSurviveTheJsonRoundTrip() = {
+    let rendered = render(secondStore(), render(firstStore(), [], []), [])
+    let text = jsonEncode(signalFramesJson([SignalFrame("one", ["a.one"], 3), SignalFrame("two", [], 7)])) ?: ""
+    let back = signalFramesFromJson(jsonDecode(text) ?: JsonNull)
+    let restored = signalFramesFromJson(jsonDecode(jsonEncode(signalFramesJson(rendered)) ?: "") ?: JsonNull)
+    let foreign = signalFramesFromJson(JsonObject([JsonMember("shape", JsonInt(1))]))
+    let one = listGet(back, 0) ?: SignalFrame("", [], 0)
+    print("frames: ${text} decoded: ${signalFrameKey(one)} ${join(signalFrameDependencies(one), ",")}@${toString(signalFrameRevision(one))} restored: ${revisions(restored)}/${toString(listLength(foreign))}")
+    checkAll("frames round trip through json while foreign shapes skip", [
+        signalRevisionOf(restored, "route") == signalRevisionOf(rendered, "route"),
+        signalRevisionOf(restored, "panel") == signalRevisionOf(rendered, "panel"),
+        signalFrameKey(one) == "one",
+        join(signalFrameDependencies(one), ",") == "a.one",
+        signalFrameRevision(one) == 3,
+        listLength(foreign) == 0
+    ])
+}
+
+test("keyed regions rebuild only the changed slice", keyedRegionsRebuildOnlyTheChangedSlice)
+test("a forced key rebuilds while others retain", aForcedKeyRebuildsWhileOthersRetain)
+test("an unseen key has an unknown dependency set", anUnseenKeyHasAnUnknownDependencySet)
+test("frames survive the json round trip", framesSurviveTheJsonRoundTrip)

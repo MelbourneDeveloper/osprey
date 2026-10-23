@@ -706,11 +706,16 @@ scalar's value; `jsonFloat` also accepts `JsonInt` and widens it. Each accessor
 returns `Error` with a message naming the accessor and the reason, such as
 `jsonField: no member email` or `jsonIndex: not an array`.
 
-These declarations are Osprey source that the compiler attaches to a program
-that names any of them. A program that names none compiles exactly as written.
-A program that declares a type or constructor with one of these names keeps its
-own declarations and gets none of these. A program that declares a function
-with one of these names keeps its own function in place of that one only.
+These declarations are one unit of Osprey source that the compiler attaches
+to a program that names any of them; the prelude is a list of such
+independent units, each attached on its own demand. A program that names
+none of a unit compiles exactly as written. A program that declares a type,
+constructor or effect with one of a unit's names keeps its own declarations
+and gets none of that unit. A program that declares a function with one of
+these names keeps its own function in place of that one only. A unit written
+against another unit's declarations — the signals unit is written against
+these — attaches only beside it, so naming a signals declaration attaches
+this unit too ([STAGE-SIGNALS-STD]).
 
 ### Limits and failure reasons — [BUILTIN-JSON-LIMITS]
 

@@ -1,0 +1,83 @@
+(** The built-in signals layer: this program declares no `Signal` effect and
+    no frame cache of its own — the prelude attaches both for a program that
+    names them. Two keyed regions refresh across renders in which only one
+    slice changes, a forced key rebuilds alone, and frames survive a JSON
+    round trip. Implements [STAGE-SIGNALS-STD], [STAGE-SIGNALS-CACHE]. *)
+
+type Route =
+    tab : string
+type Panel =
+    title : string
+type Store =
+    route : Route
+    panel : Panel
+
+firstStore () = Store(route = Route(tab = "home"), panel = Panel(title = "main"))
+secondStore () = Store(route = Route(tab = "away"), panel = Panel(title = "main"))
+routeLabel () = "route:${(perform Signal<Route>.read ()).tab}"
+panelLabel () = "panel:${(perform Signal<Panel>.read ()).title}"
+encodeRoute route = JsonString route.tab
+
+render (store, frames, changed) =
+    handle static Signal<Route>
+        read => store.route
+    handle static Signal<Panel>
+        read => store.panel
+    [
+        signalFrame (signalRefreshKeyed frames "route" changed "" routeLabel),
+        signalFrame (signalRefreshKeyed frames "panel" changed "" panelLabel)
+    ]
+
+revisions frames = "route@${toString (signalRevisionOf frames "route")} panel@${toString (signalRevisionOf frames "panel")}"
+
+keyedRegionsRebuildOnlyTheChangedSlice () =
+    first = render (firstStore (), [], [])
+    routeChanged = signalChanges (firstStore ()).route (secondStore ()).route encodeRoute (signalDependencies routeLabel)
+    second = render (secondStore (), first, routeChanged)
+    sameSlice = signalChanges (firstStore ()).route (firstStore ()).route encodeRoute (signalDependencies routeLabel)
+    print "first: ${revisions first} second: ${revisions second}"
+    checkAll "a keyed region keeps its revision until its slice changes" [
+        signalRevisionOf first "route" == 1, signalRevisionOf first "panel" == 1,
+        signalRevisionOf second "route" == 2, signalRevisionOf second "panel" == 1,
+        listLength sameSlice == 0,
+    ]
+
+aForcedKeyRebuildsWhileOthersRetain () =
+    first = render (firstStore (), [], [])
+    idle = render (firstStore (), first, [])
+    forced = render (firstStore (), signalForced first "route", [])
+    print "idle: ${revisions idle} forced: ${revisions forced}"
+    checkAll "forcing one key rebuilds only that region" [
+        signalRevisionOf idle "route" == 1, signalRevisionOf idle "panel" == 1,
+        signalRevisionOf forced "route" == 2, signalRevisionOf forced "panel" == 1,
+    ]
+
+anUnseenKeyHasAnUnknownDependencySet () =
+    blank = signalRetained [] "route" "seed"
+    checkAll "an unseen key rebuilds and never reuses the placeholder" [
+        join blank.dependencies "," == "<unknown>",
+        blank.revision == 0,
+        blank.value == "seed",
+    ]
+
+framesSurviveTheJsonRoundTrip () =
+    rendered = render (secondStore (), render (firstStore (), [], []), [])
+    text = jsonEncode (signalFramesJson [SignalFrame "one" ["a.one"] 3, SignalFrame "two" [] 7]) ?: ""
+    back = signalFramesFromJson (jsonDecode text ?: JsonNull)
+    restored = signalFramesFromJson (jsonDecode (jsonEncode (signalFramesJson rendered) ?: "") ?: JsonNull)
+    foreign = signalFramesFromJson (JsonObject [JsonMember "shape" (JsonInt 1)])
+    one = listGet back 0 ?: SignalFrame "" [] 0
+    print "frames: ${text} decoded: ${signalFrameKey one} ${join (signalFrameDependencies one) ","}@${toString (signalFrameRevision one)} restored: ${revisions restored}/${toString (listLength foreign)}"
+    checkAll "frames round trip through json while foreign shapes skip" [
+        signalRevisionOf restored "route" == signalRevisionOf rendered "route",
+        signalRevisionOf restored "panel" == signalRevisionOf rendered "panel",
+        signalFrameKey one == "one",
+        join (signalFrameDependencies one) "," == "a.one",
+        signalFrameRevision one == 3,
+        listLength foreign == 0,
+    ]
+
+test "keyed regions rebuild only the changed slice" keyedRegionsRebuildOnlyTheChangedSlice
+test "a forced key rebuilds while others retain" aForcedKeyRebuildsWhileOthersRetain
+test "an unseen key has an unknown dependency set" anUnseenKeyHasAnUnknownDependencySet
+test "frames survive the json round trip" framesSurviveTheJsonRoundTrip

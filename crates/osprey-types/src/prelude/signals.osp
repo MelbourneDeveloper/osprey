@@ -1,0 +1,151 @@
+//! Reactive signals and the snapshots a render keeps between dispatches.
+//! Every program that names one of these declarations gets this file compiled
+//! beside it, so no application declares its own signal reader or frame
+//! cache; a program that declares its own `Signal` keeps it and gets none of
+//! this. Implements [STAGE-SIGNALS-STD].
+
+/// A value a view reads. A view reads `(perform Signal<Route>.read()).tab`;
+/// the render answers it from its store, statically:
+/// `handle static Signal<Route> { read => store.route }`.
+static effect Signal<T> { read: fn() -> T }
+
+/// What one keyed snapshot kept from its last render: its key, the signals
+/// it read and its revision. Payloads are positional, so no field name here
+/// can collide with one in the program.
+type SignalFrame = SignalFrame(string, List<string>, int)
+
+/// A keyed snapshot: `signalRefresh`'s snapshot under the key it is kept by.
+type KeyedSnapshot<T> = {
+    snapshotKey: string,
+    snapshotDependencies: List<string>,
+    snapshotRevision: int,
+    snapshotValue: T
+}
+
+/// The key a frame is kept under.
+fn signalFrameKey(frame) = match frame {
+    SignalFrame(key, _, _) => key
+}
+
+/// The signals the frame's snapshot read.
+fn signalFrameDependencies(frame) = match frame {
+    SignalFrame(_, dependencies, _) => dependencies
+}
+
+/// The frame's snapshot revision.
+fn signalFrameRevision(frame) = match frame {
+    SignalFrame(_, _, revision) => revision
+}
+
+/// What to keep of a keyed snapshot until the next render.
+fn signalFrame(keyed) = SignalFrame(keyed.snapshotKey, keyed.snapshotDependencies, keyed.snapshotRevision)
+
+/// The snapshot to refresh for `key`. A key with no frame has an unknown
+/// dependency set, so its first refresh rebuilds. A retained snapshot's value
+/// is never reused unless nothing it read changed, and a caller that keeps
+/// only frames supplies `placeholder` for it.
+fn signalRetained<T>(frames, key, placeholder) -> SignalSnapshot<T> = match __signalFrameAt(frames, key) {
+    Success { value } => { dependencies: signalFrameDependencies(value), revision: signalFrameRevision(value), value: placeholder }
+    _ => { dependencies: ["<unknown>"], revision: 0, value: placeholder }
+}
+
+/// Refresh the snapshot kept under `key`: rebuilt by `view` when a signal it
+/// reads is in `changed`, or when the key is unseen or forced, otherwise
+/// retained. Call it inside the `handle static` regions that answer the
+/// signals.
+fn signalRefreshKeyed<T>(frames, key, changed, placeholder, view) -> KeyedSnapshot<T> = {
+    let refreshed = signalRefresh(signalRetained(frames, key, placeholder), changed, view)
+    KeyedSnapshot {
+        snapshotKey: key,
+        snapshotDependencies: refreshed.dependencies,
+        snapshotRevision: refreshed.revision,
+        snapshotValue: refreshed.value
+    }
+}
+
+/// Frames in which only `key` rebuilds at its next refresh.
+fn signalForced(frames, key) = range(0, listLength(frames)) |> map(fn(index) => __signalForcedAt(frames, key, index)) |> toList
+
+/// The revision kept for `key`, or 0 when it has none.
+fn signalRevisionOf(frames, key) = match __signalFrameAt(frames, key) {
+    Success { value } => signalFrameRevision(value)
+    _ => 0
+}
+
+/// `identities` when `encode` gives `before` and `after` different JSON,
+/// otherwise none: the changed set a refresh needs for one slice.
+fn signalChanges(before, after, encode, identities) = match (jsonEncode(encode(before)) ?: "") == (jsonEncode(encode(after)) ?: "") {
+    true => []
+    false => identities
+}
+
+/// Frames as JSON, always the shape
+/// `[{"key": string, "dependencies": [string], "revision": int}, ...]`.
+fn signalFramesJson(frames) = JsonArray(range(0, listLength(frames)) |> map(fn(index) => __signalFrameJson(listGet(frames, index))) |> toList)
+
+/// Frames read back from `signalFramesJson`'s shape. An element of any other
+/// shape is skipped, never guessed: its key is then unseen and rebuilds.
+fn signalFramesFromJson(doc) = match doc {
+    JsonArray(items) => range(0, listLength(items)) |> fold([], fn(kept, index) => __signalKeepFrame(kept, listGet(items, index)))
+    _ => []
+}
+
+// The frame kept under `key`, scanning in order.
+fn __signalFrameAt(frames, key) = listGet(range(0, listLength(frames)) |> fold([], fn(found, index) => __signalKeyed(found, listGet(frames, index), key)), 0)
+
+fn __signalKeyed(found, frame, key) = match frame {
+    Success { value } => match signalFrameKey(value) == key {
+        true => listAppend(found, value)
+        false => found
+    }
+    _ => found
+}
+
+fn __signalForcedAt(frames, key, index) = match listGet(frames, index) {
+    Success { value } => match signalFrameKey(value) == key {
+        true => SignalFrame(key, ["<unknown>"], signalFrameRevision(value))
+        false => value
+    }
+    _ => SignalFrame(key, ["<unknown>"], 0)
+}
+
+fn __signalFrameJson(frame) = match frame {
+    Success { value } => JsonObject([
+        JsonMember("key", JsonString(signalFrameKey(value))),
+        JsonMember("dependencies", JsonArray(signalFrameDependencies(value) |> __signalJsonTexts)),
+        JsonMember("revision", JsonInt(signalFrameRevision(value)))
+    ])
+    _ => JsonNull
+}
+
+fn __signalJsonTexts(texts) = range(0, listLength(texts)) |> map(fn(index) => JsonString(listGet(texts, index) ?: "")) |> toList
+
+fn __signalKeepFrame(kept, item) = match __signalFrameFromJson(item ?: JsonNull) {
+    Success { value } => listAppend(kept, value)
+    _ => kept
+}
+
+fn __signalFrameFromJson(doc) = match jsonText(jsonField(doc, "key") ?: JsonNull) {
+    Success { value } => __signalFrameWithKey(doc, value)
+    Error { message } => Error { message: message }
+}
+
+fn __signalFrameWithKey(doc, key) = match jsonInt(jsonField(doc, "revision") ?: JsonNull) {
+    Success { value } => __signalFrameWithRevision(doc, key, value)
+    Error { message } => Error { message: message }
+}
+
+fn __signalFrameWithRevision(doc, key, revision) = match jsonField(doc, "dependencies") ?: JsonNull {
+    JsonArray(items) => Success { value: SignalFrame(key, __signalDepTexts(items), revision) }
+    _ => Error { message: "signal frame: dependencies is not an array" }
+}
+
+// A dependency that is not a string is dropped, never guessed: fewer kept
+// dependencies than the view reads make the next refresh rebuild, never
+// retain a stale value.
+fn __signalDepTexts(items) = range(0, listLength(items)) |> fold([], fn(texts, index) => __signalDepTextAt(texts, listGet(items, index)))
+
+fn __signalDepTextAt(texts, item) = match jsonText(item ?: JsonNull) {
+    Success { value } => listAppend(texts, value)
+    _ => texts
+}
