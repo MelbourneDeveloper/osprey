@@ -39,9 +39,37 @@ impl ProfilerEvents for Silent {
     async fn notify(&self, _method: &'static str, _params: Value) {}
 }
 
+/// Every notification the service sends, in order.
+#[derive(Debug, Default)]
+struct Recorder(std::sync::Mutex<Vec<(&'static str, Value)>>);
+
+#[async_trait]
+impl ProfilerEvents for Recorder {
+    async fn notify(&self, method: &'static str, params: Value) {
+        if let Ok(mut sent) = self.0.lock() {
+            sent.push((method, params));
+        }
+    }
+}
+
+impl Recorder {
+    /// The `top_function` of every progress notification sent so far.
+    fn tops(&self) -> Vec<String> {
+        let sent = self.0.lock().map(|sent| sent.clone()).unwrap_or_default();
+        sent.iter()
+            .filter(|(method, _)| *method == methods::CPU_PROGRESS)
+            .filter_map(|(_, params)| params.get("top_function").and_then(Value::as_str).map(str::to_owned))
+            .collect()
+    }
+}
+
 /// The shared service with only the Osprey runtime, reading `fixture`'s
 /// endpoint directory and writing exports under its scratch directory.
 fn service(fixture: &Fixture) -> ProfilerService {
+    service_with(fixture, Arc::new(Silent))
+}
+
+fn service_with(fixture: &Fixture, events: Arc<dyn ProfilerEvents>) -> ProfilerService {
     let runtime = OspreyRuntime::new(OspreyConfig {
         socket_dir: Some(fixture.socket_dir.clone()),
     });
@@ -49,7 +77,7 @@ fn service(fixture: &Fixture) -> ProfilerService {
         output_dir: fixture.tmp.join("out"),
         ..ProfilerConfig::default()
     };
-    ProfilerService::new(vec![Arc::new(runtime)], config, Arc::new(Silent))
+    ProfilerService::new(vec![Arc::new(runtime)], config, events)
 }
 
 async fn call(service: &ProfilerService, method: &str, params: Value) -> Value {
@@ -295,5 +323,32 @@ async fn a_program_killed_mid_session_keeps_its_samples() {
         samples(&report) > 0,
         "samples taken before the kill are reported: {report}"
     );
+    service.shutdown().await;
+}
+
+/// [PROF-CPU-PROGRESS] The live "hottest function" is the one the program
+/// spends its time in, ranked by self samples. Ranked by inclusive samples, the
+/// root of every whole stack, `main`, would always win.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_progress_names_where_the_time_is_spent_not_the_entry_point() {
+    let fixture = Fixture::start("lp-progress");
+    let recorder = Arc::new(Recorder::default());
+    let service = service_with(&fixture, recorder.clone());
+    let report = profile(&service, &fixture, json!({}), 3).await;
+    let tops = recorder.tops();
+    let self_samples = |name: &str| {
+        hot_functions(&report)
+            .iter()
+            .find(|hot| hot.get("name").and_then(Value::as_str) == Some(name))
+            .and_then(|hot| hot.get("self_samples").and_then(Value::as_i64))
+            .unwrap_or(0)
+    };
+    assert!(!tops.is_empty(), "progress is sent while recording");
+    assert!(!tops.iter().any(|top| top == "main"), "the entry point is never the hottest: {tops:?} {report}");
+    assert!(
+        tops.iter().all(|top| self_samples(top) > 0),
+        "every live top spends time of its own: {tops:?} {report}"
+    );
+    assert_eq!(tops.last().map(String::as_str), Some(HOT_FUNCTION), "the fixture's time is spent in spin: {report}");
     service.shutdown().await;
 }
