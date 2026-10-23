@@ -1,0 +1,4 @@
+ok 1 - list map/filter/fold traverse eagerly
+ok 2 - listSort orders int and string lists ascending
+1..2
+# tests=2 passed=2 failed=0 skipped=0

@@ -1144,8 +1144,10 @@ impl Checker {
         args: Vec<Type>,
     ) -> Type {
         let constrained_builtin = name.is_some_and(|name| {
-            matches!(name, "length" | "isEmpty" | "print" | "toString" | "toGpu")
-                || crate::builtin_constraints::is_gpu_buffer_builtin(name)
+            matches!(
+                name,
+                "length" | "isEmpty" | "print" | "toString" | "toGpu" | "listSort"
+            ) || crate::builtin_constraints::is_gpu_buffer_builtin(name)
         });
         if let (Some(name), Some(receiver)) = (name, args.first()) {
             if constrained_builtin {

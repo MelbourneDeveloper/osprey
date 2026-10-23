@@ -477,6 +477,10 @@ jobs:
       - name: Install jq and Xvfb
         run: sudo apt-get install -y jq xvfb
 
+      # npm installs a packed copy of the built UI, so it is built first.
+      - name: Build the shared profiler UI (lspkit submodule)
+        run: make _profiler_ui
+
       - name: Install VS Code extension dependencies
         run: npm ci
         working-directory: ./vscode-extension

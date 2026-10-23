@@ -1,0 +1,39 @@
+/// Two generic records share a field NAME (`child`), and the helpers reading
+/// it have concrete signatures, so codegen emits them as real functions BEFORE
+/// main constructs a single value: each read must derive its record's layout
+/// from the receiver's inferred type instead of guessing by field name — which
+/// the shared name made ambiguous, quarantining the access (#273). `Row`
+/// orders the shared field differently, so a wrong owner would read the other
+/// slot. Implements [TYPE-GENERICS-DECL] [TYPE-FIELD-ACCESS-NON-RECORD]
+/// [BUILTIN-LIST-GET].
+type Node<A> =
+    Leaf { label: string }
+
+type Tab<A> = { name: string, child: Node<A> }
+type Row<A> = { child: Node<A>, key: string }
+
+fn labelOf<A>(node: Node<A>) = match node {
+    Leaf { label } => label
+}
+
+fn tabChildAt(tabs: List<Tab<string>>, index) = match listGet(tabs, index) {
+    Success { value } => labelOf(value.child)
+    Error => ""
+}
+
+fn rowChildAt(rows: List<Row<string>>, index) = match listGet(rows, index) {
+    Success { value } => labelOf(value.child)
+    Error => ""
+}
+
+fn sharedFieldCase() = {
+    let tabs = [Tab { name: "t", child: Leaf { label: "tab" } }]
+    let rows = [Row { child: Leaf { label: "row" }, key: "k" }]
+    checkAll("two generic records sharing a field name read their own slots", [
+        tabChildAt(tabs, 0) == "tab",
+        rowChildAt(rows, 0) == "row",
+        tabChildAt(tabs, 1) == "",
+        rowChildAt(rows, 1) == ""
+    ])
+}
+test("shared field name across generic records", fn() => sharedFieldCase())

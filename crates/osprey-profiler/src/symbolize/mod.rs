@@ -180,8 +180,19 @@ pub(crate) fn extend_cache(
     stacks: &[Vec<u64>],
     sym: &dyn Symbolize,
 ) -> Result<(), ProfileError> {
+    extend_cache_where(cache, images, stacks, sym, |_| true)
+}
+
+/// [`extend_cache`] for the addresses of only the images `wanted` accepts.
+pub(crate) fn extend_cache_where(
+    cache: &mut ChainCache,
+    images: &[Image],
+    stacks: &[Vec<u64>],
+    sym: &dyn Symbolize,
+    wanted: impl Fn(&Image) -> bool,
+) -> Result<(), ProfileError> {
     for (image_index, addrs) in missing_addresses(cache, images, stacks) {
-        let Some(image) = images.get(image_index) else {
+        let Some(image) = images.get(image_index).filter(|image| wanted(image)) else {
             continue;
         };
         let list: Vec<u64> = addrs.into_iter().collect();

@@ -21,8 +21,8 @@ import {
 } from "vscode-languageclient/node";
 import { registerDebugLaunch } from "./debug-launch";
 import { registerOspreyDebugPanel } from "./debug-panel";
-import { registerDebugProfilerLink } from "@nimblesite/lsp-profiler-ui/out/src/debug-link";
 import { registerProfilerCommands } from "./profiler/profile-run";
+import { registerProfiler, type OspreyProfiler } from "./profiler/profiler-host";
 import { registerTestDocsCommand } from "./test-docs-panel";
 import { registerOspreyTestExplorer } from "./test-explorer";
 import { registerTestDebugProfile } from "./test-debug";
@@ -51,19 +51,29 @@ export * from "./debug-config";
 
 let client: LanguageClient;
 
-export function activate(context: ExtensionContext) {
+/** What `activate` publishes: the shared profiler UI and the running language client. */
+export interface OspreyExtensionApi {
+  readonly profiler: OspreyProfiler;
+  getLspClient(): LanguageClient | undefined;
+}
+
+export function activate(context: ExtensionContext): OspreyExtensionApi {
   console.log("Osprey extension is now active!");
 
   // Create output channel for diagnostics
   const outputChannel = window.createOutputChannel("Osprey Debug");
   outputChannel.appendLine("=== Osprey Extension Activation ===");
 
+  // The shared live profiler ([PROF-VSCODE-SHARED]): the Processes panel,
+  // live CPU sessions on running programs through `osprey lsp`, and the
+  // debugger-variable bridge. Its client arrives once the server starts.
+  const profiler = registerProfiler(context, outputChannel);
+  const api: OspreyExtensionApi = { profiler, getLspClient: () => client };
   // CPU profiler ([PROF-VSCODE-FLAME]): the Profile Current File command, the
   // interactive flame-graph webview, and inline heat decorations. Registered
   // before the server-enabled gate — it only needs the compiler CLI — and
   // first, so the Test Explorer's Profile run profile can reuse its heat
   // manager ([TESTING-PROFILE]).
-  context.subscriptions.push(...registerDebugProfilerLink({ debugType: "osprey" }));
   const heat = registerProfilerCommands(context, () =>
     resolveServerCommand(context),
   );
@@ -97,7 +107,7 @@ export function activate(context: ExtensionContext) {
   const config = workspace.getConfiguration("osprey");
   if (!config.get("server.enabled", true)) {
     outputChannel.appendLine("Language server is disabled in configuration");
-    return;
+    return api;
   }
 
   // Shipwright: verify the bundled osprey compiler matches the version this
@@ -206,6 +216,7 @@ export function activate(context: ExtensionContext) {
       outputChannel.appendLine(
         "SUCCESS: Osprey language server started successfully",
       );
+      profiler.setClient(client);
       console.log("Osprey language server started successfully");
     })
     .catch((error: any) => {
@@ -320,6 +331,7 @@ export function activate(context: ExtensionContext) {
       }
     }),
   );
+  return api;
 }
 
 async function debugCurrentFile() {

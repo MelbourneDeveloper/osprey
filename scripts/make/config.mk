@@ -100,9 +100,9 @@ WEBCOMPILER_NODE_DEPS = webcompiler/node_modules/.package-lock.json
 BANK_WEB_NODE_DEPS    = examples/projects/modules/web/node_modules/.package-lock.json
 BANK_E2E_NODE_DEPS    = examples/projects/modules/e2e/node_modules/.package-lock.json
 
-# The extension links the shared profiler UI from the lspkit submodule
-# ([PROF-VSCODE-SHARED]); tsc and esbuild resolve its compiled out/, so the
-# package is built before anything compiles the extension. Its wire types are
+# The extension installs the shared profiler UI from the lspkit submodule
+# ([PROF-VSCODE-SHARED]); npm copies its compiled out/, so the package is built
+# before the extension's dependencies are installed. Its wire types are
 # gitignored and generated from lspkit's model ([PROF-WIRE-GEN]) with the
 # typediagram CLI version lspkit's own CI pins.
 PROFILER_UI_DIR     = lspkit/packages/lsp-profiler-ui
@@ -113,6 +113,11 @@ $(PROFILER_UI_BUILT): $(PROFILER_UI_DIR)/node_modules/.package-lock.json $(shell
 	@echo "==> [lsp-profiler-ui] generating the wire model and compiling the shared profiler UI..."
 	cd lspkit && npx --yes --package typediagram@$(TYPEDIAGRAM_VERSION) -c 'node scripts/typediagram/generate.mjs'
 	npm --prefix $(PROFILER_UI_DIR) run compile
+
+# The extension installs a packed copy of the built UI, not a link to the
+# submodule (vscode-extension/.npmrc: install-links), so vsce can ship it; that
+# copy is a snapshot, so the extension reinstalls whenever the UI rebuilds.
+$(EXT_NODE_DEPS): $(PROFILER_UI_BUILT)
 
 # Build logs and coverage reports live under target/, never in the repo root.
 LOG_DIR      = target/logs

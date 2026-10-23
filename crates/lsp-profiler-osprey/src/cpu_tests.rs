@@ -25,13 +25,38 @@ fn a_pid_with_no_process_is_not_found_and_a_live_one_is_not_osprey() {
     );
 }
 
+/// A program killed by SIGKILL leaves its socket behind until the next start
+/// sweeps it, so a refused connection names a dead pid as not found and only
+/// a live one — the OS reused the pid — as not an Osprey program.
+#[tokio::test]
+async fn a_stale_socket_of_a_dead_program_is_not_found() {
+    let dir = std::env::temp_dir().join(format!("osprey-cpu-stale-{}", std::process::id()));
+    drop(std::fs::remove_dir_all(&dir));
+    std::fs::create_dir_all(&dir).unwrap();
+    let dead = u32::MAX - 7;
+    drop(UnixListener::bind(dir.join(format!("{dead}.sock"))).unwrap()); // the file stays, unserved
+    let cpu = OspreyCpu::new(Endpoints::new(Some(dir)));
+    let attach = cpu
+        .attach(&SamplerConfig {
+            pid: dead,
+            ..config()
+        })
+        .await;
+    assert!(matches!(attach, Err(SamplerError::ProcessNotFound(pid)) if pid == dead));
+}
+
 #[test]
 fn connection_failures_are_classified() {
     let refused_error = io::Error::from(io::ErrorKind::ConnectionRefused);
+    let own = std::process::id();
     assert!(matches!(
-        refused(3, &refused_error),
-        SamplerError::UnsupportedRuntime { pid: 3, .. }
+        refused(own, &refused_error),
+        SamplerError::UnsupportedRuntime { pid, .. } if pid == own
     ));
+    assert_eq!(
+        refused(u32::MAX - 7, &refused_error),
+        SamplerError::ProcessNotFound(u32::MAX - 7)
+    );
     let denied = io::Error::from(io::ErrorKind::PermissionDenied);
     assert!(
         matches!(refused(3, &denied), SamplerError::PermissionDenied(message) if message.contains("PID 3"))

@@ -51,6 +51,7 @@ fn field_owner(cg: &mut Codegen, target: &Value, field: &str) -> Result<String> 
             }
         }
     }
+    derive_record_layout(cg, target.inferred_type.as_ref());
     let inferred = target
         .inferred_type
         .as_ref()
@@ -65,6 +66,30 @@ fn field_owner(cg: &mut Codegen, target: &Value, field: &str) -> Result<String> 
 fn declares_field(cg: &Codegen, owner: &str, field: &str) -> bool {
     cg.record_layout(owner)
         .is_some_and(|(_, fields)| fields.iter().any(|(name, _)| name == field))
+}
+
+/// A field read inside a function emitted BEFORE any construction runs — a
+/// recursive helper the checker resolved to one concrete type — must still see
+/// its record's layout. Derive the instantiation from the declaration at the
+/// receiver's inferred type, under the same `Name#shape` key a construction
+/// registers, so both share one layout. Implements [TYPE-GENERICS-DECL]
+/// [TYPE-FIELD-ACCESS-NON-RECORD].
+fn derive_record_layout(cg: &mut Codegen, ty: Option<&Type>) {
+    let Some(Type::Con { name, args }) = ty else {
+        return;
+    };
+    let Some(owner) = crate::types::record_shape(&cg.prog, name, args) else {
+        return;
+    };
+    if cg.obj_layout(&owner).is_some() {
+        return;
+    }
+    let layout = crate::types::record_field_types(&cg.prog, name, args)
+        .into_iter()
+        .flatten()
+        .map(|(field, ty)| (field, shape_of(cg, &ty)))
+        .collect();
+    let _ = cg.register_layout(owner, layout);
 }
 
 /// Broken-code quarantine: a receiver whose record neither codegen tracked nor

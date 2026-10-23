@@ -231,6 +231,7 @@ fn functional(e: &mut TypeEnv) {
 
 fn lists(e: &mut TypeEnv) {
     let t = || Type::Var(0);
+    let v = || Type::Var(1);
     // Persistent List<T> API used by the list examples.
     poly(e, "List", vec![0], vec![], Type::list(t()));
     // `(List<t>, t) -> List<t>`: append/prepend share one signature.
@@ -267,6 +268,39 @@ fn lists(e: &mut TypeEnv) {
         vec![0],
         vec![Type::list(t()), Type::fun(vec![t()], u())],
         u(),
+    );
+    // Eager list combinators [BUILTIN-LIST-MAP], [BUILTIN-LIST-FILTER],
+    // [BUILTIN-LIST-FOLD].
+    poly(
+        e,
+        "mapList",
+        vec![0, 1],
+        vec![Type::list(t()), Type::fun(vec![t()], v())],
+        Type::list(v()),
+    );
+    poly(
+        e,
+        "filterList",
+        vec![0],
+        vec![Type::list(t()), Type::fun(vec![t()], b())],
+        Type::list(t()),
+    );
+    poly(
+        e,
+        "foldList",
+        vec![0, 1],
+        vec![Type::list(t()), v(), Type::fun(vec![v(), t()], v())],
+        v(),
+    );
+    // Natural-order sort over the two element types the runtime can compare
+    // without a callback [BUILTIN-LIST-SORT]. `builtin_constraints` rejects
+    // every other element type before codegen.
+    poly(
+        e,
+        "listSort",
+        vec![0],
+        vec![Type::list(t())],
+        Type::list(t()),
     );
     maps(e);
 }

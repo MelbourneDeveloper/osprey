@@ -112,6 +112,7 @@ pub(crate) fn gen(
         "listPrepend" => list_insert(cg, "osprey_list_prepend_of", args)?,
         "listConcat" => list_concat(cg, args)?,
         "listReverse" => one_list_handle(cg, "osprey_list_reverse", args)?,
+        "listSort" => one_list_handle(cg, "osprey_list_sort", args)?,
         "listGet" => list_get(cg, args)?,
         "listContains" => list_contains(cg, args)?,
         "Map" => map_empty(cg),

@@ -453,7 +453,9 @@ pub(crate) static FUNCTIONAL: &[BuiltinDoc] = &[
 /// List surface from docs/specs/runtime/0012-Built-InFunctions.md:
 /// [BUILTIN-LIST],
 /// [BUILTIN-LIST-GET], [BUILTIN-LIST-APPEND], [BUILTIN-LIST-PREPEND],
-/// [BUILTIN-LIST-CONCAT], [BUILTIN-LIST-REVERSE], [BUILTIN-LIST-CONTAINS] and
+/// [BUILTIN-LIST-CONCAT], [BUILTIN-LIST-REVERSE], [BUILTIN-LIST-CONTAINS],
+/// [BUILTIN-LIST-FOREACH], [BUILTIN-LIST-MAP], [BUILTIN-LIST-FILTER],
+/// [BUILTIN-LIST-FOLD], [BUILTIN-LIST-SORT] and
 /// [BUILTIN-COLLECTION-LENGTH].
 pub(crate) static LISTS: &[BuiltinDoc] = &[
     builtin_doc!(
@@ -509,6 +511,30 @@ pub(crate) static LISTS: &[BuiltinDoc] = &[
         "Applies function to every list element in index order.",
         ["list" => "The list", "function" => "Function applied per element"],
         "forEachList(xs, print)",
+    ),
+    builtin_doc!(
+        "mapList",
+        "Returns a new list by applying a function to every element, in index order.",
+        ["list" => "The list", "function" => "The transformation function"],
+        "mapList([1, 2, 3], fn(n) => n * 2)  // [2, 4, 6]",
+    ),
+    builtin_doc!(
+        "filterList",
+        "Returns a new list keeping the elements that satisfy a predicate, in index order.",
+        ["list" => "The list", "predicate" => "The predicate that returns true for elements to keep"],
+        "filterList([1, 2, 3, 4], fn(n) => n % 2 == 0)  // [2, 4]",
+    ),
+    builtin_doc!(
+        "foldList",
+        "Reduces a list to a single value by repeatedly applying a function.",
+        ["list" => "The list to reduce", "initial" => "The initial value for the accumulator", "function" => "The reduction function that takes (accumulator, current) and returns the new accumulator"],
+        "foldList([1, 2, 3], 0, add)",
+    ),
+    builtin_doc!(
+        "listSort",
+        "Returns a new list sorted in ascending order by the elements' natural order: integers by value, strings by byte content. The sort is stable. Only List<int> and List<string> are supported; any other element type is a compile-time error.",
+        ["list" => "The list to sort"],
+        "listSort([3, 1, 2])  // [1, 2, 3]",
     ),
 ];
 

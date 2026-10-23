@@ -129,3 +129,31 @@ fn iterator_builtins_do_not_advertise_runtime_lists() {
         );
     }
 }
+
+#[test]
+fn list_combinators_and_sort_match_the_runtime_list_surface() {
+    // [BUILTIN-LIST-MAP], [BUILTIN-LIST-FILTER], [BUILTIN-LIST-FOLD],
+    // [BUILTIN-LIST-SORT].
+    let expected = [
+        ("mapList", "mapList : (List<t0>, (t0) -> t1) -> List<t1>"),
+        (
+            "filterList",
+            "filterList : (List<t0>, (t0) -> bool) -> List<t0>",
+        ),
+        (
+            "foldList",
+            "foldList : (List<t0>, t1, (t1, t0) -> t1) -> t1",
+        ),
+        (
+            "listSort",
+            "listSort : (List<int> | List<string>) -> List<t0>",
+        ),
+    ];
+    for (name, signature) in expected {
+        assert_eq!(
+            builtin_signature(name).as_deref(),
+            Some(signature),
+            "{name}"
+        );
+    }
+}

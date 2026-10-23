@@ -39,8 +39,14 @@ impl LiveSession {
             self.symbols.replace_images(images);
         }
         self.threads.extend(batch.threads);
-        let resolved = self.symbols.resolve(&batch.stacks);
+        // Without native frames only a sourceless stack keeps another image's
+        // frames, so only those are named ([`wire_frames`]).
         let include_native = self.include_native;
+        let resolved = if include_native {
+            self.symbols.resolve(&batch.stacks)
+        } else {
+            self.symbols.resolve_source(&batch.stacks)
+        };
         self.stacks.extend(
             resolved
                 .into_iter()

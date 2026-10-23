@@ -1,0 +1,46 @@
+(** ML surface of the #273 regression: two generic records share a field NAME
+    (`child`), and the helpers reading it have concrete signatures, so codegen
+    emits them as real functions BEFORE main constructs a single value. Each
+    read must derive its record's layout from the receiver's inferred type
+    instead of guessing by field name — which the shared name made ambiguous,
+    quarantining the access. `Row` orders the shared field differently, so a
+    wrong owner would read the other slot. Implements [TYPE-GENERICS-DECL]
+    [TYPE-FIELD-ACCESS-NON-RECORD] [BUILTIN-LIST-GET]. *)
+
+type Node A =
+    Leaf
+        label : string
+
+type Tab A =
+    name : string
+    child : Node<A>
+
+type Row A =
+    child : Node<A>
+    key : string
+
+labelOf<A> : Node<A> -> string
+labelOf node = match node
+    Leaf label => label
+
+tabChildAt : (List<Tab<string>>, int) -> string
+tabChildAt (tabs, index) = match listGet tabs index
+    Success value => labelOf value.child
+    Error => ""
+
+rowChildAt : (List<Row<string>>, int) -> string
+rowChildAt (rows, index) = match listGet rows index
+    Success value => labelOf value.child
+    Error => ""
+
+sharedFieldCase () =
+    tabs = [Tab<string>(name = "t", child = Leaf<string>(label = "tab"))]
+    rows = [Row<string>(child = Leaf<string>(label = "row"), key = "k")]
+    checkAll "two generic records sharing a field name read their own slots" [
+        tabChildAt (tabs, 0) == "tab",
+        rowChildAt (rows, 0) == "row",
+        tabChildAt (tabs, 1) == "",
+        rowChildAt (rows, 1) == ""
+    ]
+
+test "shared field name across generic records" sharedFieldCase

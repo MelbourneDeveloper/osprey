@@ -44,6 +44,7 @@ pub(crate) fn fixed_numeric_operand(name: &str, ty: &Type) -> bool {
 }
 
 const SIZED_DISPLAY: &str = "string | List<T> | Map<string, V>";
+const SORTABLE_DISPLAY: &str = "List<int> | List<string>";
 const PRINTABLE_DISPLAY: &str =
     "int | float | bool | string | Unit | any | Result<printable, printable>";
 const GPU_SOURCE_DISPLAY: &str = "List<int> | List<float> | List<bool> \
@@ -57,6 +58,7 @@ pub(crate) fn display_param_type(name: &str, index: usize) -> Option<&'static st
     }
     match name {
         "length" | "isEmpty" => Some(SIZED_DISPLAY),
+        "listSort" => Some(SORTABLE_DISPLAY),
         "print" | "toString" => Some(PRINTABLE_DISPLAY),
         "toGpu" => Some(GPU_SOURCE_DISPLAY),
         name if is_gpu_buffer_builtin(name) => Some(GPU_BUFFER_DISPLAY),
@@ -82,6 +84,9 @@ pub(crate) fn invalid_use(name: &str, ty: &Type) -> Option<String> {
         }
         "length" | "isEmpty" if !is_sized(ty) => Some(format!(
             "`{name}` supports only string, List<T>, or Map<string, V>; got {ty}"
+        )),
+        "listSort" if !is_sortable_list(ty) => Some(format!(
+            "`listSort` supports only List<int> or List<string>; got {ty}"
         )),
         "print" if !is_printable(ty) => Some(format!("cannot convert value for printing: {ty}")),
         "toString" if !is_printable(ty) => Some(format!("cannot convert value to string: {ty}")),
@@ -161,6 +166,31 @@ fn is_sized(ty: &Type) -> bool {
     }
 }
 
+/// A `List<T>` whose elements the list runtime can order without a callback
+/// [BUILTIN-LIST-SORT]. Unresolved variables are deferred exactly as
+/// `is_sized` defers them.
+fn is_sortable_list(ty: &Type) -> bool {
+    match ty {
+        Type::Var(_) => true,
+        Type::Con { name, args } if name == names::LIST => {
+            matches!(args.as_slice(), [elem] if is_sortable_elem(elem))
+        }
+        _ => false,
+    }
+}
+
+/// An element with a natural ascending order: `int` compares by value and
+/// `string` by byte content [BUILTIN-LIST-SORT].
+fn is_sortable_elem(ty: &Type) -> bool {
+    match ty {
+        Type::Var(_) => true,
+        Type::Con { name, args } => {
+            args.is_empty() && matches!(name.as_str(), names::INT | names::STRING)
+        }
+        _ => false,
+    }
+}
+
 /// Values supported by `runtime::to_string_value`. `any` is retained as the
 /// explicit erased-compatibility escape hatch; concrete aggregate and runtime
 /// handles are rejected. Result errors use the runtime's stored string message,
@@ -222,6 +252,20 @@ mod tests {
         assert!(invalid_use("print", &fiber).is_some());
         assert!(invalid_use("interpolation", &Type::list(Type::int())).is_some());
         assert!(invalid_use("interpolation", &Type::string()).is_none());
+    }
+
+    #[test]
+    fn sort_constraint_accepts_only_int_and_string_lists() {
+        // [BUILTIN-LIST-SORT] (docs/specs/runtime/0012-Built-InFunctions.md)
+        assert_eq!(invalid_use("listSort", &Type::list(Type::int())), None);
+        assert_eq!(invalid_use("listSort", &Type::list(Type::string())), None);
+        assert_eq!(invalid_use("listSort", &Type::Var(9)), None);
+        assert!(invalid_use("listSort", &Type::list(Type::float())).is_some());
+        assert!(invalid_use("listSort", &Type::list(Type::bool())).is_some());
+        assert!(invalid_use("listSort", &Type::list(Type::list(Type::int()))).is_some());
+        assert!(invalid_use("listSort", &Type::int()).is_some());
+        assert_eq!(display_param_type("listSort", 0), Some(SORTABLE_DISPLAY));
+        assert_eq!(display_param_type("listSort", 1), None);
     }
 
     #[test]

@@ -326,7 +326,7 @@ suite("Warning fix document-version guard", () => {
       changed.edit?.documentChanges?.[0] &&
         "textDocument" in changed.edit.documentChanges[0],
     );
-    changed.edit.documentChanges[0].edits[0].newText = "different";
+    Object.assign(changed.edit.documentChanges[0].edits[0], { newText: "different" });
     const stale = structuredClone(original);
     assert.ok(
       stale.edit?.documentChanges?.[0] &&

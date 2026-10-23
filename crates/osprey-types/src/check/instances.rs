@@ -22,14 +22,10 @@ pub(super) fn resolved_instantiations(
             )
         })
         .collect();
+    let mentions = crate::applications::Mentions::of(&substitutions);
     substitutions
         .iter()
-        .map(|(site, bindings)| {
-            (
-                *site,
-                crate::applications::expanded(bindings, &substitutions),
-            )
-        })
+        .map(|(site, bindings)| (*site, crate::applications::expanded(bindings, &mentions)))
         .collect()
 }
 /// Preserve open as well as closed argument types for handler refinement.

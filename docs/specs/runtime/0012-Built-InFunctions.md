@@ -793,6 +793,18 @@ such as nested lists and records compare by identity.
 #### `forEachList(list: List<T>, function: fn(T) -> Unit) -> Unit` — [BUILTIN-LIST-FOREACH]
 Calls `function` once per element in index order.
 
+#### `mapList(list: List<T>, function: fn(T) -> U) -> List<U>` — [BUILTIN-LIST-MAP]
+Returns a new list with `function` applied to every element, in index order.
+
+#### `filterList(list: List<T>, predicate: fn(T) -> bool) -> List<T>` — [BUILTIN-LIST-FILTER]
+Returns a new list keeping the elements that satisfy `predicate`, in index order.
+
+#### `foldList(list: List<T>, initial: U, function: fn(U, T) -> U) -> U` — [BUILTIN-LIST-FOLD]
+Reduces a list to a single value by repeatedly applying `function`, starting from `initial`.
+
+#### `listSort(list: List<T>) -> List<T>` — [BUILTIN-LIST-SORT]
+Returns a new list sorted in ascending order by the elements' natural order: integers compare by value and strings by byte content. The sort is stable. `T` must be `int` or `string`; any other element type is a compile-time type error, never a runtime crash.
+
 ### `Map<string, V>` — [BUILTIN-MAP]
 
 `Map()` and map literals create string-keyed maps. Map iteration order is

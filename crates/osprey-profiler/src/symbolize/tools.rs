@@ -150,7 +150,7 @@ fn atos_args(
 /// which need not be where it now sits. An EMPTY path also qualifies: on Linux
 /// `dl_iterate_phdr` reports the main executable with `dlpi_name == ""`, and
 /// treating that as a foreign image would leave every Osprey frame unnamed.
-fn is_main_image(image: &Path, fallback: &Path) -> bool {
+pub(crate) fn is_main_image(image: &Path, fallback: &Path) -> bool {
     if image.as_os_str().is_empty() {
         return true;
     }

@@ -6,6 +6,7 @@
 use crate::ctx::InferCtx;
 use crate::ty::{Scheme, Type, VarId};
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::sync::Arc;
 
 /// One call's signature, deferred obligations, and ordered declared binders.
 pub(crate) struct AppliedSignature {
@@ -15,73 +16,153 @@ pub(crate) struct AppliedSignature {
     pub bindings: HashMap<VarId, Type>,
 }
 
-/// Maps names to their type schemes. Cloned to form child scopes (lambda
-/// bodies, match arms) — value semantics, so child bindings never leak out.
+/// One scope's own bindings. A `None` or `false` entry records that this scope
+/// removed or shadowed a name, so a lookup stops there instead of reaching an
+/// outer scope's binding.
+#[derive(Debug, Clone, Default)]
+struct Frame {
+    vars: HashMap<String, Option<Scheme>>,
+    /// Ordered declaration binders, cleared whenever a value shadows a name.
+    type_params: HashMap<String, Option<Vec<Type>>>,
+    /// Names declared `mut` — the only bindings handler-arm assignment may target.
+    mutables: HashMap<String, bool>,
+    /// Runtime obligations attached to the builtin binding, cleared by shadowing.
+    runtime_builtins: HashMap<String, bool>,
+}
+
+/// Maps names to their type schemes, with value semantics: bindings added to a
+/// child scope (lambda bodies, match arms) never leak out, and a scope never
+/// sees what its parent binds after the child was made.
+///
+/// A scope shares its parent instead of copying it: inference opens a child
+/// for every lambda, arm and block, and copying an environment holding every
+/// builtin and top-level scheme made each one cost the whole environment.
+/// A scope writes only its own frame.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct TypeEnv {
-    vars: HashMap<String, Scheme>,
-    /// Ordered declaration binders, cleared whenever a value shadows a name.
-    type_params: HashMap<String, Vec<Type>>,
-    /// Names declared `mut` — the only bindings handler-arm assignment may target.
-    mutables: HashSet<String>,
-    /// Runtime obligations attached to the builtin binding, cleared by shadowing.
-    runtime_builtins: HashSet<String>,
+    local: Arc<Frame>,
+    outer: Option<Arc<TypeEnv>>,
+    depth: usize,
 }
+
+/// Past this many nested scopes a child is flattened, so lookups stay short
+/// however a pass chains them.
+const MAX_DEPTH: usize = 64;
 
 impl TypeEnv {
     pub(crate) fn new() -> TypeEnv {
         TypeEnv::default()
     }
 
+    /// Every frame, innermost first.
+    fn frames(&self) -> impl Iterator<Item = &Frame> {
+        std::iter::successors(Some(self), |env| env.outer.as_deref()).map(|env| &*env.local)
+    }
+
+    /// The innermost frame's entry for a name, whatever it records.
+    fn lookup<'a, T>(&'a self, pick: impl Fn(&'a Frame) -> Option<&'a T>) -> Option<&'a T> {
+        self.frames().find_map(pick)
+    }
+
+    /// This scope's own frame, for writing. A frame another scope still shares
+    /// is not copied: this scope becomes a child of its own snapshot instead,
+    /// so the write costs one empty frame however large the shared one is.
+    fn frame(&mut self) -> &mut Frame {
+        if Arc::get_mut(&mut self.local).is_none() {
+            *self = self.child();
+        }
+        Arc::make_mut(&mut self.local)
+    }
+
     pub(crate) fn get(&self, name: &str) -> Option<&Scheme> {
-        self.vars.get(name)
+        self.lookup(|frame| frame.vars.get(name))
+            .and_then(Option::as_ref)
+    }
+
+    fn type_params(&self, name: &str) -> Option<&Vec<Type>> {
+        self.lookup(|frame| frame.type_params.get(name))
+            .and_then(Option::as_ref)
+    }
+
+    /// Hide an outer declaration's binders and builtin obligations, writing a
+    /// marker only where there is something to hide.
+    fn shadow_declaration(&mut self, name: &str) {
+        if self.type_params(name).is_some() {
+            let _ = self.frame().type_params.insert(name.to_owned(), None);
+        }
+        if self.is_runtime_builtin(name) {
+            let _ = self.frame().runtime_builtins.insert(name.to_owned(), false);
+        }
     }
 
     pub(crate) fn insert(&mut self, name: impl Into<String>, scheme: Scheme) {
         let name = name.into();
         // A fresh binding shadows any outer `mut` of the same name.
-        let _ = self.mutables.remove(&name);
-        let _ = self.type_params.remove(&name);
-        let _ = self.runtime_builtins.remove(&name);
-        let _ = self.vars.insert(name, scheme);
+        if self.is_mutable(&name) {
+            let _ = self.frame().mutables.insert(name.clone(), false);
+        }
+        self.shadow_declaration(&name);
+        let _ = self.frame().vars.insert(name, Some(scheme));
     }
 
     /// Bind a `mut` declaration — the one binding form handler arms may assign.
     pub(crate) fn insert_mutable(&mut self, name: impl Into<String>, scheme: Scheme) {
         let name = name.into();
-        let _ = self.type_params.remove(&name);
-        let _ = self.runtime_builtins.remove(&name);
-        let _ = self.vars.insert(name.clone(), scheme);
-        let _ = self.mutables.insert(name);
+        self.shadow_declaration(&name);
+        let frame = self.frame();
+        let _ = frame.vars.insert(name.clone(), Some(scheme));
+        let _ = frame.mutables.insert(name, true);
     }
 
     pub(crate) fn is_mutable(&self, name: &str) -> bool {
-        self.mutables.contains(name)
+        self.lookup(|frame| frame.mutables.get(name))
+            .is_some_and(|mutable| *mutable)
     }
 
     pub(crate) fn mark_runtime_builtin(&mut self, name: &str) {
-        let _ = self.runtime_builtins.insert(name.to_owned());
+        let _ = self.frame().runtime_builtins.insert(name.to_owned(), true);
     }
 
     pub(crate) fn is_runtime_builtin(&self, name: &str) -> bool {
-        self.runtime_builtins.contains(name)
+        self.lookup(|frame| frame.runtime_builtins.get(name))
+            .is_some_and(|builtin| *builtin)
     }
 
     /// The currently bound names. Snapshotted on the freshly built builtin
     /// environment to detect redefinition of built-in functions.
     pub(crate) fn bound_names(&self) -> HashSet<String> {
-        self.vars.keys().cloned().collect()
+        let mut decided = HashSet::new();
+        let mut bound = HashSet::new();
+        for frame in self.frames() {
+            for (name, scheme) in &frame.vars {
+                if decided.insert(name.as_str()) && scheme.is_some() {
+                    let _ = bound.insert(name.clone());
+                }
+            }
+        }
+        bound
     }
 
     pub(crate) fn remove(&mut self, name: &str) {
-        let _ = self.vars.remove(name);
-        let _ = self.type_params.remove(name);
-        let _ = self.runtime_builtins.remove(name);
+        self.shadow_declaration(name);
+        if self.get(name).is_some() {
+            let _ = self.frame().vars.insert(name.to_owned(), None);
+        }
     }
 
     /// Attach declaration-site binders to this exact lexical binding.
     pub(crate) fn declare_type_params(&mut self, name: &str, params: Vec<Type>) {
-        let _ = self.type_params.insert(name.to_owned(), params);
+        let _ = self
+            .frame()
+            .type_params
+            .insert(name.to_owned(), Some(params));
+    }
+
+    /// The declaration-site binders exactly as declared — NOT re-instantiated
+    /// against the current scheme. A body check quantifies the very variables
+    /// the signature exported, which a substituted copy would orphan.
+    pub(crate) fn declared_params(&self, name: &str) -> Vec<Type> {
+        self.type_params(name).cloned().unwrap_or_default()
     }
 
     /// Instantiate the signature and its declared binders with one substitution.
@@ -89,8 +170,7 @@ impl TypeEnv {
         let scheme = self.get(name)?;
         let map = scheme.vars.iter().map(|v| (*v, ctx.fresh())).collect();
         let params = self
-            .type_params
-            .get(name)
+            .type_params(name)
             .into_iter()
             .flatten()
             .map(|ty| subst_vars(&ctx.apply(ty), &map))
@@ -104,28 +184,90 @@ impl TypeEnv {
         })
     }
 
-    /// A fresh child scope (a clone — bindings added to the child don't leak).
+    /// A fresh child scope: bindings added to the child don't leak.
     pub(crate) fn child(&self) -> TypeEnv {
-        self.clone()
+        let outer = if self.depth < MAX_DEPTH {
+            self.clone()
+        } else {
+            self.flattened()
+        };
+        TypeEnv {
+            local: Arc::default(),
+            depth: outer.depth + 1,
+            outer: Some(Arc::new(outer)),
+        }
+    }
+
+    /// One frame holding exactly what this scope sees.
+    fn flattened(&self) -> TypeEnv {
+        let mut merged = Frame::default();
+        for frame in self.frames() {
+            for (name, value) in &frame.vars {
+                let _ = merged
+                    .vars
+                    .entry(name.clone())
+                    .or_insert_with(|| value.clone());
+            }
+            for (name, value) in &frame.type_params {
+                let _ = merged
+                    .type_params
+                    .entry(name.clone())
+                    .or_insert_with(|| value.clone());
+            }
+            for (name, value) in &frame.mutables {
+                let _ = merged.mutables.entry(name.clone()).or_insert(*value);
+            }
+            for (name, value) in &frame.runtime_builtins {
+                let _ = merged
+                    .runtime_builtins
+                    .entry(name.clone())
+                    .or_insert(*value);
+            }
+        }
+        TypeEnv {
+            local: Arc::new(merged),
+            outer: None,
+            depth: 0,
+        }
     }
 
     /// The free variables of the whole environment — the vars `generalize` must
-    /// *not* quantify, because an outer scope may still constrain them.
+    /// *not* quantify, because an outer scope may still constrain them. A
+    /// binding an inner scope shadows or removed is not visible, so it does
+    /// not count.
     pub(crate) fn free_vars(&self, ctx: &mut InferCtx) -> BTreeSet<VarId> {
         let mut out = BTreeSet::new();
-        for scheme in self.vars.values() {
-            let mut fv = BTreeSet::new();
-            ctx.free_vars(&scheme.ty, &mut fv);
-            for (_, obligation) in &scheme.obligations {
-                ctx.free_vars(obligation, &mut fv);
+        let mut decided: HashSet<&str> = HashSet::new();
+        let mut frames = self.frames().peekable();
+        while let Some(frame) = frames.next() {
+            let innermost_decides = frames.peek().is_some();
+            for (name, scheme) in &frame.vars {
+                let visible = if innermost_decides {
+                    decided.insert(name.as_str())
+                } else {
+                    !decided.contains(name.as_str())
+                };
+                if let (true, Some(scheme)) = (visible, scheme) {
+                    scheme_free_vars(ctx, scheme, &mut out);
+                }
             }
-            for q in &scheme.vars {
-                let _ = fv.remove(q);
-            }
-            out.extend(fv);
         }
         out
     }
+}
+
+/// A scheme's free variables: those of its type and obligations it does not
+/// quantify.
+fn scheme_free_vars(ctx: &mut InferCtx, scheme: &Scheme, out: &mut BTreeSet<VarId>) {
+    let mut fv = BTreeSet::new();
+    ctx.free_vars(&scheme.ty, &mut fv);
+    for (_, obligation) in &scheme.obligations {
+        ctx.free_vars(obligation, &mut fv);
+    }
+    for q in &scheme.vars {
+        let _ = fv.remove(q);
+    }
+    out.extend(fv);
 }
 
 /// A scheme's built-in obligations restated against the substitution `map` —
@@ -229,6 +371,58 @@ mod tests {
         } else {
             panic!("expected union");
         }
+    }
+
+    #[test]
+    fn a_child_scope_neither_leaks_nor_sees_later_parent_bindings() {
+        let mut parent = TypeEnv::new();
+        parent.insert_mutable("count", Scheme::mono(Type::int()));
+        parent.declare_type_params("count", vec![Type::Var(7)]);
+        parent.mark_runtime_builtin("count");
+        let mut child = parent.child();
+        child.insert("count", Scheme::mono(Type::string()));
+        child.insert("local", Scheme::mono(Type::bool()));
+        parent.insert("later", Scheme::mono(Type::int()));
+        assert_eq!(
+            child.get("count").map(|s| s.ty.clone()),
+            Some(Type::string())
+        );
+        assert!(!child.is_mutable("count") && !child.is_runtime_builtin("count"));
+        assert!(child.type_params("count").is_none() && child.get("later").is_none());
+        assert_eq!(parent.get("count").map(|s| s.ty.clone()), Some(Type::int()));
+        assert!(parent.is_mutable("count") && parent.is_runtime_builtin("count"));
+        assert!(parent.type_params("count").is_some() && parent.get("local").is_none());
+    }
+
+    #[test]
+    fn removing_or_shadowing_hides_an_outer_binding_from_every_query() {
+        let mut ctx = InferCtx::new();
+        let mut parent = TypeEnv::new();
+        parent.insert("pinned", Scheme::mono(Type::Var(0)));
+        parent.insert("gone", Scheme::mono(Type::Var(1)));
+        let mut child = parent.child();
+        child.insert("pinned", Scheme::mono(Type::int()));
+        child.remove("gone");
+        assert!(child.get("gone").is_none() && parent.get("gone").is_some());
+        assert_eq!(
+            child.bound_names(),
+            ["pinned".to_owned()].into_iter().collect()
+        );
+        assert!(child.free_vars(&mut ctx).is_empty());
+        assert_eq!(parent.free_vars(&mut ctx), [0, 1].into_iter().collect());
+    }
+
+    #[test]
+    fn deep_nesting_flattens_without_changing_what_a_scope_sees() {
+        let mut env = TypeEnv::new();
+        env.insert("base", Scheme::mono(Type::int()));
+        for depth in 0..(MAX_DEPTH * 2) {
+            env = env.child();
+            env.insert(format!("v{depth}"), Scheme::mono(Type::bool()));
+        }
+        assert!(env.depth <= MAX_DEPTH + 1);
+        assert!(env.get("base").is_some() && env.get("v0").is_some());
+        assert_eq!(env.bound_names().len(), MAX_DEPTH * 2 + 1);
     }
 
     #[test]

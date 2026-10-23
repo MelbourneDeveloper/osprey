@@ -207,9 +207,15 @@ impl InferCtx {
     /// The occurs check: does variable `id` appear anywhere in `t`? Prevents
     /// the construction of infinite types like `t0 ~ List<t0>`.
     pub(crate) fn occurs(&mut self, id: VarId, t: &Type) -> bool {
-        let t = self.prune(t);
-        match &t {
-            Type::Var(v) => *v == id,
+        match t {
+            Type::Var(v) => match self.lend(*v) {
+                Some((slot, bound)) => {
+                    let found = self.occurs(id, &bound);
+                    self.restore(slot, bound);
+                    found
+                }
+                None => *v == id,
+            },
             Type::Fun { params, ret } => {
                 params.iter().any(|p| self.occurs(id, p)) || self.occurs(id, ret)
             }
@@ -222,20 +228,28 @@ impl InferCtx {
     /// Fully resolve `t` against the current substitution. The occurs-check
     /// keeps the substitution acyclic, so this terminates.
     pub(crate) fn apply(&mut self, t: &Type) -> Type {
-        let t = self.prune(t);
-        if matches!(t, Type::Var(_)) {
-            return t;
-        }
-        crate::ty::map_type_vars(&t, &mut |v| self.apply(&Type::Var(v)))
+        crate::ty::map_type_vars(t, &mut |v| match self.lend(v) {
+            Some((slot, bound)) => {
+                let resolved = self.apply(&bound);
+                self.restore(slot, bound);
+                resolved
+            }
+            None => Type::Var(v),
+        })
     }
 
     /// Collect the free (unbound) variables of `t` into `out`.
     pub(crate) fn free_vars(&mut self, t: &Type, out: &mut BTreeSet<VarId>) {
-        let t = self.prune(t);
-        match &t {
-            Type::Var(v) => {
-                let _ = out.insert(*v);
-            }
+        match t {
+            Type::Var(v) => match self.lend(*v) {
+                Some((slot, bound)) => {
+                    self.free_vars(&bound, out);
+                    self.restore(slot, bound);
+                }
+                None => {
+                    let _ = out.insert(*v);
+                }
+            },
             Type::Fun { params, ret } => {
                 for p in params {
                     self.free_vars(p, out);
@@ -257,6 +271,22 @@ impl InferCtx {
                     self.free_vars(v, out);
                 }
             }
+        }
+    }
+
+    /// Take variable `id`'s binding out of the substitution so a deep walk can
+    /// read it in place instead of copying it at every node, as [`Self::prune`]
+    /// does; [`Self::restore`] puts it back. The occurs-check keeps the
+    /// substitution acyclic, so a walk never reaches the slot it borrowed.
+    fn lend(&mut self, id: VarId) -> Option<(usize, Type)> {
+        let slot = usize::try_from(id).ok()?;
+        let bound = self.subst.get_mut(slot)?.take()?;
+        Some((slot, bound))
+    }
+
+    fn restore(&mut self, slot: usize, bound: Type) {
+        if let Some(entry) = self.subst.get_mut(slot) {
+            *entry = Some(bound);
         }
     }
 }

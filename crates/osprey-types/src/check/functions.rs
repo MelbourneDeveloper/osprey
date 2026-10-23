@@ -113,10 +113,7 @@ impl Checker {
         // variables would count as "free in the environment" and nothing would
         // generalize.
         let fun_ty = Type::fun(params, ret);
-        let declared = env
-            .applied(&mut self.ctx, name)
-            .map(|applied| applied.params)
-            .unwrap_or_default();
+        let declared = env.declared_params(name);
         env.remove(name);
         let mut scheme = self.generalize_with_obligations(env, &fun_ty);
         // Explicit binders are quantified even when the signature never uses

@@ -7,7 +7,7 @@
 //! keyed by image index [PROF-SYMBOLIZE-OFFLINE].
 
 use crate::raw::Image;
-use crate::symbolize::tools::LlvmSymbolizer;
+use crate::symbolize::tools::{is_main_image, LlvmSymbolizer};
 use crate::symbolize::{self, ChainCache, FrameKind, SymFrame, Symbolize};
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -89,6 +89,35 @@ impl LiveSymbols {
             &mut self.cache,
             &self.images,
             stacks,
+            self.tool.as_ref(),
+        ));
+        stacks.iter().map(|stack| self.frames(stack)).collect()
+    }
+
+    /// [`Self::resolve`] for a profile that keeps only Osprey source frames.
+    /// Source lives only in the program's own image, so another image's
+    /// addresses are named only for a stack that reaches no source: every
+    /// other stack drops those frames, and asking `atos` for them is what
+    /// stalled a live session on a busy machine [PROF-LSP-RUNTIME].
+    pub fn resolve_source(&mut self, stacks: &[Vec<u64>]) -> Vec<Vec<LiveFrame>> {
+        let exe = self.exe.as_path();
+        let own = |image: &Image| is_main_image(Path::new(&image.path), exe);
+        drop(symbolize::extend_cache_where(
+            &mut self.cache,
+            &self.images,
+            stacks,
+            self.tool.as_ref(),
+            own,
+        ));
+        let sourceless: Vec<Vec<u64>> = stacks
+            .iter()
+            .filter(|stack| !self.frames(stack).iter().any(|frame| frame.user))
+            .cloned()
+            .collect();
+        drop(symbolize::extend_cache(
+            &mut self.cache,
+            &self.images,
+            &sourceless,
             self.tool.as_ref(),
         ));
         stacks.iter().map(|stack| self.frames(stack)).collect()
@@ -250,6 +279,26 @@ mod tests {
         assert_eq!(names, [("0x1100", Some("app"))]);
         drop(live.resolve(&[vec![0x1100]]));
         assert_eq!(ASKED.with(Cell::get), 2); // nothing was remembered
+    }
+
+    #[test]
+    fn a_source_profile_names_other_images_only_for_stacks_without_source() {
+        let mut live = symbols();
+        // The first stack reaches Osprey source in the main image, so its libc
+        // leaf is never asked for; the second reaches none and is named whole.
+        let frames = live.resolve_source(&[vec![0x8001, 0x1201], vec![0x8100, 0x2001]]);
+        let names: Vec<Vec<_>> = frames
+            .iter()
+            .map(|stack| stack.iter().map(|f| (f.name.as_str(), f.user)).collect())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                vec![("0x8001", false), ("f1200", true)],
+                vec![("f8100", false), ("f2000", false)]
+            ]
+        );
+        assert_eq!(ASKED.with(Cell::get), 3); // 0x1200 and 0x2000, then 0x8100
     }
 
     #[test]

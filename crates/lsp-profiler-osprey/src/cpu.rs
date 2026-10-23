@@ -128,16 +128,12 @@ async fn greet(connection: &mut Connection) -> Result<Hello, SamplerError> {
     }
 }
 
-/// A socket nobody accepts on is a stale file for a pid now running something
-/// else; one we may not open needs the program's own user.
+/// A socket nobody accepts on is a stale file: a SIGKILL left it for a program
+/// now gone, or for a pid now running something else. One we may not open
+/// needs the program's own user.
 fn refused(pid: u32, error: &io::Error) -> SamplerError {
     match error.kind() {
-        io::ErrorKind::ConnectionRefused | io::ErrorKind::NotFound => {
-            SamplerError::UnsupportedRuntime {
-                pid,
-                runtime: RUNTIME.to_owned(),
-            }
-        }
+        io::ErrorKind::ConnectionRefused | io::ErrorKind::NotFound => missing(pid),
         io::ErrorKind::PermissionDenied => SamplerError::PermissionDenied(format!(
             "the endpoint of PID {pid} belongs to another user: {error}"
         )),

@@ -23,7 +23,8 @@
  *
  * Backs the list builtins of docs/specs/runtime/0012-Built-InFunctions.md — [BUILTIN-LIST],
  * [BUILTIN-LIST-GET], [BUILTIN-LIST-APPEND], [BUILTIN-LIST-PREPEND],
- * [BUILTIN-LIST-CONCAT], [BUILTIN-LIST-REVERSE] and [BUILTIN-COLLECTION-LENGTH].
+ * [BUILTIN-LIST-CONCAT], [BUILTIN-LIST-REVERSE], [BUILTIN-LIST-SORT] and
+ * [BUILTIN-COLLECTION-LENGTH].
  * The iterator at the bottom also carries the linear scan emitted for
  * [BUILTIN-LIST-CONTAINS] and [BUILTIN-LIST-FOREACH].
  */
@@ -397,6 +398,75 @@ OspreyList *osprey_list_reverse(OspreyList *l) {
   for (int64_t i = osprey_list_length(l) - 1; i >= 0; i--) {
     osprey_list_builder_push_borrowed(b, osprey_list_get(l, i));
   }
+  return osprey_list_builder_seal(b);
+}
+
+/* Natural ascending order for [BUILTIN-LIST-SORT]: strings compare by byte
+   content, integers by signed value. Codegen guarantees the element type is
+   one of those two, so the elem_managed flag alone selects the comparison and
+   no other element kind can reach this branch. */
+static int64_t list_sort_less(OspreyList *l, int64_t a, int64_t b) {
+  if (l->elem_managed) {
+    return strcmp((const char *)(uintptr_t)a, (const char *)(uintptr_t)b) < 0;
+  }
+  return a < b;
+}
+
+/* Merge the two sorted halves [lo, mid) and [mid, hi) into `scratch`, then
+   copy the merged run back over `src`. Taking the LEFT element on a tie keeps
+   equal elements in their original relative order, making the whole sort
+   stable [BUILTIN-LIST-SORT]. */
+static void list_sort_merge(OspreyList *l, int64_t *src, int64_t *scratch,
+                            int64_t lo, int64_t mid, int64_t hi) {
+  int64_t i = lo;
+  int64_t j = mid;
+  int64_t k = lo;
+  while (i < mid && j < hi) {
+    scratch[k++] = list_sort_less(l, src[j], src[i]) ? src[j++] : src[i++];
+  }
+  while (i < mid) {
+    scratch[k++] = src[i++];
+  }
+  while (j < hi) {
+    scratch[k++] = src[j++];
+  }
+  memcpy(src + lo, scratch + lo, (size_t)(hi - lo) * sizeof(int64_t));
+}
+
+static void list_sort_range(OspreyList *l, int64_t *src, int64_t *scratch,
+                            int64_t lo, int64_t hi) {
+  if (hi - lo < 2) {
+    return;
+  }
+  int64_t mid = lo + (hi - lo) / 2;
+  list_sort_range(l, src, scratch, lo, mid);
+  list_sort_range(l, src, scratch, mid, hi);
+  list_sort_merge(l, src, scratch, lo, mid, hi);
+}
+
+/* Stable ascending sort of List<int> / List<string>. The borrowed elements are
+   copied into a scratch pair, merge-sorted in place, then pushed through the
+   builder (which dups each borrowed element) so the result owns its elements
+   exactly as `listReverse`'s does. */
+OspreyList *osprey_list_sort(OspreyList *l) {
+  int64_t n = osprey_list_length(l);
+  if (n < 2) {
+    osp_retain(l); /* alias return: +1 to the caller (see concat) */
+    return (OspreyList *)l;
+  }
+  int64_t *src = (int64_t *)malloc((size_t)n * sizeof(int64_t));
+  int64_t *scratch = (int64_t *)malloc((size_t)n * sizeof(int64_t));
+  for (int64_t i = 0; i < n; i++) {
+    src[i] = osprey_list_get(l, i);
+  }
+  list_sort_range(l, src, scratch, 0, n);
+  OspreyListBuilder *b =
+      osprey_list_builder_new_of(osprey_list_elem_managed(l));
+  for (int64_t i = 0; i < n; i++) {
+    osprey_list_builder_push_borrowed(b, src[i]);
+  }
+  free(src);
+  free(scratch);
   return osprey_list_builder_seal(b);
 }
 

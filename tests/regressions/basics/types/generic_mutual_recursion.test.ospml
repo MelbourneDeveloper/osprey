@@ -1,0 +1,33 @@
+// Mutually recursive generic functions with declared signatures generalize
+// together, so one program can use the group at two types (#278).
+// Implements [TYPE-GENERICS-FN], [TYPE-UNION-REC], [BUILTIN-LIST-CONCAT].
+namespace demo
+
+type Tree T =
+    Leaf
+        item : T
+    Node
+        kids : List<Tree<T>>
+
+kid<T> : (List<T>, List<Tree<T>>, int) -> List<T>
+kid (out, kids, index) = listConcat out (all (listGet kids index ?: Node(kids = [])))
+
+all<T> : Tree<T> -> List<T>
+all tree = match tree
+    Leaf item => [item]
+    Node kids => range (0, length kids) |> fold [] (\(out, index) => kid (out, kids, index))
+
+print "${length (all (Node(kids = [Leaf(item = 1), Leaf(item = 2)])))} ${join (all (Leaf(item = "x"))) ","}"
+
+mutualGenericCase () =
+    ints = all (Node(kids = [Leaf(item = 1), Leaf(item = 2)]))
+    texts = all (Leaf(item = "x"))
+    checkAll "mutually recursive generics instantiate at each type" [
+        length ints == 2,
+        (listGet ints 0 ?: 0) == 1,
+        (listGet ints 1 ?: 0) == 2,
+        length texts == 1,
+        (listGet texts 0 ?: "") == "x"
+    ]
+
+test "mutually recursive generic functions work at two types" mutualGenericCase

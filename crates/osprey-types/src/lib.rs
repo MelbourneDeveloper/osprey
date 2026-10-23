@@ -68,6 +68,8 @@ mod redundant;
 mod redundant_sites;
 #[cfg(test)]
 mod redundant_tests;
+#[cfg(test)]
+mod redundant_window_tests;
 mod staging;
 #[cfg(test)]
 #[path = "../../testkit.rs"]

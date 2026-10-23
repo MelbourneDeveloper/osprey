@@ -149,9 +149,92 @@
         "icon": "$(book)"
       },
       {
+        "command": "osprey.profiler.profileStart",
+        "title": "Start Profiling",
+        "category": "Osprey",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "osprey.profiler.profileStop",
+        "title": "Stop Profiling",
+        "category": "Osprey",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "osprey.profiler.profileSnapshot",
+        "title": "Take Profile Snapshot",
+        "category": "Osprey",
+        "icon": "$(device-camera)"
+      },
+      {
+        "command": "osprey.profiler.profileAttachToDebug",
+        "title": "Profile Debug Session",
+        "category": "Osprey",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "osprey.profiler.profileShowResults",
+        "title": "Show Profile Results",
+        "category": "Osprey",
+        "icon": "$(flame)"
+      },
+      {
         "command": "osprey.profiler.inspectVariable",
-        "title": "Osprey: Inspect Variable in Profiler",
+        "title": "Inspect Variable in Profiler",
+        "category": "Osprey",
         "icon": "$(graph)"
+      },
+      {
+        "command": "osprey.profiler.refreshProcesses",
+        "title": "Refresh Processes",
+        "category": "Osprey",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "osprey.profiler.sortProcesses",
+        "title": "Sort Processes",
+        "category": "Osprey",
+        "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "osprey.profiler.groupProcesses",
+        "title": "Group Processes",
+        "category": "Osprey",
+        "icon": "$(group-by-ref-type)"
+      },
+      {
+        "command": "osprey.profiler.filterProcesses",
+        "title": "Filter Processes",
+        "category": "Osprey",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "osprey.profiler.profileCurrentFileCpu",
+        "title": "Run & Profile CPU (Current File)",
+        "category": "Osprey",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "osprey.profiler.profileProcess",
+        "title": "Profile CPU",
+        "category": "Osprey",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "osprey.profiler.copyProcessPid",
+        "title": "Copy PID",
+        "category": "Osprey"
+      },
+      {
+        "command": "osprey.profiler.revealProcessScript",
+        "title": "Reveal Entry in Editor",
+        "category": "Osprey"
+      },
+      {
+        "command": "osprey.profiler.killProcess",
+        "title": "Kill Process",
+        "category": "Osprey",
+        "icon": "$(close)"
       }
     ],
     "menus": {
@@ -202,6 +285,22 @@
         {
           "command": "osprey.showTestDocumentation",
           "when": "resourceLangId == osprey || resourceLangId == osprey-ml"
+        },
+        {
+          "command": "osprey.profiler.profileProcess",
+          "when": "false"
+        },
+        {
+          "command": "osprey.profiler.copyProcessPid",
+          "when": "false"
+        },
+        {
+          "command": "osprey.profiler.revealProcessScript",
+          "when": "false"
+        },
+        {
+          "command": "osprey.profiler.killProcess",
+          "when": "false"
         }
       ],
       "testing/item/context": [
@@ -223,6 +322,75 @@
           "when": "debugType == osprey",
           "group": "inline@10"
         }
+      ],
+      "view/title": [
+        {
+          "command": "osprey.profiler.profileCurrentFileCpu",
+          "when": "view == osprey.profiler.processes && !osprey.profiler.cpuBusy",
+          "group": "navigation@1"
+        },
+        {
+          "command": "osprey.profiler.profileStop",
+          "when": "view == osprey.profiler.processes && osprey.profiler.profiling",
+          "group": "navigation@1"
+        },
+        {
+          "command": "osprey.profiler.refreshProcesses",
+          "when": "view == osprey.profiler.processes",
+          "group": "navigation@3"
+        },
+        {
+          "command": "osprey.profiler.sortProcesses",
+          "when": "view == osprey.profiler.processes",
+          "group": "1_order@1"
+        },
+        {
+          "command": "osprey.profiler.groupProcesses",
+          "when": "view == osprey.profiler.processes",
+          "group": "1_order@2"
+        },
+        {
+          "command": "osprey.profiler.filterProcesses",
+          "when": "view == osprey.profiler.processes",
+          "group": "1_order@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "osprey.profiler.profileStop",
+          "when": "view == osprey.profiler.processes && viewItem == processProfiling",
+          "group": "inline@0"
+        },
+        {
+          "command": "osprey.profiler.profileProcess",
+          "when": "view == osprey.profiler.processes && viewItem =~ /^process/ && !osprey.profiler.cpuBusy",
+          "group": "inline@1"
+        },
+        {
+          "command": "osprey.profiler.profileStop",
+          "when": "view == osprey.profiler.processes && viewItem == processProfiling",
+          "group": "1_profile@0"
+        },
+        {
+          "command": "osprey.profiler.profileProcess",
+          "when": "view == osprey.profiler.processes && viewItem =~ /^process/ && !osprey.profiler.cpuBusy",
+          "group": "1_profile@1"
+        },
+        {
+          "command": "osprey.profiler.copyProcessPid",
+          "when": "view == osprey.profiler.processes && viewItem =~ /^(process|blockedProcess)/",
+          "group": "9_copy@1"
+        },
+        {
+          "command": "osprey.profiler.revealProcessScript",
+          "when": "view == osprey.profiler.processes && viewItem =~ /^(process|blockedProcess)/",
+          "group": "9_copy@2"
+        },
+        {
+          "command": "osprey.profiler.killProcess",
+          "when": "view == osprey.profiler.processes && viewItem =~ /^(process|blockedProcess)/",
+          "group": "9_danger@1"
+        }
       ]
     },
     "keybindings": [
@@ -236,6 +404,16 @@
         "command": "osprey.debug",
         "key": "f5",
         "when": "resourceLangId == osprey || resourceLangId == osprey-ml"
+      },
+      {
+        "command": "osprey.profiler.profileStart",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p"
+      },
+      {
+        "command": "osprey.profiler.profileStop",
+        "key": "ctrl+alt+shift+p",
+        "mac": "cmd+alt+shift+p"
       }
     ],
     "breakpoints": [
@@ -262,6 +440,11 @@
           "name": "Program",
           "icon": "icon.png",
           "contextualTitle": "Osprey Debug"
+        },
+        {
+          "id": "osprey.profiler.processes",
+          "name": "Processes",
+          "icon": "$(pulse)"
         }
       ]
     },
@@ -380,7 +563,65 @@
         "osprey.profiler.inlineHeat": {
           "type": "boolean",
           "default": true,
-          "description": "After profiling, show inline per-line heat annotations (NN.N% \u00b7 M samples) and overview-ruler marks in the profiled source files."
+          "description": "After profiling, show inline per-line heat annotations (NN.N% · M samples) and overview-ruler marks in the profiled source files."
+        },
+        "osprey.profiler.sampleRate": {
+          "type": "number",
+          "default": 100,
+          "description": "Sampling rate in Hz for CPU profiling (1-1000)."
+        },
+        "osprey.profiler.includeNative": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include native frames in profile results."
+        },
+        "osprey.profiler.lineThreshold": {
+          "type": "number",
+          "default": 1,
+          "description": "Minimum percentage of total samples for a line to appear as a hotspot (0.1-100)."
+        },
+        "osprey.profiler.functionThreshold": {
+          "type": "number",
+          "default": 2,
+          "description": "Minimum percentage of total samples for a function to appear as a hotspot (0.1-100)."
+        },
+        "osprey.profiler.maxDiagnosticsPerFile": {
+          "type": "number",
+          "default": 20,
+          "description": "Maximum number of profiling diagnostics per file."
+        },
+        "osprey.profiler.showInlineHeatMap": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline heat map decorations for hot lines after profiling."
+        },
+        "osprey.profiler.profileOnLaunch": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically start CPU profiling when a debug session launches."
+        },
+        "osprey.profiler.processRefreshMs": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 250,
+          "description": "Poll interval (ms) for refreshing the Processes panel while it is visible."
+        },
+        "osprey.profiler.preset": {
+          "type": "string",
+          "enum": [
+            "default",
+            "quick",
+            "detailed",
+            "longRunning"
+          ],
+          "enumDescriptions": [
+            "Use the sampleRate / includeNative settings",
+            "Short burst: 10 seconds at 100 Hz, for quick hotspot checks",
+            "Thorough: 60 seconds at 200 Hz, higher-fidelity data",
+            "No time limit at 50 Hz, for long-running servers and batch jobs"
+          ],
+          "default": "default",
+          "description": "Profiling preset that configures sample rate and duration."
         },
         "osprey.profiler.palette": {
           "type": "object",
@@ -392,12 +633,40 @@
           "description": "Override profiler colors: critical, hot, warm, memory, memoryHot, memoryWarm, memoryCool, leak, success."
         }
       }
-    }
+    },
+    "viewsWelcome": [
+      {
+        "view": "osprey.profiler.processes",
+        "contents": "Connecting to the Osprey language server…",
+        "when": "osprey.profiler.serverState != running && osprey.profiler.serverState != stopped"
+      },
+      {
+        "view": "osprey.profiler.processes",
+        "contents": "The Osprey language server is not running.",
+        "when": "osprey.profiler.serverState == stopped"
+      },
+      {
+        "view": "osprey.profiler.processes",
+        "contents": "Loading processes…\n[Run & Profile CPU (Current File)](command:osprey.profiler.profileCurrentFileCpu)",
+        "when": "osprey.profiler.serverState == running && osprey.profiler.processesState == loading"
+      },
+      {
+        "view": "osprey.profiler.processes",
+        "contents": "Couldn't load the process list.\n[Run & Profile CPU (Current File)](command:osprey.profiler.profileCurrentFileCpu)",
+        "when": "osprey.profiler.serverState == running && osprey.profiler.processesState == error"
+      },
+      {
+        "view": "osprey.profiler.processes",
+        "contents": "No processes running.\n[Run & Profile CPU (Current File)](command:osprey.profiler.profileCurrentFileCpu)",
+        "when": "osprey.profiler.serverState == running && osprey.profiler.processesState == loaded"
+      }
+    ]
   },
   "dependencies": {
+    "@nimblesite/lsp-profiler-ui": "file:../lspkit/packages/lsp-profiler-ui",
     "@nimblesite/shipwright-vscode": "^0.5.4",
-    "vscode-languageclient": "^9.0.1",
-    "@nimblesite/lsp-profiler-ui": "file:../lspkit/packages/lsp-profiler-ui"
+    "@preact/signals-core": "^1.14.4",
+    "vscode-languageclient": "^10.1.2"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",
@@ -420,7 +689,8 @@
   "scripts": {
     "sync-icon": "node scripts/sync-icon.mjs",
     "vscode:prepublish": "npm run sync-icon && npm run compile",
-    "precompile": "npm run sync-icon",
+    "precompile": "npm run sync-icon && node scripts/sync-profiler-contributions.mjs --check",
+    "sync-profiler": "node scripts/sync-profiler-contributions.mjs",
     "compile": "tsc -b",
     "lint": "tsc -p ./ --noEmit",
     "watch": "tsc -b -w",
