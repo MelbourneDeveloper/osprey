@@ -80,7 +80,7 @@ esac
 case $TARGET in
   wasm32)            GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-159} ;;
   ios-sim|macos|android*) GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-174} ;;
-  *)                 GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-225} ;;
+  *)                 GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-227} ;;
 esac
 
 # [GPU-KERNEL-EXTRACT] differential. The extracted-kernel lowering and the

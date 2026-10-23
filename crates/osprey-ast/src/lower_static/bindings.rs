@@ -1,8 +1,8 @@
 //! Specialization of lexically resolved immutable callable bindings.
 
 use super::{Lowering, Region};
-use crate::{Expr, Program, Stmt};
-use std::collections::BTreeMap;
+use crate::{Expr, Parameter, Position, Program, Stmt};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) fn collect(program: &Program) -> BTreeMap<String, Expr> {
     #[derive(Default)]
@@ -18,15 +18,17 @@ pub(super) fn collect(program: &Program) -> BTreeMap<String, Expr> {
                 } if matches!(value, Expr::Lambda { .. } | Expr::Identifier(_)) => {
                     let _ = self.0.insert(name.clone(), value.clone());
                 }
-                // A one-parameter function whose body is a static region is a
-                // handler value a module can export, since a module-level
-                // `let` must be a constant; it applies like the `let` form.
+                // A function whose body is a static region is a handler
+                // value a module can export, since a module-level `let` must
+                // be a constant; it applies like the `let` form. Parameters
+                // beyond the callback are values its arms capture, and the
+                // region follows each instantiation's callback (#274).
                 Stmt::Function {
                     name,
                     parameters,
                     body: body @ Expr::Handler { stage, .. },
                     ..
-                } if parameters.len() == 1 && stage.is_compile_time() => {
+                } if stage.is_compile_time() => {
                     let _ = self.0.insert(
                         name.clone(),
                         Expr::Lambda {
@@ -46,12 +48,12 @@ pub(super) fn collect(program: &Program) -> BTreeMap<String, Expr> {
     bindings.0
 }
 
-/// The one-parameter static region `function` names through `let` aliases:
-/// the aliases passed through, its parameter and its region.
+/// The static region `function` names through `let` aliases: the aliases
+/// passed through, its parameters and its region.
 pub(super) fn installer<'a>(
     bindings: &'a BTreeMap<String, Expr>,
     function: &'a Expr,
-) -> Option<(Vec<String>, &'a crate::Parameter, &'a Expr)> {
+) -> Option<(Vec<String>, &'a [Parameter], &'a Expr)> {
     let mut selected = function;
     let mut aliases = Vec::new();
     while let Expr::Identifier(name) = selected {
@@ -67,59 +69,67 @@ pub(super) fn installer<'a>(
     else {
         return None;
     };
-    let [parameter] = parameters.as_slice() else {
-        return None;
-    };
     matches!(body.as_ref(), Expr::Handler { stage, .. } if stage.is_compile_time()).then_some((
         aliases,
-        parameter,
+        parameters,
         body.as_ref(),
     ))
 }
 
 impl Lowering {
     /// A callable static interpretation must be selected before its callback is
-    /// specialized. Erasing the lambda's region at definition time loses that
-    /// callback's operations. Resolve only known closure/function arguments;
-    /// arbitrary runtime-selected handlers still require a dynamic region.
+    /// specialized. Erasing the region at definition time loses the callback's
+    /// operations, so the region applies at each instantiation instead: every
+    /// resolvable callback argument is substituted and the remaining arguments
+    /// are bound once, in order, discharging what the callback requires
+    /// ([STAGE-POLY], [STAGE-POLY-ERASURE]). Arbitrary runtime-selected
+    /// handlers still require a dynamic region.
     pub(super) fn apply_static_handler(&mut self, expression: &mut Expr) -> bool {
-        let Expr::Call {
-            function,
-            arguments,
-            named_arguments,
-        } = expression
-        else {
+        let Some(installation) = self.installation(expression) else {
             return false;
         };
-        let [action] = arguments.as_slice() else {
+        let Some((effect, position)) = installation.handled() else {
             return false;
         };
-        if !named_arguments.is_empty()
-            || !matches!(action, Expr::Lambda { .. } | Expr::Identifier(_))
-        {
+        if !self.spend_fuel(effect, "handler application", position) {
             return false;
         }
-        let Some((aliases, parameter, body)) = installer(&self.bindings, function) else {
+        let Expr::Call { arguments, .. } = &*expression else {
             return false;
         };
-        let Expr::Handler {
-            effect, position, ..
-        } = body
-        else {
-            return false;
-        };
-        let mut applied = body.clone();
-        let parameter = parameter.name.clone();
-        let effect = effect.clone();
-        let position = *position;
-        let action = action.clone();
-        if !self.spend_fuel(&effect, "handler application", position) {
-            return false;
-        }
-        substitute(&mut applied, &parameter, &action);
-        self.consumed.extend(aliases);
+        let applied = self.inline(&installation.parameters, &installation.region, arguments);
+        self.consumed.extend(installation.aliases);
         *expression = applied;
         true
+    }
+
+    /// The installer application `expression` makes, when it is a plain
+    /// positional call whose static region a resolvable callback argument
+    /// reaches; only such an application can discharge.
+    fn installation(&self, expression: &Expr) -> Option<Installation> {
+        let (function, arguments) = positional_call(expression)?;
+        let (aliases, parameters, region) = installer(&self.bindings, function)?;
+        let applicable = parameters.len() == arguments.len()
+            && self.callback_reaches_region(parameters, arguments, region);
+        applicable.then(|| Installation {
+            aliases,
+            parameters: parameters.to_vec(),
+            region: region.clone(),
+        })
+    }
+
+    fn callback_reaches_region(
+        &self,
+        parameters: &[Parameter],
+        arguments: &[Expr],
+        region: &Expr,
+    ) -> bool {
+        parameters
+            .iter()
+            .zip(arguments)
+            .any(|(parameter, argument)| {
+                self.is_callback(argument) && mentions(region, &parameter.name)
+            })
     }
 
     pub(super) fn specialize_binding(&mut self, name: &str, regions: &[Region]) -> Option<Expr> {
@@ -133,6 +143,39 @@ impl Lowering {
     }
 }
 
+/// One installer application selected for rewriting: the `let` aliases it
+/// passed through, the installer's parameters and its static region.
+struct Installation {
+    aliases: Vec<String>,
+    parameters: Vec<Parameter>,
+    region: Expr,
+}
+
+impl Installation {
+    /// The handled effect and the region's position, for the rewrite ledger.
+    fn handled(&self) -> Option<(&str, Option<Position>)> {
+        match &self.region {
+            Expr::Handler {
+                effect, position, ..
+            } => Some((effect, *position)),
+            _ => None,
+        }
+    }
+}
+
+/// A call without named arguments: its callee and positional arguments. Named
+/// arguments never select an installer.
+fn positional_call(expression: &Expr) -> Option<(&Expr, &[Expr])> {
+    match expression {
+        Expr::Call {
+            function,
+            arguments,
+            named_arguments,
+        } if named_arguments.is_empty() => Some((function, arguments)),
+        _ => None,
+    }
+}
+
 pub(super) fn substitute(expression: &mut Expr, parameter: &str, action: &Expr) {
     if matches!(expression, Expr::Identifier(name) if name == parameter) {
         *expression = action.clone();
@@ -141,4 +184,12 @@ pub(super) fn substitute(expression: &mut Expr, parameter: &str, action: &Expr) 
             substitute(child, parameter, action);
         });
     }
+}
+
+/// Whether `region`'s body names `parameter`: only a parameter the region
+/// reaches can carry its arguments' operations into it.
+fn mentions(region: &Expr, parameter: &str) -> bool {
+    let mut free = BTreeSet::new();
+    crate::freevars::free_idents(region, &mut free);
+    free.contains(parameter)
 }
