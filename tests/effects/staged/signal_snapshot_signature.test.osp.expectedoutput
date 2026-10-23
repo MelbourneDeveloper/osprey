@@ -1,4 +1,5 @@
 count=4 6
 ok 1 - one helper serves every value type
-1..1
-# tests=1 passed=1 failed=0 skipped=0
+ok 2 - the helper tracks what the direct form tracks
+1..2
+# tests=2 passed=2 failed=0 skipped=0

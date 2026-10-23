@@ -188,6 +188,14 @@ pub fn lower(program: &Program) -> Result<Program, Vec<StageError>> {
     crate::lower_static::run(program)
 }
 
+/// `program` with every local binding renamed to a name unique in the
+/// program; top-level names are kept. Substituting into a body is then
+/// capture-free.
+#[must_use]
+pub fn resolve_bindings(program: &Program) -> Program {
+    crate::lower_static::resolve_bindings(program)
+}
+
 /// [`validate`] then [`lower`]: discharge every static handler in `program`,
 /// returning the rewritten program.
 ///

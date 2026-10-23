@@ -40,4 +40,28 @@ fn oneHelperServesEveryValueType() = {
     ])
 }
 
+fn directLabels(n, cached, changed) = {
+    handle static Signal<Count> { read => Count { value: n } }
+    signalRefresh(cached, changed, countLabel)
+}
+
+fn trackedLabels(n, cached, changed) = {
+    handle static Signal<Count> { read => Count { value: n } }
+    refreshed(cached, changed, countLabel)
+}
+
+fn theHelperTracksWhatTheDirectFormTracks() = {
+    let built = trackedLabels(1, blank(""), ["<unknown>"])
+    let unrelated = trackedLabels(2, built, signalDependencies(title))
+    let related = trackedLabels(3, unrelated, signalDependencies(count))
+    let direct = directLabels(1, blank(""), ["<unknown>"])
+    checkAll("a refresh through the helper reads the callback's own signals", [
+        join(built.dependencies, ",") == join(direct.dependencies, ","),
+        join(built.dependencies, ",") == join(signalDependencies(countLabel), ","),
+        unrelated.revision == 1, unrelated.value == "count=1",
+        related.revision == 2, related.value == "count=3"
+    ])
+}
+
 test("one helper serves every value type", oneHelperServesEveryValueType)
+test("the helper tracks what the direct form tracks", theHelperTracksWhatTheDirectFormTracks)

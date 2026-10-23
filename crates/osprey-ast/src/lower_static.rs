@@ -108,6 +108,12 @@ pub(crate) fn run(program: &Program) -> Result<Program, Vec<StageError>> {
     }
 }
 
+/// Give every local binding a name unique in the program, so a term moved
+/// between scopes can neither capture nor be captured.
+pub(crate) fn resolve_bindings(program: &Program) -> Program {
+    hygiene::resolve(program)
+}
+
 fn has_regions(program: &Program) -> bool {
     #[derive(Default)]
     struct Regions(bool);
