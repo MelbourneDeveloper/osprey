@@ -117,18 +117,30 @@ fn bound_arguments(name: &str, arguments: &[Expr], named: &[NamedArgument]) -> V
     let positional = slots
         .iter()
         .zip(arguments)
+        .filter(|(_, value)| needs_binding(name, value))
         .map(|(name, value)| binding(name, value.clone()));
-    let named = named.iter().map(|argument| {
-        binding(
-            match argument.name.as_str() {
-                "cached" => "$signalCached",
-                "changed" => "$signalChanged",
-                _ => "$signalWork",
-            },
-            argument.value.clone(),
-        )
-    });
+    let named = named
+        .iter()
+        .filter(|argument| needs_binding(name, &argument.value))
+        .map(|argument| {
+            binding(
+                match argument.name.as_str() {
+                    "cached" => "$signalCached",
+                    "changed" => "$signalChanged",
+                    _ => "$signalWork",
+                },
+                argument.value.clone(),
+            )
+        });
     positional.chain(named).collect()
+}
+
+/// A dependency query never calls its work, so work whose evaluation has no
+/// effect -- a name or a lambda -- is not bound at all: a bound name would keep
+/// a static performer referenced, and static lowering prunes every function
+/// that references one ([STAGE-SIGNALS-CACHE], [STAGE-RESIDUE]).
+fn needs_binding(query: &str, value: &Expr) -> bool {
+    query != "signalDependencies" || !matches!(value, Expr::Identifier(_) | Expr::Lambda { .. })
 }
 
 fn dependency_binding(operations: Vec<String>) -> Stmt {

@@ -1,0 +1,36 @@
+//! Every scalar-signature function reaches the library boundary, or the
+//! build fails and names it (#281).
+use super::selection::host_abi;
+use super::tests::{abi_of, checked};
+
+#[test]
+fn a_scalar_function_codegen_did_not_define_is_refused_not_dropped() {
+    // [IOS-HOST-ABI] The archive and header would silently lack `greet`.
+    let (program, types, ir) =
+        checked("fn greet(name: string) -> string = name\nfn plain(n: int) -> int = n\n");
+    let inlined = ir.replace(" @greet(", " @greet_inlined(");
+    let error = host_abi(&program, &types, &inlined).expect_err("undefined export");
+    assert!(
+        error.contains("library export `greet`") && !error.contains("`plain`"),
+        "{error}"
+    );
+}
+
+#[test]
+fn signal_queries_in_the_call_graph_keep_the_export() {
+    // [IOS-HOST-ABI] [STAGE-SIGNALS-CACHE]
+    let (abi, _) = abi_of(
+        "static effect Signal<T> { read: fn() -> T }\n\
+         type Tally = { tally: int }\n\
+         fn tallied() -> Tally = perform Signal<Tally>.read()\n\
+         fn ids() = signalDependencies(tallied)\n\
+         fn go(saved: string) -> string = \"${join(ids(), \",\")}${saved}\"\n\
+         fn snap(saved: string) -> string = {\n\
+             handle static Signal<Tally> { read => Tally { tally: 3 } }\n\
+             \"${signalSnapshot(tallied).value.tally}${saved}\"\n\
+         }\n\
+         fn plain(saved: string) -> string = \"p${saved}\"\n",
+    );
+    let names: Vec<&str> = abi.exports.iter().map(|e| e.c_name.as_str()).collect();
+    assert_eq!(names, ["osprey_go", "osprey_snap", "osprey_plain"]);
+}

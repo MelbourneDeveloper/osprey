@@ -96,3 +96,20 @@ fn an_unknown_dependency_is_stale_without_a_search() {
         "{same:?}"
     );
 }
+
+/// `signalDependencies` never invokes its callback, so naming one must keep no
+/// reference to it: static lowering prunes every function that references a
+/// static performer, and a library export has no caller to keep it (#281).
+#[test]
+fn a_dependency_query_binds_only_work_with_effects() {
+    let named = expand(
+        &call("signalDependencies", vec![ident("work")]),
+        vec!["Signal<T>.read".to_owned()],
+    );
+    assert_eq!(bound_names(&named), ["$signalDependencies"]);
+    let made = expand(
+        &call("signalDependencies", vec![call("make", vec![])]),
+        vec!["Signal<T>.read".to_owned()],
+    );
+    assert_eq!(bound_names(&made), ["$signalWork", "$signalDependencies"]);
+}

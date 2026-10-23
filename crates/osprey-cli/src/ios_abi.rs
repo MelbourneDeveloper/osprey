@@ -467,3 +467,7 @@ fn checked_abi(
 #[cfg(test)]
 #[path = "ios_abi_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ios_abi_export_tests.rs"]
+mod export_tests;
