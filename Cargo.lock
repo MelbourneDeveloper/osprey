@@ -747,6 +747,8 @@ version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "futures-util",
+ "lsp-profiler",
+ "lsp-profiler-osprey",
  "lspkit",
  "lspkit-live",
  "lspkit-server",

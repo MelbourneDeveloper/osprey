@@ -19,6 +19,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::engine::OspreyEngine;
 use crate::model::{At, Query, Report};
+use crate::profiler::{self, ProfilerHost};
 use crate::wire;
 
 /// The fixed wire position encoding advertised and used throughout.
@@ -33,7 +34,7 @@ const METHOD_NOT_FOUND: i32 = -32601;
 type BoxedWriter = Box<dyn AsyncWrite + Unpin + Send>;
 
 /// A shared, thread-safe message writer over the type-erased output.
-type SharedWriter = Arc<MessageWriter<BoxedWriter>>;
+pub(crate) type SharedWriter = Arc<MessageWriter<BoxedWriter>>;
 
 /// A type-erased async input source, mirroring [`BoxedWriter`].
 type BoxedReader = Box<dyn AsyncRead + Unpin + Send>;
@@ -68,8 +69,11 @@ async fn serve_on(reader: BoxedReader, writer: &SharedWriter) -> Result<(), Serv
         writer: Arc::clone(writer),
     }));
     let dispatcher = build_dispatcher(&engine);
+    let host = ProfilerHost::new(writer);
     let mut reader = BufReader::new(reader);
-    serve(&mut reader, writer, &engine, &bus, &dispatcher).await
+    let served = serve(&mut reader, writer, &engine, &bus, &dispatcher, &host).await;
+    host.shutdown().await;
+    served
 }
 
 /// The main read/route loop. Returns `Ok` on a clean disconnect or `exit`.
@@ -80,6 +84,7 @@ async fn serve(
     engine: &OspreyEngine,
     bus: &lspkit_server::DiagnosticsBus,
     dispatcher: &Dispatcher,
+    host: &ProfilerHost,
 ) -> Result<(), ServerError> {
     loop {
         let message = match read_message(reader).await {
@@ -89,6 +94,7 @@ async fn serve(
         };
         let params = message.params.unwrap_or(Value::Null);
         match (message.id, message.method) {
+            (Some(id), Some(method)) if host.dispatch(&id, &method, &params) => {}
             (Some(id), Some(method)) => {
                 let reply = request(dispatcher, &id, &method, params).await;
                 let _ = writer.write_message(&reply).await;
@@ -96,6 +102,11 @@ async fn serve(
             (None, Some(method)) => {
                 if method == "exit" {
                     return Ok(());
+                }
+                if method == "$/cancelRequest" {
+                    if let Some(id) = cancel_id(&params) {
+                        host.cancel(&id);
+                    }
                 }
                 notify(engine, bus, dispatcher, &method, params).await;
             }
@@ -108,7 +119,10 @@ async fn serve(
 /// dispatcher (so cancellation tokens are tracked).
 async fn request(dispatcher: &Dispatcher, id: &RequestId, method: &str, params: Value) -> Message {
     match method {
-        "initialize" => Message::response(id.clone(), wire::initialize_result(ENCODING.as_str())),
+        "initialize" => Message::response(
+            id.clone(),
+            profiler::initialize_result(wire::initialize_result(ENCODING.as_str())),
+        ),
         "shutdown" => Message::response(id.clone(), Value::Null),
         _ => match dispatcher.dispatch(id, method, params).await {
             Ok(HandlerResult::Ok(value)) => Message::response(id.clone(), value),

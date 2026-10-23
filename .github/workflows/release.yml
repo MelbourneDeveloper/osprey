@@ -143,6 +143,12 @@ jobs:
             mingw-w64-ucrt-x86_64-llvm
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-openssl
+      # The language server mounts lspkit's profiler, whose build script
+      # generates its wire model with typeDiagram [PROF-LSP-HOST]. The
+      # Linux/macOS leg gets it from setup-osprey-compiler.
+      - name: Install typeDiagram (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/typediagram
       - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
