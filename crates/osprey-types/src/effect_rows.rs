@@ -17,6 +17,8 @@ mod handlers;
 #[cfg(test)]
 mod identity_tests;
 mod index;
+#[cfg(test)]
+mod mask_tests;
 mod methods;
 mod model_values;
 mod names;

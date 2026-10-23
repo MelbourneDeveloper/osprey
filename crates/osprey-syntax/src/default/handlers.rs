@@ -1,6 +1,6 @@
-//! Handler lowering: arms (shared with kernels) and the `return` and
-//! `finally` clauses. Implements [EFFECTS-HANDLER-ARMS] and
-//! [EFFECTS-FINALIZATION].
+//! Handler lowering: arms (shared with kernels), the `return` and `finally`
+//! clauses, and `mask`. Implements [EFFECTS-HANDLER-ARMS],
+//! [EFFECTS-FINALIZATION] and [EFFECTS-MASK].
 
 use super::lower::Lowerer;
 use osprey_ast::{Expr, HandlerArm};
@@ -59,5 +59,23 @@ impl Lowerer<'_> {
                     position: Some(self.pos(*clause)),
                 })
             })
+    }
+
+    /// `mask E { body }`. A lone value in the braces is the body itself, as
+    /// in ML layout.
+    pub(super) fn lower_mask(&self, node: Node<'_>) -> Expr {
+        let body = match self.lower_expr_field(node, "body") {
+            Expr::Block {
+                statements,
+                value,
+                position,
+            } => crate::desugar::block(statements, value, position),
+            body => body,
+        };
+        Expr::Mask {
+            effect: self.mentioned_effect(node),
+            body: Box::new(body),
+            position: Some(self.pos(node)),
+        }
     }
 }

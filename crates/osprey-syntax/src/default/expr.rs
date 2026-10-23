@@ -79,11 +79,7 @@ impl Lowerer<'_> {
                 }
             }
             // Implements [EFFECTS-MASK] and [EFFECTS-INSTANCE].
-            "mask_expression" => Expr::Mask {
-                effect: self.mentioned_effect(node),
-                body: Box::new(self.lower_expr_field(node, "body")),
-                position: Some(self.pos(node)),
-            },
+            "mask_expression" => self.lower_mask(node),
             "instance_expression" => Expr::Instance {
                 effect: self.mentioned_effect(node),
                 position: Some(self.pos(node)),
@@ -301,7 +297,7 @@ impl Lowerer<'_> {
     /// instantiation when it wrote one: `Signal<Count>` and `Signal<Cursor>` are
     /// different effects to a row, so they are different effects to the name a
     /// row carries. Implements [STAGE-SIGNALS-EXACT].
-    fn mentioned_effect(&self, node: Node<'_>) -> String {
+    pub(super) fn mentioned_effect(&self, node: Node<'_>) -> String {
         let base = self.field_text(node, "effect");
         let arguments = node
             .child_by_field_name("instantiation")
