@@ -28,9 +28,8 @@ mod hygiene;
 mod region;
 mod requirements;
 use region::{answered, innermost_arm, shadowed_regions, specialization_key, Region};
-use requirements::{
-    all_requirements, function_definitions, retain_referenced_originals, static_performers,
-};
+pub(crate) use requirements::function_definitions;
+use requirements::{all_requirements, retain_referenced_originals, static_performers};
 
 /// The pass state: the program's function definitions plus what the rewrite has
 /// produced so far.

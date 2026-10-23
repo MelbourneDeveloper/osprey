@@ -188,6 +188,12 @@ pub fn lower(program: &Program) -> Result<Program, Vec<StageError>> {
     crate::lower_static::run(program)
 }
 
+/// Every named function definition in `program`, at any nesting depth.
+#[must_use]
+pub fn function_definitions(program: &Program) -> BTreeMap<String, Stmt> {
+    crate::lower_static::function_definitions(program)
+}
+
 /// `program` with every local binding renamed to a name unique in the
 /// program; top-level names are kept. Substituting into a body is then
 /// capture-free.

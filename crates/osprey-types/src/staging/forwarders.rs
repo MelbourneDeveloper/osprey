@@ -7,7 +7,7 @@
 //! a lambda or a runtime value keeps the conservative unknown set.
 //! Implements [STAGE-SIGNALS-EXACT].
 
-use super::signals::is_intrinsic;
+use super::signals::{callee_name, is_intrinsic};
 use osprey_ast::{mutate, walk_statement, AstVisitor, Expr, Program, Stmt};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -27,7 +27,7 @@ fn work_index(query: &str) -> usize {
 /// `None` when no helper forwards a callback.
 pub(super) fn specialized(program: &Program) -> Option<Program> {
     let resolved = osprey_ast::stage::resolve_bindings(program);
-    let definitions = definitions(&resolved);
+    let definitions = osprey_ast::stage::function_definitions(&resolved);
     let forwarders = forwarders(&definitions);
     if forwarders.is_empty() {
         return None;
@@ -47,22 +47,6 @@ pub(super) fn specialized(program: &Program) -> Option<Program> {
     }
     result.statements.extend(copies.produced);
     Some(result)
-}
-
-/// Every named function, at any depth, by name.
-fn definitions(program: &Program) -> BTreeMap<String, Stmt> {
-    #[derive(Default)]
-    struct Collector(BTreeMap<String, Stmt>);
-    impl AstVisitor for Collector {
-        fn statement(&mut self, statement: &Stmt) {
-            if let Stmt::Function { name, .. } = statement {
-                let _ = self.0.insert(name.clone(), statement.clone());
-            }
-        }
-    }
-    let mut collector = Collector::default();
-    osprey_ast::walk_program(program, &mut collector);
-    collector.0
 }
 
 /// Each helper's parameters that reach a query's callback, directly or
@@ -126,7 +110,7 @@ fn callback_arguments<'a>(
     else {
         return Vec::new();
     };
-    let Some(name) = callee(function) else {
+    let Some(name) = callee_name(function) else {
         return Vec::new();
     };
     let indices: Vec<usize> = if is_intrinsic(name) {
@@ -135,14 +119,6 @@ fn callback_arguments<'a>(
         found.get(name).into_iter().flatten().copied().collect()
     };
     indices.iter().filter_map(|i| arguments.get(*i)).collect()
-}
-
-fn callee(function: &Expr) -> Option<&str> {
-    match function {
-        Expr::Identifier(name) => Some(name),
-        Expr::TypeApply { function, .. } => callee(function),
-        _ => None,
-    }
 }
 
 /// The copies made so far, keyed by helper and the callbacks substituted.

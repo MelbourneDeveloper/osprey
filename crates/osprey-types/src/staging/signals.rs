@@ -100,7 +100,7 @@ fn expand(expression: &Expr, operations: Vec<String>) -> Expr {
     }
 }
 
-fn callee_name(function: &Expr) -> Option<&str> {
+pub(super) fn callee_name(function: &Expr) -> Option<&str> {
     match function {
         Expr::Identifier(name) => Some(name),
         Expr::TypeApply { function, .. } => callee_name(function),

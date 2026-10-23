@@ -98,7 +98,7 @@ fn referenced_names(statement: &Stmt) -> BTreeSet<String> {
 }
 
 /// Every named function definition in the program, at any nesting depth.
-pub(super) fn function_definitions(program: &Program) -> BTreeMap<String, Stmt> {
+pub(crate) fn function_definitions(program: &Program) -> BTreeMap<String, Stmt> {
     #[derive(Default)]
     struct Collector(BTreeMap<String, Stmt>);
     impl crate::AstVisitor for Collector {
