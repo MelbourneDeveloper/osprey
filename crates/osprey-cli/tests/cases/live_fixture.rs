@@ -8,8 +8,18 @@ use std::process::{Child, Command, Stdio};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+use serde_json::Value;
+
 /// The fixture's hot function.
 pub(crate) const HOT_FUNCTION: &str = "spin";
+/// The sample rate every session asks for: `n * RATE_HZ` samples are what `n`
+/// seconds record on an idle machine.
+pub(crate) const RATE_HZ: i64 = 997;
+/// How long a starved sampler has to record what a test needs before it fails.
+/// Tests wait for samples, never for seconds: a loaded machine samples slower.
+pub(crate) const RECORDING_DEADLINE: Duration = Duration::from_secs(120);
+/// How often a test re-reads `cpu.list` while it waits.
+pub(crate) const POLL: Duration = Duration::from_millis(50);
 /// How long a test waits for the fixture's endpoint to appear.
 const STARTUP: Duration = Duration::from_secs(20);
 
@@ -136,4 +146,22 @@ fn wait_for_endpoint(tmp: &Path, pid: u32) -> PathBuf {
         std::thread::sleep(Duration::from_millis(20));
     }
     panic!("no endpoint for PID {pid} under {}", tmp.display());
+}
+
+/// `session`'s entry in a `cpu.list` result: `None` once it has ended.
+pub(crate) fn listed_session<'a>(list: &'a Value, session: &Value) -> Option<&'a Value> {
+    list.get("sessions")
+        .and_then(Value::as_array)
+        .and_then(|all| {
+            all.iter()
+                .find(|s| s.get("session_id") == session.get("session_id"))
+        })
+}
+
+/// A listed session's live sample count; 0 once it is not listed.
+pub(crate) fn listed_samples(listed: Option<&Value>) -> i64 {
+    listed
+        .and_then(|s| s.get("sample_count"))
+        .and_then(Value::as_i64)
+        .unwrap_or(0)
 }

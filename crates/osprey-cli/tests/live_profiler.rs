@@ -13,9 +13,10 @@
     reason = "a failed setup step must fail the end-to-end test that needed it"
 )]
 
+use std::future::Future;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use lsp_profiler::wire::methods;
@@ -26,7 +27,10 @@ use serde_json::{json, Value};
 #[path = "cases/live_fixture.rs"]
 mod live_fixture;
 
-use live_fixture::{Fixture, Flavor, HOT_FUNCTION};
+use live_fixture::{
+    listed_samples, listed_session, Fixture, Flavor, HOT_FUNCTION, POLL, RATE_HZ,
+    RECORDING_DEADLINE,
+};
 
 #[derive(Debug)]
 struct Silent;
@@ -63,6 +67,16 @@ impl Recorder {
             })
             .collect()
     }
+
+    /// The `sample_count` of the latest progress notification; 0 before the first.
+    fn progress_samples(&self) -> i64 {
+        let sent = self.0.lock().map(|sent| sent.clone()).unwrap_or_default();
+        sent.iter()
+            .rev()
+            .find(|(method, _)| *method == methods::CPU_PROGRESS)
+            .and_then(|(_, params)| params.get("sample_count").and_then(Value::as_i64))
+            .unwrap_or(0)
+    }
 }
 
 /// The shared service with only the Osprey runtime, reading `fixture`'s
@@ -96,20 +110,68 @@ async fn error_code(service: &ProfilerService, method: &str, params: Value) -> i
     }
 }
 
-/// Record `secs` of the fixture, then stop and return the report.
-async fn profile(service: &ProfilerService, fixture: &Fixture, params: Value, secs: u64) -> Value {
-    let mut start = json!({ "pid": fixture.pid, "sample_rate": 997 });
+/// Start a CPU session on the fixture, returning its `{ session_id }`.
+async fn start_session(service: &ProfilerService, fixture: &Fixture, params: Value) -> Value {
+    let mut start = json!({ "pid": fixture.pid, "sample_rate": RATE_HZ });
     if let (Some(start), Some(extra)) = (start.as_object_mut(), params.as_object()) {
         start.extend(extra.clone());
     }
-    let started = call(service, methods::CPU_START, start).await;
-    tokio::time::sleep(Duration::from_secs(secs)).await;
-    call(
+    json!({ "session_id": call(service, methods::CPU_START, start).await.get("session_id") })
+}
+
+/// Record `enough` samples of the fixture, then stop and return the report.
+async fn profile(
+    service: &ProfilerService,
+    fixture: &Fixture,
+    params: Value,
+    enough: i64,
+) -> Value {
+    let session = start_session(service, fixture, params).await;
+    await_samples(service, &session, enough).await;
+    call(service, methods::CPU_STOP, session).await
+}
+
+/// Wait until `session` has recorded `enough` samples, by its live count in `cpu.list`.
+async fn await_samples(service: &ProfilerService, session: &Value, enough: i64) {
+    await_listing(
         service,
-        methods::CPU_STOP,
-        json!({ "session_id": started.get("session_id") }),
+        session,
+        |listed| listed_samples(listed) >= enough,
+        "the samples",
     )
-    .await
+    .await;
+}
+
+/// Poll `cpu.list` until `session`'s entry (`None` once it has ended) satisfies `until`.
+async fn await_listing(
+    service: &ProfilerService,
+    session: &Value,
+    until: impl Fn(Option<&Value>) -> bool,
+    what: &str,
+) {
+    let list = || call(service, methods::CPU_LIST, json!({}));
+    drop(poll(what, list, |list| until(listed_session(list, session))).await);
+}
+
+/// Re-read `state` until `holds` accepts it. Past [`RECORDING_DEADLINE`] the
+/// test fails with `what` and the last state read.
+async fn poll<T: std::fmt::Debug, F: Future<Output = T>>(
+    what: &str,
+    mut state: impl FnMut() -> F,
+    holds: impl Fn(&T) -> bool,
+) -> T {
+    let deadline = Instant::now() + RECORDING_DEADLINE;
+    loop {
+        let current = state().await;
+        if holds(&current) {
+            return current;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{what} not reached in {RECORDING_DEADLINE:?}: {current:?}"
+        );
+        tokio::time::sleep(POLL).await;
+    }
 }
 
 fn hot_functions(report: &Value) -> &[Value] {
@@ -182,7 +244,7 @@ async fn cpu_profiling_finds_the_ml_twins_hot_function_and_its_lines() {
 async fn finds_the_hot_function_and_its_lines(flavor: Flavor, name: &str) {
     let fixture = Fixture::start(name, flavor);
     let service = service(&fixture);
-    let report = profile(&service, &fixture, json!({}), 3).await;
+    let report = profile(&service, &fixture, json!({}), 3 * RATE_HZ).await;
     assert!(samples(&report) > 100, "{report}");
     let spin = hot_functions(&report)
         .iter()
@@ -248,12 +310,18 @@ async fn native_frames_only_on_request(flavor: Flavor, name: &str) {
             })
         })
     };
-    let source_only = profile(&service, &fixture, json!({}), 2).await;
+    let source_only = profile(&service, &fixture, json!({}), 2 * RATE_HZ).await;
     assert!(
         !native(&source_only),
         "without native frames every hotspot is source: {source_only}"
     );
-    let with_native = profile(&service, &fixture, json!({ "include_native": true }), 2).await;
+    let with_native = profile(
+        &service,
+        &fixture,
+        json!({ "include_native": true }),
+        2 * RATE_HZ,
+    )
+    .await;
     assert!(
         native(&with_native),
         "the runtime's own frames appear on request: {with_native}"
@@ -303,7 +371,21 @@ async fn a_second_session_on_the_same_program_is_refused() {
 async fn a_duration_caps_the_recorded_time() {
     let fixture = Fixture::start("lp-duration", Flavor::Default);
     let service = service(&fixture);
-    let report = profile(&service, &fixture, json!({ "duration_secs": 1.0 }), 3).await;
+    let started = call(
+        &service,
+        methods::CPU_START,
+        json!({ "pid": fixture.pid, "sample_rate": RATE_HZ, "duration_secs": 1.0 }),
+    )
+    .await;
+    let session = json!({ "session_id": started.get("session_id") });
+    await_listing(
+        &service,
+        &session,
+        |listed| listed.is_none(),
+        "the session ending by itself",
+    )
+    .await;
+    let report = call(&service, methods::CPU_STOP, session).await;
     let secs = report
         .get("duration_secs")
         .and_then(Value::as_f64)
@@ -323,12 +405,12 @@ async fn a_mid_session_snapshot_reports_the_samples_so_far() {
     let service = service(&fixture);
     let started = call(&service, methods::CPU_START, json!({ "pid": fixture.pid })).await;
     let session = json!({ "session_id": started.get("session_id") });
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    await_samples(&service, &session, 1).await;
     let snapshot = call(&service, methods::CPU_SNAPSHOT, session.clone()).await;
     drop(call(&service, methods::CPU_STOP, session).await);
     assert!(
         samples(&snapshot) > 0,
-        "two seconds in, the snapshot has samples: {snapshot}"
+        "once samples are streaming, the snapshot has them: {snapshot}"
     );
     service.shutdown().await;
 }
@@ -340,15 +422,10 @@ async fn a_program_killed_mid_session_keeps_its_samples() {
     let mut fixture = Fixture::start("lp-killed", Flavor::Default);
     let service = service(&fixture);
     let started = call(&service, methods::CPU_START, json!({ "pid": fixture.pid })).await;
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    let session = json!({ "session_id": started.get("session_id") });
+    await_samples(&service, &session, 1).await;
     fixture.kill();
-    tokio::time::sleep(Duration::from_millis(500)).await;
-    let report = call(
-        &service,
-        methods::CPU_STOP,
-        json!({ "session_id": started.get("session_id") }),
-    )
-    .await;
+    let report = call(&service, methods::CPU_STOP, session).await;
     assert!(
         samples(&report) > 0,
         "samples taken before the kill are reported: {report}"
@@ -364,7 +441,17 @@ async fn live_progress_names_where_the_time_is_spent_not_the_entry_point() {
     let fixture = Fixture::start("lp-progress", Flavor::Default);
     let recorder = Arc::new(Recorder::default());
     let service = service_with(&fixture, Arc::<Recorder>::clone(&recorder));
-    let report = profile(&service, &fixture, json!({}), 3).await;
+    let session = start_session(&service, &fixture, json!({})).await;
+    let enough = 3 * RATE_HZ;
+    await_samples(&service, &session, enough).await;
+    // Progress is a once-a-second tick that a loaded machine runs late: the
+    // tops judged include one sent after all that evidence was in.
+    let progress = || std::future::ready(recorder.progress_samples());
+    let announced = poll("progress covering the samples", progress, |sent| {
+        *sent >= enough
+    })
+    .await;
+    let report = call(&service, methods::CPU_STOP, session).await;
     let tops = recorder.tops();
     let self_samples = |name: &str| {
         hot_functions(&report)
@@ -374,6 +461,10 @@ async fn live_progress_names_where_the_time_is_spent_not_the_entry_point() {
             .unwrap_or(0)
     };
     assert!(!tops.is_empty(), "progress is sent while recording");
+    assert!(
+        samples(&report) >= announced,
+        "the report holds every sample progress announced, {announced}: {report}"
+    );
     assert!(
         !tops.iter().any(|top| top == "main"),
         "the entry point is never the hottest: {tops:?} {report}"

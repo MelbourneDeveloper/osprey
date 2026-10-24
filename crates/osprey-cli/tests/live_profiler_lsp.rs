@@ -11,14 +11,17 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-use std::time::Duration;
+use std::time::Instant;
 
 use serde_json::{json, Value};
 
 #[path = "cases/live_fixture.rs"]
 mod live_fixture;
 
-use live_fixture::{Fixture, Flavor, HOT_FUNCTION};
+use live_fixture::{
+    listed_samples, listed_session, Fixture, Flavor, HOT_FUNCTION, POLL, RATE_HZ,
+    RECORDING_DEADLINE,
+};
 
 /// `osprey lsp` with its stdio, killed on drop.
 struct Server {
@@ -93,6 +96,22 @@ impl Server {
             .cloned()
             .unwrap_or_else(|| panic!("{name} failed: {reply}"))
     }
+
+    /// Poll `cpu.list` until `session` has recorded `enough` samples.
+    fn await_samples(&mut self, session: &Value, enough: i64) {
+        let deadline = Instant::now() + RECORDING_DEADLINE;
+        for id in 1_000.. {
+            let list = self.command(id, "cpu.list", &json!({}));
+            if listed_samples(listed_session(&list, session)) >= enough {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "{enough} samples not recorded in {RECORDING_DEADLINE:?}: {list}"
+            );
+            std::thread::sleep(POLL);
+        }
+    }
 }
 
 impl Drop for Server {
@@ -138,14 +157,11 @@ fn lists_and_profiles(flavor: Flavor, name: &str) {
     let started = server.command(
         3,
         "cpu.start",
-        &json!({ "pid": fixture.pid, "sample_rate": 997 }),
+        &json!({ "pid": fixture.pid, "sample_rate": RATE_HZ }),
     );
-    std::thread::sleep(Duration::from_secs(2));
-    let report = server.command(
-        4,
-        "cpu.stop",
-        &json!({ "session_id": started.get("session_id") }),
-    );
+    let session = json!({ "session_id": started.get("session_id") });
+    server.await_samples(&session, 2 * RATE_HZ);
+    let report = server.command(4, "cpu.stop", &session);
     let hot = report
         .get("hot_functions")
         .and_then(Value::as_array)

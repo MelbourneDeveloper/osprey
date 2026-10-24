@@ -62,6 +62,7 @@ Shared UI quality debt, which predates this work unless marked:
 
 Test reliability:
 
+- [x] The live profiler e2e tests recorded for fixed seconds, so a starved sampler failed them: the snapshot found no samples, and the progress test stopped before any progress was sent. They now record until `cpu.list` shows the samples they need, the progress test waits for a progress notification covering them, and the duration test waits for its session to leave the listing. Each wait has a two-minute deadline. All 13 passed three runs in a row with 28 busy loops on 14 cores.
 - [ ] `profiler-cpu-launch-e2e` (`waitForListing`) and `test-debug.e2e` (integrated-terminal console selection) fail under a long, loaded run and pass alone. Find what they race on and remove the timing dependence. Do not raise the timeouts.
 
 Compiler CI on PR #270, owned by the effects work rather than the profiler:

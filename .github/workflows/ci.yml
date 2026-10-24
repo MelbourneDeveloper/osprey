@@ -850,6 +850,11 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # The iOS and macOS builds compile the workspace, whose lsp-profiler
+      # build script generates its wire model with typeDiagram [PROF-LSP-RUNTIME].
+      - name: Install typeDiagram
+        uses: ./.github/actions/typediagram
+
       - uses: actions/download-artifact@v4
         with:
           name: coverage-rust
