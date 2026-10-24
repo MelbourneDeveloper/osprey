@@ -5,16 +5,16 @@ import {
   escapeHtml,
   makeNonce,
   pathBasename,
-} from "../../client/src/profiler/flame-html";
+} from "@nimblesite/lsp-profiler-ui/out/src/flame-html";
 import {
   buildFlameModel,
   type SpeedscopeFile,
 } from "../../client/src/profiler/flame-model";
-import { FLAME_SCRIPT } from "../../client/src/profiler/flame-script";
+import { FLAME_SCRIPT } from "@nimblesite/lsp-profiler-ui/out/src/flame-script";
 import {
   clampViewRange,
   fitLabelText,
-} from "../../client/src/profiler/flame-script-helpers";
+} from "@nimblesite/lsp-profiler-ui/out/src/flame-script-helpers";
 import type { ProfileSummary } from "../../client/src/profiler/summary";
 
 const DOC: SpeedscopeFile = {

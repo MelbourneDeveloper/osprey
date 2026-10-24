@@ -1,41 +1,68 @@
 # Shared profiler integration
 
-Preserve Osprey's runtime and compiler layer. Move reusable views and behavior into lspkit; mount the same views and exercise the same VSIX contract from both extensions. No git operations are part of this work.
+Osprey keeps its runtime and compiler layer: optimized native builds, DWARF symbolization, the platform sampler, the live-attach endpoint every native program serves ([PROF-ATTACH-ENDPOINT] in [0028-Profiler](../specs/tooling/0028-Profiler.md)), compiler invocation, cancellation and source classification (`isOspreySource`). lspkit owns everything above that: the `lsp-profiler` service mounted by `osprey lsp` through `crates/lsp-profiler-osprey`, and the `@nimblesite/lsp-profiler-ui` package whose views, palette, debugger links and VSIX contracts both Osprey and SharpLsp mount. The behaviour is specified in lspkit's [LSP-PROFILER-SPEC](../../lspkit/docs/specs/LSP-PROFILER-SPEC.md): `[PROF-UI-SAMPLED]`, `[PROF-UI-PALETTE]`, `[PROF-UI-DEBUG-LINK]`, `[PROF-UI-CONTRACT]` and `[PROF-UI-CAPABILITIES]`.
 
-| Capability | Osprey today | lspkit / SharpLsp today | Required destination |
-| --- | --- | --- | --- |
-| Optimized native builds, DWARF, platform sampler | Implemented | Runtime-specific .NET sampler | Keep Osprey implementation |
-| Fiber IDs, running/waiting samples, dropped samples | Implemented | No fiber-state view | Shared UI accepts runtime metadata |
-| Left-heavy/time-order canvas, zoom/pan/search | Implemented | SVG preview/external interactive viewer | Move engine into lspkit |
-| Hot self/total functions, line heat, source jumps | Implemented | Implemented | Shared results, preserve Osprey annotations |
-| Speedscope, V8, folded exports | Implemented | Implemented | Preserve artifacts |
-| Cancellable compilation/run, test explorer profiling | Implemented | Launch/attach session flow | Keep Osprey commands and test integration |
-| Process explorer, live sessions | Absent | Implemented | Runtime adapter required |
-| Heap snapshots/diffs/leaks/retention | Absent | .NET backend implemented | Native heap capture required; never fake support |
-| Configurable product palettes | Absent | Fixed orange/purple | Shared palette with host defaults |
-| Watch ↔ profiler navigation | Absent | Type picker, no watch bridge | Shared bridge, exact session/type provenance |
-| VSIX regression contract | Osprey-specific suites | Shared UI + .NET integration suites | Common suite runs in both real extensions |
-
-## Verification checklist
-
-- [x] Existing Osprey model, HTML, panel, heat, cancellation and export tests pass.
-- [x] Both hosts use the same interactive CPU renderer and test contract.
-- [x] Product palettes cover canvas, panels and editor heat.
-- [x] Debugger links preserve session identity and do not guess object identity from a type.
-- [x] Real Osprey runs reach the shared profiler; .NET regression runs still pass.
-- [x] Native runtime capabilities and gaps are explicitly verified.
-- [x] Desktop, 520px/360px panels, light/dark themes and live canvas palette repaint checked.
-- [x] Reduced-motion behavior checked in a rendered panel.
-
-Verification on 2026-10-22: all 438 Osprey extension tests passed before the final refinements; the final focused Osprey profiler run passed 91 tests, SharpLsp passed 51 shared profiler/CPU/decoration tests, and the final broader Osprey profiler/debugger run passed 163 tests including the real variable-to-profiler bridge. Both suites import the same lspkit webview and CPU capture contracts. These run in real VS Code extension hosts; they do not establish installed-package validation or native heap/attach parity.
+| Capability | Where it lives | Status |
+| --- | --- | --- |
+| Optimized native builds, DWARF, platform sampler | Osprey compiler and runtime | Done |
+| Fiber IDs, running/waiting samples, dropped samples | Osprey summary, shared header and chips | Done |
+| Left-heavy/time-order canvas, zoom/pan/search, slab budget | lspkit `flame-model`, `flame-time-order`, `flame-script` | Done |
+| Hot self/total functions, line heat, source jumps | lspkit results panel and decorations; Osprey heat annotations | Done |
+| Speedscope, V8, folded exports | Osprey CLI artifacts, opened from the shared panel | Done |
+| Cancellable compilation/run, test explorer profiling | Osprey commands and test integration | Done |
+| Process discovery, live CPU attach, snapshot, stop, live progress | `crates/lsp-profiler-osprey` over the shared protocol | Done on Unix; Windows has no endpoint (`attach_none.rs`) |
+| Heap snapshots, diffs, leaks, retention | No Osprey memory backend | Absent; `memory: false` hides every memory surface, never faked |
+| Host palettes over canvas, panels, memory canvases and editor heat | lspkit `palette.ts`; Osprey `OSPREY_PALETTE` | Done |
+| Watch ↔ profiler navigation | lspkit `debug-link`; session-scoped, type queries only | Done; type retention needs a memory backend |
+| VSIX regression contract | lspkit `testing/webview-contract`, `testing/cpu-capture-contract` | Runs in both real extension hosts |
 
 ## Workspace integration
 
-The unpublished shared-package changes live in the existing `../SharpLsp/lspkit` checkout. Osprey currently resolves that local source package. A coordinated lspkit release or repository dependency pin is required before this can build from an isolated Osprey checkout; no git or publication was authorized in this task. Do not describe this as shipping-ready or full backend parity.
+Osprey builds the shared UI from its `lspkit` submodule (`file:../lspkit/packages/lsp-profiler-ui`; CI runs `make _profiler_ui` before `npm ci`, which installs a packed copy). The submodule pins `8a23f74` on lspkit's `feature/shared-profiler-ui` branch, which is pushed but not merged into lspkit `main`, and has no pull request. SharpLsp's own `lspkit` submodule pins the older `4566b47` on the same branch.
 
-## Outstanding runtime work
+## Review of 2026-10-24
 
-- [ ] Implement and validate native process discovery and live CPU attach/snapshot/stop through the shared protocol.
-- [ ] Implement native heap snapshots, allocation sites, diffs, leak evidence and retention graphs for supported Osprey memory backends.
-- [ ] Run the common process/memory/debugger runtime contracts in Osprey, not only the UI contracts.
-- [ ] Resolve existing compiler CI failures: missing Default twins for `ml_name_positions` and `verdict_declared`, and ML parse errors in `finalizers_masks_instances`.
+Fixed, each with a test written first where the defect was observable:
+
+- [x] A speedscope export with a non-object profile threw from `parseSpeedscope`, and a `null`, negative or string weight was accepted and turned every slab into `NaN`. Both are now classified errors.
+- [x] Search's "% of total" compared every matched slab with every counted one, O(n²) over a 150,000-slab budget. It is now one sort and sweep (`coveredSpan`).
+- [x] A label cached for an 8px width bucket was fitted to the widest width in the bucket and could overflow its slab by up to 7px. It is now fitted to the narrowest.
+- [x] The frame ranking was implemented twice (`frameColors` and `paletteFrames`), the search twice (`searchMatches` and the webview's own loop), the palette's CSS variable names twice (`paletteCss` and the live repaint) and the palette's default colours twice (`DEFAULT_PALETTE` and `PROFILER_CSS_VARS`). Each now has one definition, and the webview runs the tested functions through `Function.prototype.toString`.
+- [x] The memory timeline, the retention graph's target and cycle colours, the leak badges and the high-confidence leak decoration were fixed purple and red whatever the host palette said. They now read the palette.
+- [x] No test pinned the live progress's top function or the hot-function tie order. The Rust tests `progress_names_the_function_with_the_most_self_samples`, `progress_breaks_equal_self_samples_by_name` and `hot_functions_break_equal_totals_by_self_samples_then_name` do now.
+- [x] The UI package's `npm run lint` ran ESLint with no config and always failed. It now type-checks with `tsc --noEmit`, as Osprey's extension does.
+- [x] Osprey's `flame-html`, `flame-script` and `flame-script-helpers` were one-line re-exports carrying a comment that did not describe them. They are deleted, and their importers use the package directly. `OSPREY_PALETTE` is typed as `ProfilerPalette`.
+- [x] Stale comments: fixed hex colours in the decoration headers, an orphaned `MAX_INLINE_SVG_BYTES` comment, the `tracksMemory` contract, and imports placed mid-file.
+
+Verification: lspkit `make lint` (clippy, spec citations, skill links), `cargo fmt --check`, the three new Rust tests and the UI package's 171 VS Code tests pass. Osprey's extension lints and compiles against the rebuilt package. Osprey's profiler, flame, debugger and palette suites (`OSPREY_TEST_GREP="[Pp]rofil|[Ff]lame|[Dd]ebug|[Pp]alette|[Ss]ampled"`) passed 269 of 272 in one seven-minute run. The three failures all passed when re-run on their own: two `runInTerminal` launcher timeouts in the Test Explorer debug suite, and `a debug-launched program is profiled over the wire`, whose process listing timed out.
+
+## Todo
+
+Delivery:
+
+- [ ] Commit the review fixes in lspkit, then in Osprey with the submodule bump. Awaiting the owner's go-ahead.
+- [ ] Open the lspkit pull request for `feature/shared-profiler-ui`, merge it into `main`, and repin Osprey's submodule to the merged commit.
+- [ ] Bump SharpLsp's `lspkit` submodule to the same commit and run its shared profiler, CPU and decoration suites. SharpLsp has not been run against these fixes.
+- [ ] Publish `@nimblesite/lsp-profiler-ui` so neither host depends on a `file:` path (lspkit plan, Phase 4).
+
+Runtime:
+
+- [ ] Windows live attach: `attach_none.rs` leaves Osprey programs on Windows undiscoverable and unprofilable from the Processes view.
+- [ ] A native heap backend for Osprey's memory modes (ARC and GC): snapshots, allocation sites, diffs, leak evidence and retention graphs. Then drop `memory: false` from `PROFILER_HOST` and run the shared memory contracts in Osprey.
+- [ ] Debugger type retention for Osprey variables, which needs the heap backend.
+
+Shared UI quality debt, which predates this work unless marked:
+
+- [ ] `profiler.ts` is 542 lines, over the 500-line limit.
+- [ ] Functions over 20 lines in `profiler.ts`, `process-explorer.ts`, `process-explorer-rows.ts`, `memory-dashboard-html.ts`, `memory-status.ts`, `profiler-decorations.ts`, `profiler-flamegraph-html.ts`, `profiler-webview.ts` and `scripts/contributions.mjs`. `createProfilerStore` (28 lines) and `registerProfilerUi` (25 lines) are shorter than before this work but still over.
+- [ ] Canvas labels (`rgba(15, 15, 15, 0.9)`) and the active toggle's text (`#171b16`) assume a light palette. A host with dark CPU colours gets unreadable labels.
+- [ ] The UI package's own suite runs against a mock language server, which lspkit's `CLAUDE.md` forbids. Real-server coverage is the host suites. Port the suite or record the exception in the spec.
+- [ ] An ESLint config with SharpLsp's reactive-screen and no-legacy rules (lspkit plan, Phase 4).
+
+Test reliability:
+
+- [ ] `profiler-cpu-launch-e2e` (`waitForListing`) and `test-debug.e2e` (integrated-terminal console selection) fail under a long, loaded run and pass alone. Find what they race on and remove the timing dependence. Do not raise the timeouts.
+
+Compiler CI on PR #270, owned by the effects work rather than the profiler:
+
+- [ ] `tests/effects/scope/finalizers_masks_instances` needs spec 0017's `mask` and `instance`.

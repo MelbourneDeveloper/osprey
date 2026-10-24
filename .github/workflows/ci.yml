@@ -126,6 +126,11 @@ jobs:
             examples/projects/modules/e2e/package-lock.json
             examples/projects/modules/web/package-lock.json
 
+      # Skills live in .agents/skills for every agent; Claude Code reads them
+      # through links in .claude/skills.
+      - name: Every skill is linked for Claude Code
+        run: node lspkit/scripts/link-skills.mjs --check .
+
       # Rust toolchain + clang/LLVM + lldb-dap + the C runtime archives + the
       # release binary.
       - name: Setup Osprey Compiler

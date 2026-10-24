@@ -17,7 +17,7 @@ import {
   window,
   type DebugSession,
 } from "vscode";
-import { pathBasename } from "./profiler/flame-html";
+import { pathBasename } from "@nimblesite/lsp-profiler-ui/out/src/flame-html";
 
 /** A session that can issue DAP requests (the bit we need from DebugSession). */
 export interface DapRequester {
