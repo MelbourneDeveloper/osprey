@@ -21,10 +21,10 @@ enum SmokeCheck {
     private static func boundaryChecks() -> [(String, Bool)] {
         [
             ("initialize once", osprey_main() == 0),
-            ("string export", text(osprey_storage_Disk_formatBytes(4_143_181_824)) == "4.1 GB"),
-            ("grouped count", text(osprey_storage_Disk_formatCount(1_234_005)) == "1,234,005"),
-            ("integer export", osprey_storage_Disk_percent(450, 750) == 60),
-            ("zero divisor", osprey_storage_Disk_percent(1, 0) == 0),
+            ("string export", text(osprey_storage_formatBytes(4_143_181_824)) == "4.1 GB"),
+            ("grouped count", text(osprey_storage_formatCount(1_234_005)) == "1,234,005"),
+            ("integer export", osprey_storage_percent(450, 750) == 60),
+            ("zero divisor", osprey_storage_percent(1, 0) == 0),
         ]
     }
 
