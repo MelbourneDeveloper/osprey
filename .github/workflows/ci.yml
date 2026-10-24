@@ -758,13 +758,15 @@ jobs:
           [ -x "$sdkmanager" ] || { echo "::error::no sdkmanager under $sdk_tools"; exit 1; }
           "$sdkmanager" "ndk;28.2.13676358" "platforms;android-34" "build-tools;34.0.0"
           image="system-images;android-34;google_apis;x86_64"
+          image_dir="$sdk_root/system-images/android-34/google_apis/x86_64"
           for attempt in 1 2 3; do
-            yes | "$sdkmanager" --install "$image" --channel=0 > /dev/null || true
-            [ -f "$sdk_root/system-images/android-34/google_apis/x86_64/system.img" ] && break
+            if "$sdkmanager" --install "$image" --channel=0 > /dev/null && [ -f "$image_dir/system.img" ]; then
+              break
+            fi
             echo "::warning::system image download $attempt failed; retrying"
-            rm -rf "$sdk_root/.temp" "$HOME/.android/cache" "$sdk_root/system-images/android-34/google_apis/x86_64"
+            rm -rf "$sdk_root/.temp" "$HOME/.android/cache" "$image_dir"
           done
-          [ -f "$sdk_root/system-images/android-34/google_apis/x86_64/system.img" ] || { echo "::error::could not install $image"; exit 1; }
+          [ -f "$image_dir/system.img" ] || { echo "::error::could not install $image"; exit 1; }
           echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$sdk_root/ndk/28.2.13676358" >> "$GITHUB_ENV"
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
