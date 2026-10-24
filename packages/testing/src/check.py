@@ -12,7 +12,7 @@ NaN equal only to NaN, so a reference value computed by CPython's numpy or
 torch under a different libm still compares. Implements [PORT-TEST-ORACLE].
 """
 
-__all__ = ["Outcome", "passed", "failed", "equal", "close", "close_all", "ints_equal", "truth", "near", "report", "summary", "ints_text", "Fault", "strictly"]
+__all__ = ["Outcome", "passed", "failed", "equal", "close", "close_all", "ints_equal", "truth", "near", "report", "summary", "ints_text", "float_of", "Fault", "strictly"]
 
 
 class Outcome:
@@ -93,6 +93,20 @@ def ints_equal(name, got, want):
         return failed(name, f"length {len(got)}, want {len(want)}: got {ints_text(got)}")
     else:
         return truth(name, i == len(want), f"index {i}: got {ints_text(got)}, want {ints_text(want)}")
+
+
+def float_of(text):
+    """A float an oracle wrote as text: Python's repr of a number, or "inf", "-inf",
+    "nan" for the values the flavor has no literal for
+    (scripts/oracles/expected_module.py). Unparseable text is NaN, so it never
+    compares equal to a real expectation by accident."""
+    match text:
+        case "inf":
+            return exp(1000.0)
+        case "-inf":
+            return 0.0 - exp(1000.0)
+        case _:
+            return unwrap_or(parseFloat(text), exp(1000.0) - exp(1000.0))
 
 
 def line(outcome):

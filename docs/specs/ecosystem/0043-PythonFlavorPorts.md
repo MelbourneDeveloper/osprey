@@ -65,10 +65,11 @@ Each port publishes as `@osprey/<name>`, epoch 1, release ordinal 1, from its pa
 | `@osprey/torch` | `Tensor`, `nn.functional`, reverse-mode autograd, `nn` modules, `optim` | in progress |
 | `@osprey/micrograd` | Karpathy's micrograd `Value` engine and `nn` | in progress |
 | `@osprey/tiktoken` | byte-level BPE encoding, decoding and training | in progress |
+| `@osprey/tokenizers` | Hugging Face WordPiece, Unigram and WordLevel models, normalizers, pre-tokenizers, post-processors | in progress |
 | `@osprey/einops` | `rearrange`, `reduce`, `repeat` patterns | in progress |
 | `@osprey/scipy` | `scipy.special` functions | in progress |
 | `@osprey/sklearn` | metrics, preprocessing, clustering, linear models | in progress |
-| `@osprey/transformers` | LLaMA/GPT-2 blocks, RoPE, sampling | in progress |
+| `@osprey/transformers` | generation: logits processors, warpers, sampling, stopping criteria; then LLaMA/GPT-2 blocks and RoPE | in progress |
 | `@osprey/peft` | LoRA adapters | in progress |
 | `@osprey/bitsandbytes` | int8 absmax and 4-bit NF4 quantization | in progress |
 | `@osprey/flash_attn` | online-softmax tiled attention | in progress |

@@ -8,23 +8,6 @@ RTOL = 0.00001
 ATOL = 0.00000001
 
 
-def inf():
-    return exp(1000.0)
-
-
-def value_of(text):
-    """The oracle spells non-finite operands as Python prints them."""
-    match text:
-        case "inf":
-            return inf()
-        case "-inf":
-            return 0.0 - inf()
-        case "nan":
-            return inf() - inf()
-        case _:
-            return unwrap_or(parseFloat(text), 0.0)
-
-
 def verdict(name, pair, want):
     a = unwrap_or(listGet(pair, 0), 0.0)
     b = unwrap_or(listGet(pair, 1), 0.0)
@@ -33,7 +16,7 @@ def verdict(name, pair, want):
 
 def special(i):
     pair = unwrap_or(listGet(Expected.SPECIAL, i), [])
-    values = [value_of(unwrap_or(listGet(pair, 0), "")), value_of(unwrap_or(listGet(pair, 1), ""))]
+    values = [Check.float_of(unwrap_or(listGet(pair, 0), "")), Check.float_of(unwrap_or(listGet(pair, 1), ""))]
     return verdict("near.special", values, unwrap_or(listGet(Expected.SPECIAL_VERDICTS, i), False))
 
 
@@ -50,6 +33,8 @@ def helper_cases():
         Check.ints_equal("ints_equal", [1, 2, 3], [1, 2, 3]),
         Check.equal("ints_equal.detail", Check.ints_equal("x", [1, 2, 4], [1, 2, 3]).detail, "index 2: got [1, 2, 4], want [1, 2, 3]"),
         Check.equal("ints_text.empty", Check.ints_text([]), "[]"),
+        Check.equal("float_of.number", Check.float_of("1.5"), 1.5),
+        Check.truth("float_of.unparseable_is_nan", Check.float_of("x") != Check.float_of("x"), "unparseable text decodes to NaN"),
         Check.equal("summary", Check.summary([Check.passed("a"), Check.failed("b", "c")]), "1 passed, 1 failed"),
     ]
 

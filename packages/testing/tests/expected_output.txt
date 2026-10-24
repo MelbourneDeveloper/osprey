@@ -25,5 +25,7 @@ ok close_all.detail
 ok ints_equal
 ok ints_equal.detail
 ok ints_text.empty
+ok float_of.number
+ok float_of.unparseable_is_nan
 ok summary
-28 passed, 0 failed
+30 passed, 0 failed
