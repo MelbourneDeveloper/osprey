@@ -13,14 +13,12 @@ signature JsonApi
     error : string -> string
 
 module Json : JsonApi
-    escape : string -> string
     escape s =
         bslash = "\\"
         quote = "\""
         step = replace s bslash (bslash + bslash) ?: ""
         replace step quote (bslash + quote) ?: ""
 
-    quoted : string -> string
     quoted s =
         quote = "\""
         quote + escape s + quote
