@@ -180,6 +180,11 @@ Exit gate: the package application and test harness compile from Osprey source w
 
 ### Phase 1 — Manifest and canonical identity
 
+The TOML parser and manifest validators live in `registry/manifest/`, outside
+the shared core, because the type checker's effect-row solver needs minutes
+for the parser today and would stall every project that loads it. The
+`doctor` manifest verdict returns once that is fixed.
+
 - [ ] Implement one typed TOML parser in `registry/core`, written in Osprey, that preserves current `[project]`/`[modules]` behavior and adds
       `[package]`, bounded discovery metadata, all three dependency tables,
       `[[assets]]`, and `[system.*]` from `[PACKAGE-MANIFEST]`.

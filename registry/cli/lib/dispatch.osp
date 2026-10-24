@@ -1,4 +1,5 @@
 namespace registry_cli;
+import registry_cli::Fetch
 import registry_cli::Reports
 import registry_cli::Doctor
 
@@ -8,11 +9,11 @@ import registry_cli::Doctor
 /// which is different from a command the specification does not know.
 module Dispatch {
     let notImplementedStatus = 3
-    let planned = ["login", "package", "add", "remove", "lock", "update", "use", "fetch", "tree", "why", "audit", "verify", "publish", "yank", "build"]
+    let planned = ["login", "package", "add", "remove", "lock", "update", "use", "tree", "why", "audit", "verify", "publish", "yank", "build"]
     let usage = [
         "usage: osprey-pkg <command>",
-        "commands: help, doctor",
-        "specified, not yet implemented: login, package init, add, remove, lock, update, use, fetch, tree, why, audit, verify, publish, yank, build --release"
+        "commands: help, doctor, fetch",
+        "specified, not yet implemented: login, package init, add, remove, lock, update, use, tree, why, audit, verify, publish, yank, build --release"
     ]
 
     fn unknown(command) = Reports::usage(listPrepend(usage, "unknown command: ${command}"))
@@ -24,10 +25,14 @@ module Dispatch {
 
     fn other(command) = if listContains(planned, command) { notImplemented(command) } else { unknown(command) }
 
+    /// The words after one argument, as its command's argument vector.
+    fn rest(args) = range(1, length(args)) |> map(fn(i) => listGet(args, i) ?: "") |> toList
+
     /// Route one argument vector to its command.
     export fn run(args) = match listGet(args, 0) ?: "help" {
         "help" => Reports::success(usage)
         "doctor" => Doctor::report()
+        "fetch" => Fetch::run(rest(args))
         command => other(command)
     }
 }

@@ -54,6 +54,12 @@ test: build
 registry-test: build
 	$(MAKE) _test_registry
 
+## registry-serve: Serve registry/sample-registry over HTTP on
+##                 127.0.0.1:8787 with the Osprey folder-registry server
+##                 (settings in registry/api/registry-server.json).
+registry-serve: build
+	cd registry/api && ../../$(BIN) . --run
+
 ## registry-blockers: Probe the host capabilities plan 0020 still needs
 ##                    (argv, exit status, binary-safe reads, ...). Expected to
 ##                    FAIL until each capability lands; never part of `test`.

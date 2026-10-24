@@ -7,13 +7,43 @@ The package manager and registry from [plan 0020](../docs/plans/0020-package-man
 | Directory | Namespace | Contents |
 | --- | --- | --- |
 | `core/` | `registry` | Pure rules shared by every frontend: package names, release identities, digest envelopes and `H(d, x)`, the canonical source-tree grammar and `SourceDigest`, a pure-Osprey SHA-256, byte encodings, canonical ordering, the arithmetic policy, the language-conformance gate and the blocked-capability inventory. No I/O. |
-| `host/` | `registry_host` | The `Host` effects (`Files`, `Process`, `Console`) and their native handlers built on Osprey builtins. Handlers carry no policy. |
-| `cli/` | `registry_cli` | Command routing and the commands themselves (`help`, `doctor` so far). `src/main.osp` is the executable entry; `lib/` holds everything tests assemble. |
+| `host/` | `registry_host` | The `Host` effects (`Files`, `Tree`, `Web`, `Process`, `Console`) and their native handlers built on Osprey builtins. Handlers carry no policy. |
+| `api/` | `registry_api` | The folder-registry HTTP server: configuration, catalog loading, the pure `Router`, and the listener. |
+| `cli/` | `registry_cli` | Command routing and the commands themselves (`help`, `doctor`, `fetch`). `src/main.osp` is the executable entry; `lib/` holds everything tests assemble. |
+| `sample-registry/` | — | A registry root with four real releases of three packages; `@demo/report` uses the other two. |
+| `manifest/` | `registry` | The TOML parser and manifest validators, kept out of `core/` until the type checker handles the parser in seconds. |
+| `resolver/` | `registry` | The SAT/CDCL resolver core and its own test project. |
 | `tests/` | `registry_tests` | Every suite, assembled with core, host and `cli/lib` into one program. `fixtures/` holds declarative JSON fixtures whose digest goldens were computed with an independent implementation (Python `hashlib`/`json`) and are asserted byte for byte. |
 | `blockers/` | `registry_blockers` | Probes for capabilities Osprey lacks; red by design until each lands. |
 | `../schemas/package-registry.td` | — | The canonical typeDiagram model. Spec 0031 renders the same bytes and a test keeps them identical. |
 
 Projects share source through `source_roots` (for example `cli` lists `../core/src`), because Osprey has no cross-project dependency model yet. `osprey test` compiles each `*.test.osp` in isolation and cannot import project modules, so suites are ordinary modules with an `export fn run()` called from `tests/src/main.osp`, run with `osprey registry/tests --run`.
+
+## Run a registry
+
+A registry is a folder. Each release is a directory `@scope/name/<epoch>.<ordinal>/` holding the package's source tree, as in `sample-registry/`. Nothing else is needed: no database, no account, no hosted service.
+
+```sh
+make registry-serve          # serves registry/sample-registry on http://127.0.0.1:8787
+curl http://127.0.0.1:8787/v1/packages
+curl http://127.0.0.1:8787/v1/packages/demo/maths
+```
+
+To serve your own folder on your network, edit `api/registry-server.json`:
+
+```json
+{ "root": "/srv/osprey-packages", "address": "0.0.0.0", "port": 8787 }
+```
+
+Then run `osprey . --run` in `registry/api`. At startup the server walks the root, computes each release's `SourceDigest`, prints every release it serves and every directory it refuses with the reason, and answers the endpoints of spec 0029 `[PACKAGE-FOLDER-REGISTRY]`.
+
+Fetch from it with the package frontend, which verifies the digest before writing anything:
+
+```sh
+echo "fetch @demo/report --registry http://127.0.0.1:8787" | ./target/osprey-pkg
+```
+
+The release lands in `.osprey/packages/@demo/report/<digest>/`.
 
 ## Running
 

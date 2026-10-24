@@ -1,0 +1,53 @@
+namespace registry_api;
+import registry::Json
+import registry_host::Host
+
+/// The server configuration: one JSON file in the working directory, because
+/// Osprey has no argv or environment builtin yet. Implements "Operation" of
+/// [PACKAGE-FOLDER-REGISTRY].
+module Config {
+    export type Settings = { root: string, address: string, port: int }
+
+    let fileName = "registry-server.json"
+    let maxPort = 65535
+
+    /// The configuration file's name, relative to the working directory.
+    export fn path() = fileName
+
+    fn text(document, field) = match Json::textAt(document, field) {
+        Success { value } => Success { value: value }
+        Error => Error { message: "config.${field}" }
+    }
+
+    fn port(document) = match Json::intAt(document, "port") {
+        Success { value } => if value > 0 && value <= maxPort { Success { value: value } } else { Error { message: "config.port" } }
+        Error => Error { message: "config.port" }
+    }
+
+    fn withPort(document, root, address) = match port(document) {
+        Success { value } => Success { value: Settings { root: root, address: address, port: value } }
+        Error { message } => Error { message: message }
+    }
+
+    fn withAddress(document, root) = match text(document, "address") {
+        Success { value } => withPort(document, root, value)
+        Error { message } => Error { message: message }
+    }
+
+    fn settingsOf(document) = match text(document, "root") {
+        Success { value } => withAddress(document, value)
+        Error { message } => Error { message: message }
+    }
+
+    /// Settings from configuration text, or a `config.*` / `json.*` code.
+    export fn parse(source) = match Json::parse(source) {
+        Success { value } => settingsOf(value)
+        Error { message } => Error { message: Json::describe(message) }
+    }
+
+    /// Settings read through `Host::Files`, or the reason they are unusable.
+    export fn load() = match perform Host::Files.read(fileName) {
+        Success { value } => parse(value)
+        Error { message } => Error { message: "config.unreadable: ${fileName}: ${message}" }
+    }
+}

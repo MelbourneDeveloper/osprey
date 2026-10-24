@@ -101,7 +101,7 @@ module ManifestSections {
         Error => false
     })
 
-    fn uniqueStrings(xs) = match Order::canonicalSet(xs, Order::compareStrings) {
+    fn uniqueStrings(xs) = match Order::canonicalSet(xs) {
         Success => true
         Error => false
     }
@@ -202,7 +202,7 @@ module ManifestSections {
 
     fn keywordsOk(keywords, span) = if length(keywords) > keywordMax { fail("manifest.keywords.count", span) }
         else if !foldList(keywords, true, fn(ok, k) => ok && keywordOk(k)) { fail("manifest.keyword.grammar", span) }
-        else if !Order::strictlyAscending(keywords, Order::compareStrings) { fail("manifest.keywords.order", span) }
+        else if !Order::strictlyAscending(keywords) { fail("manifest.keywords.order", span) }
         else { Success { value: keywords } }
 
     fn summaryOk(summary, span) = if byteLength(summary) > summaryMax { fail("manifest.summary.length", span) }

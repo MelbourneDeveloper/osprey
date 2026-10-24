@@ -238,7 +238,7 @@ module SatSearch {
                 false => {
                     let r = reasonOf(s, v)
                     let m2 = absorb(s, cur, acc.m, listGet(s.db.clauses, r) ?: [], v)
-                    Progress { m: Marks { seen: m2.seen, pathC: m2.pathC - 1, lower: m2.lower }, roots: listAppend(acc.roots, rootIdsOf(s, r)), uip: 0 }
+                    Progress { m: Marks { seen: m2.seen, pathC: m2.pathC - 1, lower: m2.lower }, roots: listConcat(acc.roots, rootIdsOf(s, r)), uip: 0 }
                 }
             }
         }

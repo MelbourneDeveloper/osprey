@@ -200,8 +200,8 @@ server and the files under its root.
 - A release directory holds the package's source exactly as published: the
   manifest plus every source and declared data file.
 - `@scope/name` follows `[PACKAGE-NAMES]`. `<epoch>.<ordinal>` are the
-  non-negative integers of `[PACKAGE-IDENTITY]`, written in decimal without
-  leading zeros.
+  epoch and ordinal of `[PACKAGE-IDENTITY]`: positive integers written in
+  decimal without sign or leading zeros, so the first release is `1.1`.
 - A release directory is immutable once served. A new release is a new
   `<epoch>.<ordinal>` directory; editing a served release is an operator error
   that the server reports as a digest change, never silently serves.

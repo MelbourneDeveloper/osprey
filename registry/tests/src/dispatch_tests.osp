@@ -13,15 +13,8 @@ module DispatchTests {
         }
     }
 
-    let manifest = "[project]\nname = \"ledger\"\n[package]\nname = \"@finch/ledger\"\nlicense = \"MIT\"\nsummary = \"s\"\nkeywords = [\"a\"]\n"
-
     fn healthyFiles() = handler Host::Files {
-        read path => if path == "osprey.toml" { Success { value: manifest } } else { Success { value: "osprey doctor probe" } }
-        write _path content => Success { value: byteLength(content) }
-    }
-
-    fn badManifestFiles() = handler Host::Files {
-        read path => if path == "osprey.toml" { Success { value: "[project]\nname = \"x\"\n[dependencies]\n\"@a/b\" = \"^1\"\n" } } else { Success { value: "osprey doctor probe" } }
+        read _path => Success { value: "osprey doctor probe" }
         write _path content => Success { value: byteLength(content) }
     }
 
@@ -34,11 +27,20 @@ module DispatchTests {
         write _path _content => Error { message: "writeFile: denied" }
     }
 
+    fn healthyTree() = handler Host::Tree {
+        walk _root => Error { message: "fixture: no walk" }
+        ensure _dir => Success { value: 0 }
+    }
+
+    fn healthyWeb() = handler Host::Web {
+        get _base _path => Error { message: "http.transport: fixture offline" }
+    }
+
     fn doctor() = Dispatch::run(["doctor"])
 
     /// `Dispatch::run` may perform host effects on any argument, so every call
     /// runs under fixture handlers even when the command touches none.
-    fn onHealthyHost(body) = healthyFiles()(fn() => healthyProcess()(body))
+    fn onHealthyHost(body) = healthyFiles()(fn() => healthyProcess()(fn() => healthyTree()(fn() => healthyWeb()(body))))
 
     fn line(report, i) = listGet(report.lines, i) ?: ""
 
@@ -70,23 +72,13 @@ module DispatchTests {
             line(report, 0) == "process: ok",
             line(report, 1) == "files: ok",
             line(report, 2) == "compiler: /usr/local/bin/osprey",
-            line(report, 3) == "manifest: ok (ledger)",
-            length(report.lines) == 4 + length(Capabilities::blocked()),
-            startsWith(line(report, 4), "blocked: process.argv")
-        ])
-    }
-
-    fn doctorManifests() = {
-        let bad = badManifestFiles()(fn() => healthyProcess()(doctor))
-        let none = brokenFiles()(fn() => healthyProcess()(doctor))
-        checkAll("doctor reports the manifest verdict from the Osprey manifest core", [
-            line(bad, 3) == "manifest: manifest.dependency.version at 4:1",
-            line(none, 3) == "manifest: none (no osprey.toml in the working directory)"
+            length(report.lines) == 3 + length(Capabilities::blocked()),
+            startsWith(line(report, 3), "blocked: process.argv")
         ])
     }
 
     fn doctorBroken() = {
-        let report = brokenFiles()(fn() => brokenProcess()(doctor))
+        let report = brokenFiles()(fn() => brokenProcess()(fn() => healthyTree()(fn() => healthyWeb()(doctor))))
         checkAll("doctor names each failing probe", [
             line(report, 0) == "process: failed (status 1)",
             line(report, 1) == "files: write failed: writeFile: denied",
@@ -98,6 +90,5 @@ module DispatchTests {
         test("dispatch: help and unknown commands", helpAndUnknown)
         test("dispatch: doctor on a healthy host", doctorHealthy)
         test("dispatch: doctor on a broken host", doctorBroken)
-        test("dispatch: doctor manifest verdicts", doctorManifests)
     }
 }

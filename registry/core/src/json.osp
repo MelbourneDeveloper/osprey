@@ -418,6 +418,41 @@ module Json {
         _ => Error { message: notObject }
     }
 
+    let wrongType = "json.wrong-type"
+
+    fn textOf(value) = match value {
+        Str { text } => Success { value: text }
+        _ => Error { message: wrongType }
+    }
+
+    fn intOf(value) = match value {
+        Num { value } => Success { value: value }
+        _ => Error { message: wrongType }
+    }
+
+    fn itemsOf(value) = match value {
+        Arr { items } => Success { value: items }
+        _ => Error { message: wrongType }
+    }
+
+    /// The string at `key`, or `json.missing-key` / `json.not-an-object` / `json.wrong-type`.
+    export fn textAt(object, key) = match get(object, key) {
+        Success { value } => textOf(value)
+        Error { message } => Error { message: message }
+    }
+
+    /// The integer at `key`, with the same failure codes as `textAt`.
+    export fn intAt(object, key) = match get(object, key) {
+        Success { value } => intOf(value)
+        Error { message } => Error { message: message }
+    }
+
+    /// The array items at `key`, with the same failure codes as `textAt`.
+    export fn itemsAt(object, key) = match get(object, key) {
+        Success { value } => itemsOf(value)
+        Error { message } => Error { message: message }
+    }
+
     /// `"${code} at byte ${offset}"` — the one human-facing rendering of a
     /// parse problem. Implements [REGISTRY-JSON-STRICT].
     export fn describe(problem) = "${problemCode(problem)} at byte ${problemOffset(problem)}"

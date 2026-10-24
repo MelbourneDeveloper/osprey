@@ -22,6 +22,10 @@ Create a pull request for the current branch with a well-structured description.
    - Details: new files, features, deps, modified behaviour
    - How Tests Prove It Works: specific test names or output
 6. Use `gh pr create` with the filled template
+7. Monitor the PR until it fails or goes green
+8. Create the fix, commit and push it and continue monitoring.
+9. Repeat until the PR goes green
+10. Merge
 
 ## Rules
 
@@ -34,3 +38,4 @@ Create a pull request for the current branch with a well-structured description.
 - `make ci` passed
 - PR created with `gh pr create`
 - PR URL returned to user
+- The PR gets successfully merged without any weaking of tests or the CI quality gates

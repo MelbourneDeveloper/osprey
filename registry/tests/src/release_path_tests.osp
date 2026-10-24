@@ -1,0 +1,84 @@
+namespace registry_tests;
+import registry::Identity
+import registry::Names
+import registry::ReleasePath
+
+/// [PACKAGE-FOLDER-REGISTRY] release directory path grammar.
+module ReleasePathTests {
+    fn code(text) = match ReleasePath::parse(text) {
+        Success => ""
+        Error { message } => message
+    }
+
+    fn shown(text) = match ReleasePath::parse(text) {
+        Success { value } => ReleasePath::format(value)
+        Error { message } => message
+    }
+
+    fn digestOf(text) = match ReleasePath::parse(text) {
+        Success { value } => value.digest
+        Error => "error"
+    }
+
+    fn fields() = match ReleasePath::parse("@finch/ledger/3.42") {
+        Success { value } => checkAll("parse splits key, epoch and ordinal", [
+            value.key.scope == "finch",
+            value.key.name == "ledger",
+            value.epoch == 3,
+            value.ordinal == 42,
+            value.digest == ""
+        ])
+        Error => checkAll("parse splits key, epoch and ordinal", [false])
+    }
+
+    fn accepts() = checkAll("release paths parse and round-trip", [
+        shown("@finch/ledger/3.42") == "@finch/ledger/3.42",
+        shown("@finch/ledger/0.0") == "@finch/ledger/0.0",
+        shown("@a1/b-2/1.1") == "@a1/b-2/1.1",
+        shown("@osprey/http/99.9223372036854775807") == "@osprey/http/99.9223372036854775807",
+        digestOf("@finch/ledger/3.42") == ""
+    ])
+
+    fn rejectsSegmentsAndNames() = checkAll("path and name rejections", [
+        code("") == "release-path.segments",
+        code("@finch/ledger") == "release-path.segments",
+        code("@finch/ledger/3.42/extra") == "release-path.segments",
+        code("/ledger/3.42") == "name.missing-at",
+        code("finch/ledger/3.42") == "name.missing-at",
+        code("@Finch/ledger/3.42") == "name.scope.chars",
+        code("@finch/Ledger/3.42") == "name.name.chars",
+        code("@/ledger/3.42") == "name.scope.length",
+        code("@finch//3.42") == "name.name.length"
+    ])
+
+    fn rejectsVersions() = checkAll("version segment rejections", [
+        code("@finch/ledger/3") == "release-path.version",
+        code("@finch/ledger/3.42.1") == "release-path.version",
+        code("@finch/ledger/03.42") == "release.epoch",
+        code("@finch/ledger/3.042") == "release.ordinal",
+        code("@finch/ledger/.42") == "release.epoch",
+        code("@finch/ledger/3.") == "release.ordinal",
+        code("@finch/ledger/") == "release-path.version",
+        code("@finch/ledger/-3.42") == "release.epoch",
+        code("@finch/ledger/+3.42") == "release.epoch",
+        code("@finch/ledger/3.4a") == "release.ordinal",
+        code("@finch/ledger/0.1") == "release.epoch",
+        code("@finch/ledger/1.0") == "release.ordinal",
+        code("@finch/ledger/9223372036854775808") == "release-path.version"
+    ])
+
+    fn formatsWithDigest() = {
+        let id = Identity::ReleaseId { key: Names::Key { scope: "finch", name: "ledger" }, epoch: 3, ordinal: 42, digest: "sha256:aa" }
+        checkAll("format ignores the digest and renders the directory", [
+            ReleasePath::format(id) == "@finch/ledger/3.42"
+        ])
+    }
+
+    export fn run() = {
+        test("release paths: parse fields", fields)
+        test("release paths: canonical round-trip", accepts)
+        test("release paths: path and name rejections", rejectsSegmentsAndNames)
+        test("release paths: version rejections", rejectsVersions)
+        test("release paths: format", formatsWithDigest)
+    }
+}
