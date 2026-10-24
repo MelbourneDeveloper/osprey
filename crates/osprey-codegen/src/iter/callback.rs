@@ -31,6 +31,28 @@ fn lambda(cg: &Codegen, expr: &Expr) -> Result<Callback> {
     Ok(known_lambda(cg, definition, None))
 }
 
+/// The concrete inferred type of a lambda callback's `index`-th parameter;
+/// `None` for a named or computed callback, or a still-generic lambda.
+pub(crate) fn param_type(
+    cg: &Codegen,
+    callback: &Callback,
+    index: usize,
+) -> Option<osprey_types::Type> {
+    let (Callback::Lambda(.., position) | Callback::Closed(.., position)) = callback else {
+        return None;
+    };
+    let declared = cg
+        .prog
+        .lambda_type(cg.source_function.as_deref(), *position)?;
+    let osprey_types::Type::Fun { params, .. } = declared else {
+        return None;
+    };
+    params
+        .get(index)
+        .filter(|ty| !osprey_types::has_type_var(ty))
+        .cloned()
+}
+
 fn identifier(cg: &mut Codegen, name: &str) -> Result<Callback> {
     if let Some(sig) = cg.fn_ptr_locals.get(name) {
         return Ok(Callback::Local(name.to_string(), sig.clone()));

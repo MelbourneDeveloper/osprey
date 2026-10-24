@@ -196,6 +196,25 @@ pub(crate) fn acc_init(cg: &mut Codegen, args: &[Expr]) -> Result<(String, Value
     Ok((acc, tmpl))
 }
 
+/// The accumulator template, tagged with the element its callback inferred.
+/// An empty `Map()`/`List()` seed names no element, yet the template re-tags
+/// the accumulator at every step and at the end: a fold stepped by a lambda
+/// that alone fixes the value type read a stored list as an integer word
+/// (`mapGet(m, p) ?: []` — "match arms disagree on type") and returned a map
+/// whose strings came back as numbers [BUILTIN-LIST-FOLD].
+fn typed_seed(cg: &Codegen, mut seed: Value, combine: &Callback) -> Value {
+    let bare = matches!(
+        seed.osp_ty.as_deref(),
+        Some(crate::collections::MAP_OWNER | crate::collections::LIST_OWNER)
+    );
+    let inferred =
+        callback::param_type(cg, combine, 0).and_then(|ty| crate::types::owner_name(&cg.prog, &ty));
+    if let (true, Some(owner)) = (bare, inferred) {
+        seed.osp_ty = Some(owner);
+    }
+    seed
+}
+
 /// Recover the loop-carried accumulator (stored as a uniform `i64`) as a value
 /// of its real type, restoring the owner/Result/fiber tags from the seed. A
 /// record accumulator comes back as a tagged pointer handle, so an inlined
@@ -264,8 +283,9 @@ pub(crate) fn acc_result(cg: &mut Codegen, acc: &str, tmpl: &Value) -> Value {
 /// `fold(iterator, initial, fn)` — counted loop accumulating `fn(acc, elem)`.
 fn fold(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let range = gen_expr(cg, nth(args, 0)?)?;
-    let (acc, tmpl) = acc_init(cg, args)?;
+    let (acc, seed) = acc_init(cg, args)?;
     let combine = callback_of(cg, nth(args, 2)?)?;
+    let tmpl = typed_seed(cg, seed, &combine);
     each_range_elem(cg, &range, |cg, elem| {
         acc_step(cg, &acc, &tmpl, &combine, elem)
     })?;
@@ -383,8 +403,9 @@ fn to_list(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 /// `foldList(list, initial, fn)` — reduce a list with `fn(acc, elem)`.
 fn fold_list(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let l = list_arg(cg, args, 0)?;
-    let (acc, tmpl) = acc_init(cg, args)?;
+    let (acc, seed) = acc_init(cg, args)?;
     let combine = callback_of(cg, nth(args, 2)?)?;
+    let tmpl = typed_seed(cg, seed, &combine);
     each_list_elem(cg, &l, |cg, _, elem| {
         acc_step(cg, &acc, &tmpl, &combine, elem)
     })?;
