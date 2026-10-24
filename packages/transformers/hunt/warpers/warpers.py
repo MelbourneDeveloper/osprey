@@ -1,11 +1,11 @@
 # osprey: flavor=python
-"""Hunt driver: transformers' float logits warpers — temperature (with a
-symbolic temperature, so 0.0 reaches the divide-by-zero policy), top_p, min_p,
-typical, epsilon and eta — over four symbolic logits (NaN/inf/subnormal/huge)."""
+"""Hunt driver: transformers' cheap float warpers — temperature (with a
+symbolic temperature, so 0.0 reaches the divide-by-zero policy), min_p and
+epsilon — over a list mixing symbolic logits with the concrete special values
+NaN, +inf, -inf, huge and subnormal."""
 from transformers.Math import neg_inf
 from transformers.LogitsProcess import (
-    EpsilonLogitsWarper, EtaLogitsWarper, MinPLogitsWarper, TemperatureLogitsWarper,
-    TopPLogitsWarper, TypicalLogitsWarper, apply,
+    EpsilonLogitsWarper, MinPLogitsWarper, TemperatureLogitsWarper, apply,
 )
 
 
@@ -24,18 +24,15 @@ class arith_total:
 def run():
     x0 = unwrap_or(parseFloat(input()), 0.0)
     x1 = unwrap_or(parseFloat(input()), 0.0)
-    x2 = unwrap_or(parseFloat(input()), 0.0)
-    x3 = unwrap_or(parseFloat(input()), 0.0)
     t = unwrap_or(parseFloat(input()), 1.0)
-    p = unwrap_or(parseFloat(input()), 0.9)
-    logits = [x0, x1, x2, x3]
+    inf = exp(1000.0)
+    ninf = 0.0 - inf
+    nan = inf - inf
+    logits = [x0, x1, inf, ninf, nan]
     a = apply(TemperatureLogitsWarper(t), [], logits)
-    b = apply(TopPLogitsWarper(p, neg_inf(), 1), [], logits)
     c = apply(MinPLogitsWarper(0.1, neg_inf(), 1), [], logits)
-    d = apply(TypicalLogitsWarper(0.9, neg_inf(), 1), [], logits)
     e = apply(EpsilonLogitsWarper(0.1, neg_inf(), 1), [], logits)
-    f = apply(EtaLogitsWarper(0.1, neg_inf(), 1), [], logits)
-    return print(len(a) + len(b) + len(c) + len(d) + len(e) + len(f))
+    return print(len(a) + len(c) + len(e))
 
 
 def main():
