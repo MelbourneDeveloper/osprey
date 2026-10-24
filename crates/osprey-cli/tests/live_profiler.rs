@@ -26,10 +26,7 @@ use serde_json::{json, Value};
 #[path = "cases/live_fixture.rs"]
 mod live_fixture;
 
-use live_fixture::{Fixture, HOT_FUNCTION};
-
-/// `spin` in the fixture: its signature through its last arm.
-const SPIN_LINES: std::ops::RangeInclusive<i64> = 9..=13;
+use live_fixture::{Fixture, Flavor, HOT_FUNCTION};
 
 #[derive(Debug)]
 struct Silent;
@@ -131,7 +128,7 @@ fn samples(report: &Value) -> i64 {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_program_is_listed_as_an_attachable_osprey_process() {
-    let fixture = Fixture::start("lp-list");
+    let fixture = Fixture::start("lp-list", Flavor::Default);
     let service = service(&fixture);
     let list = call(
         &service,
@@ -173,7 +170,17 @@ async fn the_program_is_listed_as_an_attachable_osprey_process() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn cpu_profiling_finds_the_hot_function_and_its_lines() {
-    let fixture = Fixture::start("lp-cpu");
+    finds_the_hot_function_and_its_lines(Flavor::Default, "lp-cpu").await;
+}
+
+// The ML twin is attributed to its own .ospml source, line for line.
+#[tokio::test(flavor = "multi_thread")]
+async fn cpu_profiling_finds_the_ml_twins_hot_function_and_its_lines() {
+    finds_the_hot_function_and_its_lines(Flavor::Ml, "lp-cpu-ml").await;
+}
+
+async fn finds_the_hot_function_and_its_lines(flavor: Flavor, name: &str) {
+    let fixture = Fixture::start(name, flavor);
     let service = service(&fixture);
     let report = profile(&service, &fixture, json!({}), 3).await;
     assert!(samples(&report) > 100, "{report}");
@@ -182,7 +189,7 @@ async fn cpu_profiling_finds_the_hot_function_and_its_lines() {
         .find(|f| f.get("name") == Some(&json!(HOT_FUNCTION)))
         .unwrap_or_else(|| panic!("{HOT_FUNCTION} absent: {report}"));
     let file = spin.get("file").and_then(Value::as_str).unwrap_or_default();
-    assert!(file.ends_with("live_attach.osp"), "{spin}");
+    assert!(file.ends_with(flavor.source()), "{spin}");
     let share = spin
         .get("percentage")
         .and_then(Value::as_f64)
@@ -199,7 +206,9 @@ async fn cpu_profiling_finds_the_hot_function_and_its_lines() {
         lines
             .iter()
             .any(|l| l.get("file").and_then(Value::as_str) == Some(file)
-                && SPIN_LINES.contains(&l.get("line").and_then(Value::as_i64).unwrap_or(0))),
+                && flavor
+                    .spin_lines()
+                    .contains(&l.get("line").and_then(Value::as_i64).unwrap_or(0))),
         "a hot line inside {HOT_FUNCTION}: {report}"
     );
     for key in ["speedscope_path", "flamegraph_path", "cpuprofile_path"] {
@@ -216,7 +225,16 @@ async fn cpu_profiling_finds_the_hot_function_and_its_lines() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn native_frames_appear_only_on_request() {
-    let fixture = Fixture::start("lp-native");
+    native_frames_only_on_request(Flavor::Default, "lp-native").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_ml_twins_native_frames_appear_only_on_request() {
+    native_frames_only_on_request(Flavor::Ml, "lp-native-ml").await;
+}
+
+async fn native_frames_only_on_request(flavor: Flavor, name: &str) {
+    let fixture = Fixture::start(name, flavor);
     let service = service(&fixture);
     // A native frame is any frame outside Osprey source (.osp or .ospml):
     // unlocated on a host without system debug info, located in libc
@@ -247,7 +265,7 @@ async fn native_frames_appear_only_on_request() {
 /// process without an endpoint (this test binary) is `UNSUPPORTED_RUNTIME`.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_pid_without_an_osprey_endpoint_is_classified() {
-    let fixture = Fixture::start("lp-errors");
+    let fixture = Fixture::start("lp-errors", Flavor::Default);
     let service = service(&fixture);
     let missing = json!({ "pid": 999_999 });
     assert_eq!(
@@ -262,7 +280,7 @@ async fn a_pid_without_an_osprey_endpoint_is_classified() {
 /// [PROF-CPU-START]: a pid with a session is `ALREADY_PROFILING`.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_second_session_on_the_same_program_is_refused() {
-    let fixture = Fixture::start("lp-busy");
+    let fixture = Fixture::start("lp-busy", Flavor::Default);
     let service = service(&fixture);
     let started = call(&service, methods::CPU_START, json!({ "pid": fixture.pid })).await;
     assert_eq!(
@@ -283,7 +301,7 @@ async fn a_second_session_on_the_same_program_is_refused() {
 /// [PROF-CPU-SESSIONS]: a duration ends the session by itself.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_duration_caps_the_recorded_time() {
-    let fixture = Fixture::start("lp-duration");
+    let fixture = Fixture::start("lp-duration", Flavor::Default);
     let service = service(&fixture);
     let report = profile(&service, &fixture, json!({ "duration_secs": 1.0 }), 3).await;
     let secs = report
@@ -301,7 +319,7 @@ async fn a_duration_caps_the_recorded_time() {
 /// [PROF-CPU-SNAPSHOT]: samples stream while recording, so a snapshot has them.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_mid_session_snapshot_reports_the_samples_so_far() {
-    let fixture = Fixture::start("lp-snapshot");
+    let fixture = Fixture::start("lp-snapshot", Flavor::Default);
     let service = service(&fixture);
     let started = call(&service, methods::CPU_START, json!({ "pid": fixture.pid })).await;
     let session = json!({ "session_id": started.get("session_id") });
@@ -319,7 +337,7 @@ async fn a_mid_session_snapshot_reports_the_samples_so_far() {
 /// it lived.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_program_killed_mid_session_keeps_its_samples() {
-    let mut fixture = Fixture::start("lp-killed");
+    let mut fixture = Fixture::start("lp-killed", Flavor::Default);
     let service = service(&fixture);
     let started = call(&service, methods::CPU_START, json!({ "pid": fixture.pid })).await;
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -343,7 +361,7 @@ async fn a_program_killed_mid_session_keeps_its_samples() {
 /// root of every whole stack, `main`, would always win.
 #[tokio::test(flavor = "multi_thread")]
 async fn live_progress_names_where_the_time_is_spent_not_the_entry_point() {
-    let fixture = Fixture::start("lp-progress");
+    let fixture = Fixture::start("lp-progress", Flavor::Default);
     let recorder = Arc::new(Recorder::default());
     let service = service_with(&fixture, Arc::<Recorder>::clone(&recorder));
     let report = profile(&service, &fixture, json!({}), 3).await;

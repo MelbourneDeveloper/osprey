@@ -13,13 +13,53 @@ pub(crate) const HOT_FUNCTION: &str = "spin";
 /// How long a test waits for the fixture's endpoint to appear.
 const STARTUP: Duration = Duration::from_secs(20);
 
-/// The fixture binary, compiled once for every test in this file. Under
-/// target/, so a run leaves nothing in the system temp directory.
-pub(crate) fn fixture_exe() -> &'static Path {
-    static EXE: OnceLock<PathBuf> = OnceLock::new();
-    EXE.get_or_init(|| {
-        let exe = Path::new(env!("CARGO_TARGET_TMPDIR")).join("live_attach");
-        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/live_attach.osp");
+/// Which twin of the fixture runs: the Default `live_attach.osp` or its ML
+/// twin `live_attach.ospml`, the same program in each flavor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Flavor {
+    Default,
+    Ml,
+}
+
+impl Flavor {
+    /// The fixture's source file name.
+    pub(crate) const fn source(self) -> &'static str {
+        match self {
+            Self::Default => "live_attach.osp",
+            Self::Ml => "live_attach.ospml",
+        }
+    }
+
+    /// `spin` in this twin: its signature through its last arm.
+    pub(crate) const fn spin_lines(self) -> std::ops::RangeInclusive<i64> {
+        match self {
+            Self::Default => 9..=13,
+            Self::Ml => 9..=12,
+        }
+    }
+
+    const fn exe(self) -> &'static str {
+        match self {
+            Self::Default => "live_attach",
+            Self::Ml => "live_attach_ml",
+        }
+    }
+}
+
+/// The fixture binary for `flavor`, compiled once for every test in this
+/// file. Under target/, so a run leaves nothing in the system temp directory.
+pub(crate) fn fixture_exe(flavor: Flavor) -> &'static Path {
+    static DEFAULT: OnceLock<PathBuf> = OnceLock::new();
+    static ML: OnceLock<PathBuf> = OnceLock::new();
+    let compiled = match flavor {
+        Flavor::Default => &DEFAULT,
+        Flavor::Ml => &ML,
+    };
+    compiled.get_or_init(|| {
+        let exe = Path::new(env!("CARGO_TARGET_TMPDIR")).join(flavor.exe());
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(flavor.source());
         let status = Command::new(env!("CARGO_BIN_EXE_osprey"))
             .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
             .arg(&source)
@@ -42,14 +82,15 @@ pub(crate) struct Fixture {
 }
 
 impl Fixture {
-    pub(crate) fn start(name: &str) -> Self {
+    /// The `flavor` twin, running.
+    pub(crate) fn start(name: &str, flavor: Flavor) -> Self {
         // A Unix socket path is at most 103 bytes on macOS, and a coverage
         // build's target directory is already most of that; the system temp
         // directory leaves room for `osprey-diagnostics-<uid>/<pid>.sock`.
         let tmp = std::env::temp_dir().join(format!("{name}-{}", std::process::id()));
         drop(std::fs::remove_dir_all(&tmp));
         std::fs::create_dir_all(&tmp).expect("scratch directory");
-        let child = Command::new(fixture_exe())
+        let child = Command::new(fixture_exe(flavor))
             .env("TMPDIR", &tmp)
             .stdin(Stdio::null())
             .stdout(Stdio::null())

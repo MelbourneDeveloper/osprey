@@ -18,7 +18,7 @@ use serde_json::{json, Value};
 #[path = "cases/live_fixture.rs"]
 mod live_fixture;
 
-use live_fixture::{Fixture, HOT_FUNCTION};
+use live_fixture::{Fixture, Flavor, HOT_FUNCTION};
 
 /// `osprey lsp` with its stdio, killed on drop.
 struct Server {
@@ -104,7 +104,18 @@ impl Drop for Server {
 
 #[test]
 fn the_language_server_lists_and_profiles_a_running_program() {
-    let fixture = Fixture::start("lsp-cpu");
+    lists_and_profiles(Flavor::Default, "lsp-cpu");
+}
+
+#[test]
+fn the_language_server_lists_and_profiles_a_running_ml_program() {
+    lists_and_profiles(Flavor::Ml, "lsp-cpu-ml");
+}
+
+/// `osprey lsp` finds the running `flavor` twin and attributes its hot
+/// function to that twin's own source.
+fn lists_and_profiles(flavor: Flavor, name: &str) {
+    let fixture = Fixture::start(name, flavor);
     let socket = fixture.socket_dir.join(format!("{}.sock", fixture.pid));
     assert!(socket.exists(), "the program serves {}", socket.display());
     let mut server = Server::start(&fixture);
@@ -141,8 +152,25 @@ fn the_language_server_lists_and_profiles_a_running_program() {
         .map_or(&[][..], Vec::as_slice);
     assert!(
         hot.iter()
-            .any(|f| f.get("name") == Some(&json!(HOT_FUNCTION))),
+            .any(|f| f.get("name") == Some(&json!(HOT_FUNCTION))
+                && f.get("file")
+                    .and_then(Value::as_str)
+                    .is_some_and(|file| file.ends_with(flavor.source()))),
         "{report}"
+    );
+    let lines = report
+        .get("hot_lines")
+        .and_then(Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
+    assert!(
+        lines.iter().any(|l| l
+            .get("file")
+            .and_then(Value::as_str)
+            .is_some_and(|file| file.ends_with(flavor.source()))
+            && flavor
+                .spin_lines()
+                .contains(&l.get("line").and_then(Value::as_i64).unwrap_or(0))),
+        "a hot line inside {HOT_FUNCTION}: {report}"
     );
     let shutdown = server.request(5, "shutdown", &Value::Null);
     assert!(shutdown.get("error").is_none(), "{shutdown}");
