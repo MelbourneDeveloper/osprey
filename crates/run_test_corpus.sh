@@ -29,7 +29,9 @@ set -u
 ROOT=${OSPREY_ROOT:-${0:A:h}/..}
 ROOT=${ROOT:A}
 SCRIPT=${0:A}
-BIN=$ROOT/target/release/osprey
+# OSPREY_BIN points the corpus at another build of the compiler (a worktree's,
+# or one built into a separate target directory) without touching the default.
+BIN=${OSPREY_BIN:-$ROOT/target/release/osprey}
 TESTDIR=$ROOT/tests
 SMOKE=$ROOT/scripts/wasm-smoke.mjs
 
