@@ -218,14 +218,16 @@ async fn cpu_profiling_finds_the_hot_function_and_its_lines() {
 async fn native_frames_appear_only_on_request() {
     let fixture = Fixture::start("lp-native");
     let service = service(&fixture);
-    // A native frame is any frame outside Osprey source: unlocated on a host
-    // without system debug info, located in libc (`./stdio-common/...`) on one
-    // with it, as on the Linux runners.
+    // A native frame is any frame outside Osprey source (.osp or .ospml):
+    // unlocated on a host without system debug info, located in libc
+    // (`./stdio-common/...`) on one with it, as on the Linux runners.
     let native = |report: &Value| {
         hot_functions(report).iter().any(|f| {
-            f.get("file")
-                .and_then(Value::as_str)
-                .is_none_or(|file| Path::new(file).extension().is_none_or(|e| e != "osp"))
+            f.get("file").and_then(Value::as_str).is_none_or(|file| {
+                Path::new(file)
+                    .extension()
+                    .is_none_or(|e| e != "osp" && e != "ospml")
+            })
         })
     };
     let source_only = profile(&service, &fixture, json!({}), 2).await;
