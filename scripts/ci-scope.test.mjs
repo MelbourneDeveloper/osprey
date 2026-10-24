@@ -19,6 +19,7 @@ const cases = [
   ['changed CI workflow', ['.github/workflows/ci.yml'], true, false, false],
   ['unknown future component', ['new-compiler/main.py'], true, false, false],
   ['embedded compiler documentation', ['crates/osprey-cli/assets/help.md'], true, false, false],
+  ['ported package documentation the package suite checks', ['packages/testing/README.md'], true, false, false],
 ]
 for (const [label, files, code, book, benchmarks] of cases) {
   test(label, () => assert.deepEqual(classify(files), { code, website: false, book, benchmarks }))
