@@ -22,7 +22,7 @@ fn nest(grouped: Vec<(String, Vec<MlHandleArm>)>, body: MlExpr, pos: Position) -
     let mut region = body;
     for (index, (effect, arms)) in grouped.into_iter().enumerate().rev() {
         region = MlExpr::Handle {
-            return_clause: None,
+            clauses: super::cst::MlClauses::default(),
             stage: region_stage(index),
             effect,
             arms,

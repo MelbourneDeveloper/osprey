@@ -78,13 +78,16 @@ fn main() -> ExitCode {
 fn report_version(args: &[String]) -> ExitCode {
     // [SWR-VERSION-BUILD-STAMPING] [SWR-VERSION-CLI-OUTPUT]
     let version = option_env!("OSPREY_VERSION").map_or("0.0.0-dev", |value| value);
+    // The commit follows the probed `name version` line, so a stale build is
+    // visible without disturbing the version a probe parses.
+    let commit = env!("OSPREY_COMMIT");
     if args.iter().any(|arg| arg == "--json") {
         println!(
             "{{\"manifestVersion\":1,\"name\":\"osprey\",\"version\":\"{version}\",\
-\"kind\":\"cli\",\"product\":\"osprey\"}}"
+\"kind\":\"cli\",\"product\":\"osprey\",\"commit\":\"{commit}\"}}"
         );
     } else {
-        println!("osprey {version}");
+        println!("osprey {version}\ncommit {commit}");
     }
     ExitCode::SUCCESS
 }

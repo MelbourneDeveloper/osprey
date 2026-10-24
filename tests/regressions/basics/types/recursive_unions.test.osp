@@ -47,11 +47,11 @@ match arr {
     _              => print("not arr")
 }
 match arr {
-    JArr { items } => match listContains(items, jNum)  { true => print("hasNum")  false => print("lostNum")  }
+    JArr { items } => match listContains(mapList(items, describe), describe(jNum))  { true => print("hasNum")  false => print("lostNum")  }
     _              => print("not arr")
 }
 match arr {
-    JArr { items } => match listContains(items, jBool) { true => print("hasBool") false => print("lostBool") }
+    JArr { items } => match listContains(mapList(items, describe), describe(jBool)) { true => print("hasBool") false => print("lostBool") }
     _              => print("not arr")
 }
 
@@ -76,7 +76,7 @@ match obj {
     _                => print("not obj")
 }
 match obj {
-    JObj { entries } => match listContains(mapValues(entries), nameVal) { true => print("hasName") false => print("lostName") }
+    JObj { entries } => match listContains(mapList(mapValues(entries), describe), describe(nameVal)) { true => print("hasName") false => print("lostName") }
     _                => print("not obj")
 }
 match obj {
@@ -211,7 +211,7 @@ fn recursiveUnionCase() = {
         _ => 0
     }
     let arrayHasNumber = match recursiveArray {
-        JArr { items } => listContains(items, arrayNumber)
+        JArr { items } => listContains(mapList(items, describe), describe(arrayNumber))
         _ => false
     }
     let recursiveObject = JObj {

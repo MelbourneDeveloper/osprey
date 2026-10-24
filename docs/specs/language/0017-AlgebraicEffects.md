@@ -116,6 +116,10 @@ instanceExpr ::= "instance" effectRef
 handlerTarget ::= effectRef | capabilityName
 handlerValue ::= "handler" [ "static" ] handlerTarget "{" clauses "}"
 maskExpr ::= "mask" handlerTarget "{" expr "}"
+clauses ::= { handlerArm } [ returnClause ] { handlerArm } [ finallyClause ] { handlerArm }
+          | { handlerArm } finallyClause { handlerArm } [ returnClause ] { handlerArm }
+returnClause ::= "return" identifier "=>" expr
+finallyClause ::= "finally" "=>" expr
 ```
 
 Here `capabilityName` resolves to an ordinary bound instance value; effect names resolve to declarations. ML replaces braces with layout. `instance` accepts a declaration/instantiation, not an existing `@capability` row reference. Block-scoped `handle` uses the same target and clauses as `handler`.
@@ -130,12 +134,32 @@ parameter binds the corresponding row identity; unrelated instances never unify.
 A fresh identity can escape only with its lifetime/requirements preserved, never
 as a claim that its future operations have already been handled.
 
+The compiler fixes each capability's identity at its `instance` site: the type
+is `Capability<E, #line:col>`, so two `instance` expressions never unify, even
+of the same effect. A capability name in `perform`, `handle`, `handler` or
+`mask` resolves lexically to a binding before any effect declaration. The
+static effect proof tracks each capability as its own requirement (rendered
+`Store@3:15.get` in diagnostics), and an unhandled capability operation is an
+ordinary unhandled-effect error. An effect form that names a binding whose type
+is not a capability is rejected. A compile-time handler (`handle static`) cannot
+answer a capability, because a capability is a runtime identity. At runtime each
+`instance` draws a fresh identity and the default identity is `0`. A handler
+answers only requests carrying its own identity.
+
 `[EFFECTS-MASK]` Default `mask E { body }` and ML `mask E` with an indented body
 skip one enclosing activation for that resolved effect instance while evaluating
 `body`. Masking a named capability uses `mask db`. It skips that activation's
 arms, preserves other effects and any handlers installed inside `body`, and
 requires the skipped outer scope in the row. Nested masks skip successive
 activations. It neither removes the requirement nor grants an implementation.
+
+The static proof counts the masks a request is under. A request under `n` masks
+of its effect instance is discharged by the `n+1`th enclosing activation that
+answers its operation. Nesting depth and handler counts saturate at a fixed
+bound, and a saturated request is never discharged, so the proof stays sound. A
+`mask` that would skip into a compile-time handler of the same effect is
+rejected: discharge removes that activation before the program runs, so there is
+nothing to skip.
 
 <a id="effectful-function-types"></a>
 <a id="effect-row-polymorphism-effects-row-poly"></a>
@@ -207,11 +231,34 @@ a builtin name cannot confer builtin effect behavior.
 record fields, list and map elements, collection `+`, Result payloads, and fibers.
 An operator that produces a primitive value does not carry the callable
 provenance of its operands into that result. Analysis of recursive aggregates
-must reach a finite fixed point. If a nested value must be widened, projections
+must reach a finite fixed point: a repeated structural access cycle is
+summarised as every callable stored below it. If a nested value must be
+widened, projections
 through it remain unknown rather than being treated as pure; invoking an
 unresolved callable is rejected. Widening never removes a known operation
 requirement or turns an unknown field into proof that a same-named free function
 was selected.
+
+`[EFFECTS-FIELD-ROWS]` A function-typed record or variant field may write a
+closed row after its type: `press: fn(string) -> int ![]` in Default,
+`press : (string) -> int ![]` in ML. Every construction must store a function
+whose effects fit the row. An empty row also excludes runtime builtins such as
+`print`, and a stored function whose effects cannot be proven is rejected. A
+call through the field then performs exactly the written row, whether the field
+is projected, bound by a pattern or called as a method, and wherever the value
+travelled. This holds where its own provenance is not tracked, such as across
+`map`, `toList` and `mapList`. A field name declared in several types is trusted
+only when every declaration writes a row; the call performs their union. A field
+row has no open tail. Each entry names a declared effect, and a generic effect
+names its instance (`![Signal<Query>]`).
+
+```osprey
+effect Alarm { ring: fn() -> int }
+type Control = { label: string, press: fn(string) -> int ![] }
+
+let quiet = Control { label: "go", press: fn(text) => length(text) }       // accepted
+let loud = Control { label: "go", press: fn(text) => perform Alarm.ring() } // rejected
+```
 
 ## Handler-owned state
 
@@ -283,6 +330,12 @@ an affine resource or copy a finalizer's authority to release a shared resource.
 Nested finalizers execute inner to outer. A finalizer that itself transfers
 control must still unwind the remaining outer finalizers; already-run cleanup
 is never repeated.
+
+Runtime handlers register their cleanup on a per-thread finalizer stack before
+the activation starts. Normal completion runs the top entry after the return
+clause. A dropped continuation unwinds the stack inner to outer as its body
+thread exits. Each entry runs once either way. A compile-time handler's cleanup
+is discharged into the program as `let answer = body; cleanup; answer`.
 
 ## Runtime transport obligations
 
@@ -404,7 +457,9 @@ A one-shot platform stack-switch primitive does not prohibit multi-shot implemen
 
 `[STAGE-SIGNALS-REBUILD]` A reactive consumer invalidates computations whose may-read sets contain a changed signal. Conservative widening may cause extra work; missing a possible dependency is a correctness defect. Dependency analysis alone does not implement scheduling, change propagation or a UI runtime.
 
-`[STAGE-SIGNALS-CACHE]` `signalDependencies(work)` supplies the sorted may-read identities without invoking the callback; `signalSnapshot(work)` invokes it once and returns an immutable `{ dependencies, value, revision }` snapshot, starting at revision 1. `signalRefresh(cached, changed, work)` rebuilds once when a dependency changed, its may-read set differs, or dependencies or changes contain `<unknown>`; otherwise it retains the existing snapshot without invoking `work`. A rebuild replaces the value and increments revision; it never mutates an older snapshot. Arguments evaluate once, left to right. Callback creation retains its ordinary effects; cached callable payloads retain their latent requirements. Updates are synchronous and callers supply all changed identities for a batch. See the [reactive signals guide](../../../website/src/docs/reactive-signals.md).
+`[STAGE-SIGNALS-CACHE]` `signalDependencies(work)` supplies the sorted may-read identities without invoking the callback; `signalSnapshot(work)` invokes it once and returns an immutable `{ dependencies, value, revision }` snapshot, starting at revision 1. That structural record is spelled `SignalSnapshot<T>` in a signature, so a helper that builds or forwards a snapshot can be annotated; a record literal with the same three fields is a `SignalSnapshot<T>`, and a nominal record type is not. `signalRefresh(cached, changed, work)` rebuilds once when a dependency changed, its may-read set differs, or dependencies or changes contain `<unknown>`; otherwise it retains the existing snapshot without invoking `work`. A rebuild replaces the value and increments revision; it never mutates an older snapshot. Arguments evaluate once, left to right. Callback creation retains its ordinary effects; cached callable payloads retain their latent requirements. Updates are synchronous and callers supply all changed identities for a batch. See the [reactive signals guide](../../../website/src/docs/reactive-signals.md).
+
+`[STAGE-SIGNALS-STD]` The standard signals layer is prelude source attached on demand, so an application stops declaring its own reader and frame cache. It declares `static effect Signal<T> { read: fn() -> T }`; `type SignalFrame = SignalFrame(string, List<string>, int)` — a key, its dependencies and its revision; `KeyedSnapshot<T>`, a keyed `SignalSnapshot<T>`; and the functions `signalFrameKey`, `signalFrameDependencies`, `signalFrameRevision`, `signalFrame`, `signalRetained`, `signalRefreshKeyed`, `signalForced`, `signalRevisionOf`, `signalChanges`, `signalFramesJson` and `signalFramesFromJson`. `signalRetained(frames, key, placeholder) -> SignalSnapshot<T>` is the snapshot to refresh for a key: an unseen or forced key carries the `<unknown>` dependency set and therefore rebuilds, and the placeholder value is never reused unless nothing the region read changed. `signalRefreshKeyed(frames, key, changed, placeholder, view) -> KeyedSnapshot<T>` refreshes one keyed region in a call; `signalForced(frames, key)` marks one key to rebuild at its next refresh; `signalRevisionOf(frames, key)` reads a key's kept revision, 0 when it has none. `signalChanges(before, after, encode, identities)` returns `identities` when `encode` renders the two stores differently, otherwise none. `signalFramesJson` always emits `[{"key": string, "dependencies": [string], "revision": int}, …]`, and `signalFramesFromJson` reads exactly that shape back — an element of any other shape is skipped, never guessed, so its key is then unseen and rebuilds. The layer attaches per the prelude's unit rule ([BUILTIN-JSON-TYPED]): only to a program that names one of its declarations, never to one that declares its own `Signal` effect or any of its data names, and always together with the `json` unit it is written against. Pinned by `tests/effects/staged/std_signals` in both flavors.
 
 ## Per-region backends — [STAGE-BACKEND]
 

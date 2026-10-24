@@ -51,13 +51,13 @@ match arr
     _ => print "not arr"
 match arr
     JArr items =>
-        match listContains items jNum
+        match listContains (mapList items describe) (describe jNum)
             true => print "hasNum"
             false => print "lostNum"
     _ => print "not arr"
 match arr
     JArr items =>
-        match listContains items jBool
+        match listContains (mapList items describe) (describe jBool)
             true => print "hasBool"
             false => print "lostBool"
     _ => print "not arr"
@@ -81,7 +81,7 @@ match obj
     _ => print "not obj"
 match obj
     JObj entries =>
-        match listContains (mapValues entries) nameVal
+        match listContains (mapList (mapValues entries) describe) (describe nameVal)
             true => print "hasName"
             false => print "lostName"
     _ => print "not obj"
@@ -222,7 +222,7 @@ recursiveUnionCase () =
         JArr items => listLength items
         _ => 0
     arrayHasNumber = match recursiveArray
-        JArr items => listContains items arrayNumber
+        JArr items => listContains (mapList items describe) (describe arrayNumber)
         _ => false
     recursiveObject = JObj(entries = Map() |> mapSet "answer" arrayNumber |> mapSet "word" arrayText)
     objectLength = match recursiveObject

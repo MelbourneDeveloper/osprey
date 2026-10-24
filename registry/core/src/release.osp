@@ -1,0 +1,21 @@
+namespace registry;
+import registry::Identity
+
+/// The served form of one folder-registry release and the catalog the server
+/// builds from a registry root. Shared by the server, the client and tests.
+/// Implements [PACKAGE-FOLDER-REGISTRY].
+module Release {
+    /// One file of a release, as UTF-8 text, by its path relative to the
+    /// release directory.
+    export type File = { relPath: string, content: string }
+
+    /// A valid release: its identity, whose digest is the `SourceDigest` of
+    /// `files`, and every file sorted by unsigned path bytes.
+    export type Served = { id: Identity::ReleaseId, files: List<File> }
+
+    /// A release directory the server refused, with its stable reason code.
+    export type Refused = { dir: string, code: string }
+
+    /// Every valid release, ordered by key, epoch, ordinal, and every refusal.
+    export type Catalog = { served: List<Served>, refused: List<Refused> }
+}

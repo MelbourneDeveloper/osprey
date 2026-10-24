@@ -1,0 +1,18 @@
+// osprey: flavor=ml
+// [BUILTIN-STRUCTURAL-EQUALS] The ML half of `structural_equals_function.ospo`:
+// a function's equality is not decided, so a `structuralEquals` operand that
+// contains one is a compile error in this flavor too.
+type Widget =
+    tab : string
+    onClick : int -> int
+
+same (a, b) = structuralEquals(a, b)
+inc n = n + 1
+widget () = Widget(tab = "home", onClick = inc)
+
+viaField () = structuralEquals(widget (), widget ())
+viaList () = structuralEquals([inc], [inc])
+viaMap () = structuralEquals(Map() |> mapSet("go", inc), Map() |> mapSet("go", inc))
+viaGenericCaller () = same(widget (), widget ())
+
+print "${toString (viaField ())} ${toString (viaList ())} ${toString (viaMap ())} ${toString (viaGenericCaller ())}"

@@ -1,5 +1,12 @@
 # Package Registry Trust and Discovery
 
+> **ALL OSPREY, and A WORKING API THAT SERVES WORKING PACKAGES COMES FIRST.**
+> Every executable part of the package system is Osprey, with no exceptions
+> (`[PACKAGE-IMPLEMENTATION-LANGUAGE]`). The first deliverable is the
+> database-free folder registry of `[PACKAGE-FOLDER-REGISTRY]` in
+> [spec 0029](0029-PackageManagement.md); everything in this document layers
+> onto that running service.
+
 **Status:** normative target. This specification is the registry/security half
 of [Osprey Package Registry and Manager](0029-PackageManagement.md). Its
 requirements are mandatory for the public registry. The full academic and

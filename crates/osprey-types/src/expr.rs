@@ -153,7 +153,10 @@ impl Checker {
                 ));
                 self.ctx.fresh()
             }
-            Expr::Perform { .. } | Expr::Handler { .. } => self.infer_effect_expr(e, env),
+            Expr::Perform { .. } | Expr::Handler { .. } | Expr::Mask { .. } => {
+                self.infer_effect_expr(e, env)
+            }
+            Expr::Instance { effect, position } => self.infer_instance(effect, *position),
             Expr::Resume(value) => self.infer_resume(value.as_deref(), env),
         }
     }
@@ -168,36 +171,6 @@ impl Checker {
             }
         }
         Type::string()
-    }
-
-    /// Dispatch the two effect expression forms (split out of [`Self::infer_expr`]
-    /// to keep its match within budget).
-    fn infer_effect_expr(&mut self, e: &Expr, env: &TypeEnv) -> Type {
-        match e {
-            Expr::Perform {
-                effect,
-                operation,
-                arguments,
-                named_arguments,
-                position,
-            } => self.infer_perform(
-                effect,
-                operation,
-                arguments,
-                named_arguments,
-                *position,
-                env,
-            ),
-            Expr::Handler {
-                effect,
-                arms,
-                return_clause,
-                body,
-                position,
-                ..
-            } => self.infer_handler(effect, arms, body, return_clause.as_deref(), *position, env),
-            other => self.infer_expr(other, env),
-        }
     }
 
     /// Field access retains a relation between the receiver and its field even
@@ -335,9 +308,9 @@ impl Checker {
     /// the instantiated parameters, and yield the instantiated result type.
     /// The resolved signature is published per site for the code generator.
     /// Implements [EFFECTS-GENERIC-INSTANTIATION] and [EFFECTS-OP-TYPING].
-    fn infer_perform(
+    pub(crate) fn infer_perform(
         &mut self,
-        effect: &str,
+        target: crate::handler_scope::Target<'_>,
         operation: &str,
         arguments: &[Expr],
         named_arguments: &[NamedArgument],
@@ -353,25 +326,21 @@ impl Checker {
         // `!Stash<string>` surrounds `Stash.put(42)`, the row must not rewrite
         // the performed instance from `Stash<int>` to `Stash<string>` in the
         // later static discharge proof.
-        let actual_instance = self.effect_instance_ops(effect);
+        let effect = target.effect;
+        let actual_instance = target
+            .instance
+            .clone()
+            .or_else(|| self.effect_instance_ops(effect));
         if !named_arguments.is_empty() {
             self.errors.push(TypeError::new(format!(
                 "perform `{effect}.{operation}` does not support named arguments"
             )));
         }
-        // A written instantiation is the request's identity; an unwritten one
-        // is the innermost enclosing handler's, else a fresh instance for
-        // inference. Identity is the base name: `Stash<int>` and `Stash`
-        // name one effect. Implements [EFFECTS-GENERIC-INSTANTIATION].
-        let base = osprey_ast::effect_name::base(effect);
-        let scope = self
-            .handler_scopes
-            .iter()
-            .rev()
-            .find(|s| s.name == base)
-            .filter(|_| osprey_ast::effect_name::instantiation(effect).is_none())
-            .map(|s| (s.args.clone(), s.ops.clone()))
-            .or_else(|| self.effect_instance_ops(effect));
+        // A capability's instance is fixed by its type; otherwise a written
+        // instantiation is the request's identity and an unwritten one is the
+        // innermost enclosing handler's, else a fresh instance for inference.
+        // Implements [EFFECTS-GENERIC-INSTANTIATION] and [EFFECTS-INSTANCE].
+        let scope = target.instance.or_else(|| self.scoped_instance(effect));
         let Some((eff_args, ops)) = scope else {
             self.errors
                 .push(TypeError::new(format!("unknown effect `{effect}`")));
@@ -431,23 +400,25 @@ impl Checker {
     /// resumes answer B; value arms supply their operation's result R.
     /// Implements [EFFECTS-RESUME],
     /// [EFFECTS-GENERIC-INSTANTIATION], and [EFFECTS-OP-TYPING].
-    fn infer_handler(
+    pub(crate) fn infer_handler(
         &mut self,
-        effect: &str,
+        target: crate::handler_scope::Target<'_>,
         arms: &[osprey_ast::HandlerArm],
         body: &Expr,
         return_clause: Option<&Expr>,
         position: Option<osprey_ast::Position>,
         env: &TypeEnv,
     ) -> Type {
-        let (eff_args, inst_ops, effect_known) =
-            if let Some((args, ops)) = self.effect_instance_ops(effect) {
-                (args, ops, true)
-            } else {
-                self.errors
-                    .push(TypeError::new(format!("unknown effect `{effect}`")));
-                (Vec::new(), HashMap::new(), false)
-            };
+        let effect = target.effect;
+        let (eff_args, inst_ops, effect_known) = if let Some((args, ops)) =
+            target.instance.or_else(|| self.effect_instance_ops(effect))
+        {
+            (args, ops, true)
+        } else {
+            self.errors
+                .push(TypeError::new(format!("unknown effect `{effect}`")));
+            (Vec::new(), HashMap::new(), false)
+        };
         let answer = self.ctx.fresh();
         let mut answering: Vec<(String, Type)> = Vec::new();
         let mut seen_arms = HashSet::new();
@@ -1144,8 +1115,10 @@ impl Checker {
         args: Vec<Type>,
     ) -> Type {
         let constrained_builtin = name.is_some_and(|name| {
-            matches!(name, "length" | "isEmpty" | "print" | "toString" | "toGpu")
-                || crate::builtin_constraints::is_gpu_buffer_builtin(name)
+            matches!(
+                name,
+                "length" | "isEmpty" | "print" | "toString" | "toGpu" | "listSort"
+            ) || crate::builtin_constraints::is_gpu_buffer_builtin(name)
         });
         if let (Some(name), Some(receiver)) = (name, args.first()) {
             if constrained_builtin {
@@ -1153,6 +1126,8 @@ impl Checker {
                 self.builtin_uses.push((name, receiver.clone()));
             }
         }
+        self.constrain_named_comparison(name, &args);
+        self.constrain_structural_equals(name, &args);
         let fused = self.fuse_gpu_source(name, ft, &args);
         // Preserve unresolved argument variables until the surrounding expression
         // can refine them; the recorded constraint validates the final type.
@@ -1561,6 +1536,8 @@ impl Checker {
                     self.errors.push(TypeError::new(format!(
                         "cannot compare `{l}` with `{r}`: `{op}` needs two operands of one type"
                     )));
+                } else {
+                    self.constrain_comparison(op, [left, right], &l, position);
                 }
                 Type::bool()
             }
@@ -1698,7 +1675,11 @@ impl Checker {
     /// The key of an arithmetic obligation written here. Where the function
     /// reads through an opaque alias, the key remembers that function
     /// ([`Checker::use_sites`]).
-    fn located_use(&mut self, name: &str, position: Option<osprey_ast::Position>) -> String {
+    pub(crate) fn located_use(
+        &mut self,
+        name: &str,
+        position: Option<osprey_ast::Position>,
+    ) -> String {
         let located = crate::builtin_constraints::located_name(name, position);
         if self.ctx.sees_through_aliases() {
             let _ = self.use_sites.insert(located.clone(), self.site.clone());
@@ -1710,7 +1691,7 @@ impl Checker {
     /// Inside a module that owns an opaque alias the key names the function, so
     /// the late validation reads the operand as that function may
     /// ([MODULES-OPAQUE-TYPES]).
-    fn sited_use(&mut self, name: &str) -> String {
+    pub(crate) fn sited_use(&mut self, name: &str) -> String {
         if !self.ctx.sees_through_aliases() {
             return name.to_owned();
         }

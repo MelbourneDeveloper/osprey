@@ -4,7 +4,7 @@
 use super::lower::Lowerer;
 use crate::strings::{lower_interpolation, unquote};
 use osprey_ast::{
-    Expr, FieldAssignment, HandlerArm, MapEntry, MatchArm, NamedArgument, Pattern, Stmt, SymbolPath,
+    Expr, FieldAssignment, MapEntry, MatchArm, NamedArgument, Pattern, Stmt, SymbolPath,
 };
 use tree_sitter::Node;
 
@@ -64,7 +64,7 @@ impl Lowerer<'_> {
                 self.stage(node),
                 self.mentioned_effect(node),
                 self.lower_handler_arms(node),
-                self.lower_handler_return(node),
+                self.lower_handler_clauses(node),
                 Some(self.pos(node)),
             ),
             "kernel_expression" => self.lower_kernel(node),
@@ -78,6 +78,12 @@ impl Lowerer<'_> {
                     position: Some(self.pos(node)),
                 }
             }
+            // Implements [EFFECTS-MASK] and [EFFECTS-INSTANCE].
+            "mask_expression" => self.lower_mask(node),
+            "instance_expression" => Expr::Instance {
+                effect: self.mentioned_effect(node),
+                position: Some(self.pos(node)),
+            },
             "resume_expression" => {
                 Expr::Resume(self.first_named(node).map(|n| Box::new(self.lower_expr(n))))
             }
@@ -291,7 +297,7 @@ impl Lowerer<'_> {
     /// instantiation when it wrote one: `Signal<Count>` and `Signal<Cursor>` are
     /// different effects to a row, so they are different effects to the name a
     /// row carries. Implements [STAGE-SIGNALS-EXACT].
-    fn mentioned_effect(&self, node: Node<'_>) -> String {
+    pub(super) fn mentioned_effect(&self, node: Node<'_>) -> String {
         let base = self.field_text(node, "effect");
         let arguments = node
             .child_by_field_name("instantiation")
@@ -299,44 +305,6 @@ impl Lowerer<'_> {
             .map(|list| self.lower_type_list(list))
             .unwrap_or_default();
         osprey_ast::effect_name::instantiated(&base, &arguments)
-    }
-
-    /// The operation, parameters and body shared by a handler arm and a kernel
-    /// arm — the two differ only in whether the effect is written per arm.
-    pub(crate) fn lower_arm(&self, arm: Node<'_>) -> HandlerArm {
-        HandlerArm {
-            operation: self.field_text(arm, "operation"),
-            params: self
-                .first_child_of_kind(arm, "handler_params")
-                .map(|hp| self.texts_of_kind(hp, "identifier"))
-                .unwrap_or_default(),
-            body: self.lower_expr_field(arm, "body"),
-            position: Some(self.pos(arm)),
-        }
-    }
-
-    fn lower_handler_arms(&self, node: Node<'_>) -> Vec<HandlerArm> {
-        self.named_of_kind(node, "handler_arm")
-            .iter()
-            .map(|arm| self.lower_arm(*arm))
-            .collect()
-    }
-
-    fn lower_handler_return(&self, node: Node<'_>) -> Option<Box<Expr>> {
-        self.named_of_kind(node, "handler_return")
-            .first()
-            .map(|clause| {
-                Box::new(Expr::Lambda {
-                    parameters: vec![osprey_ast::Parameter {
-                        name: self.field_text(*clause, "parameter"),
-                        ty: None,
-                        inline_constraint: false,
-                    }],
-                    return_type: None,
-                    body: Box::new(self.lower_expr_field(*clause, "body")),
-                    position: Some(self.pos(*clause)),
-                })
-            })
     }
 
     /// `head { field: value, … }`. The grammar gives every brace head the
@@ -485,6 +453,7 @@ impl Lowerer<'_> {
             effect: self.mentioned_effect(handler),
             arms: self.lower_handler_arms(handler),
             return_clause: self.lower_handler_return(handler),
+            finally: self.lower_handler_finally(handler),
             // The rest of the block is the region, not braces the user wrote:
             // a lone trailing value is the body itself, as in ML layout.
             body: Box::new({

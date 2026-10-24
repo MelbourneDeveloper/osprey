@@ -1,6 +1,7 @@
 // Reproduce the homepage film: run node scripts/render-flight.mjs from website/.
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 
 const browser = await chromium.launch({ headless: true });
 try {
@@ -12,6 +13,7 @@ try {
   await mkdir('src/assets/motion', { recursive: true });
   await writeFile('src/assets/motion/osprey-flight.png', poster);
   await writeFile('src/assets/motion/osprey-flight.webm', Buffer.from(film));
+  execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', 'src/assets/motion/osprey-flight.webm', '-c:v', 'libx264', '-crf', '23', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', 'src/assets/motion/osprey-flight.mp4']);
   console.log(`Flight film: ${film.length} bytes; poster: ${poster.length} bytes`);
 } finally {
   await browser.close();

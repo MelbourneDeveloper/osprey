@@ -253,3 +253,92 @@ fn module_aware_source_keeps_the_path_spelling_it_was_given() {
     let _ = std::fs::remove_dir_all(&real);
     assert_eq!(input.debug_path(), path);
 }
+
+#[test]
+fn a_library_exports_only_the_functions_its_entry_source_declares() {
+    // [IOS-HOST-ABI] `lib::Flow::fetch` performs an effect nobody handles and
+    // `shout` looks exportable; both live outside the entry file, so neither
+    // is a C export nor a reason to refuse the build.
+    let root = temp_project(
+        "entry-exports",
+        &[
+        ("osprey.toml", "[project]\nname = \"exp\"\nsource_roots = [\"src\", \"main.ospml\"]\ndefault_namespace = \"app\"\nentry = \"main.ospml\"\n"),
+        ("src/helpers.ospml", "namespace lib\n\neffect Slices\n    fetch : string => string\n\nmodule Flow\n    export fetch (key : string) = perform Slices.fetch key\n    export shout (text : string) = \"${text}!\"\n"),
+        ("main.ospml", "namespace app\n\nimport lib::Flow\n\nstart (source : string) = Flow::shout source\n"),
+        ],
+    );
+    let input = CompilationInput::load_project(root.to_string_lossy().as_ref()).expect("assembles");
+    let scope = input.export_scope(false);
+    let built = crate::ios::source(
+        input.backend_program(),
+        "main.ospml",
+        crate::ios::Target::Mac,
+        &scope,
+    );
+    std::fs::remove_dir_all(&root).expect("cleanup");
+    let (_, header) = built.expect("entry-only exports");
+    assert!(header.contains("osprey_app_start("), "{header}");
+    assert!(!header.contains("osprey_lib_"), "{header}");
+}
+
+/// A project under the system temp directory holding `files`.
+fn temp_project(name: &str, files: &[(&str, &str)]) -> PathBuf {
+    let root = std::env::temp_dir().join(format!("osprey-{name}-{}", std::process::id()));
+    for (path, text) in files {
+        let file = root.join(path);
+        std::fs::create_dir_all(file.parent().expect("parent")).expect("project dir");
+        std::fs::write(file, text).expect("project file");
+    }
+    root
+}
+
+#[test]
+fn an_exported_module_members_signature_is_never_reported_redundant() {
+    // [TYPE-ANNOTATION-REDUNDANT] `shout`'s signature is API for every project
+    // using `lib::Flow`; the private `loud` beside it is judged as usual:
+    // `text + "!"` alone derives `string -> string`.
+    let root = temp_project(
+        "contract-warnings",
+        &[
+            ("osprey.toml", "[project]\nname = \"exp\"\nsource_roots = [\"src\", \"main.ospml\"]\ndefault_namespace = \"app\"\nentry = \"main.ospml\"\n"),
+            ("src/flow.ospml", "namespace lib\n\n(** Loud text. *)\nmodule Flow\n    (** `text`, shouted. *)\n    export shout : string -> string\n    shout text = loud text\n    loud : string -> string\n    loud text = text + \"!\"\n"),
+            ("main.ospml", "namespace app\n\nimport lib::Flow\n\nprint (Flow::shout \"hi\")\n"),
+        ],
+    );
+    let input = CompilationInput::load_project(root.to_string_lossy().as_ref()).expect("assembles");
+    let warnings = crate::warnings::collect(&input);
+    std::fs::remove_dir_all(&root).expect("cleanup");
+    let messages: Vec<&str> = warnings.iter().map(|w| w.message.as_str()).collect();
+    assert_eq!(
+        messages,
+        ["redundant type signature on `lib::Flow::loud`: inference derives `(string) -> string` without it"]
+    );
+}
+
+#[test]
+fn an_undocumented_export_is_located_in_the_file_that_wrote_it() {
+    // [DOC-EXPORT-REQUIRED] Assembly flattens modules away, so the warning is
+    // read from each source as written and still resolves to its own file
+    // and line, here the second of two sources.
+    let root = temp_project(
+        "undocumented-exports",
+        &[
+            ("osprey.toml", "[project]\nname = \"doc\"\nsource_roots = [\"src\", \"main.ospml\"]\ndefault_namespace = \"app\"\nentry = \"main.ospml\"\n"),
+            ("src/flow.ospml", "namespace lib\n\n(** Loud text. *)\nmodule Flow\n    export shout text = text + \"!\"\n"),
+            ("main.ospml", "namespace app\n\nimport lib::Flow\n\nprint (Flow::shout \"hi\")\n"),
+        ],
+    );
+    let input = CompilationInput::load_project(root.to_string_lossy().as_ref()).expect("assembles");
+    let warnings = input.undocumented_exports();
+    std::fs::remove_dir_all(&root).expect("cleanup");
+    let [warning] = warnings.as_slice() else {
+        panic!("one warning expected: {warnings:?}");
+    };
+    assert_eq!(
+        warning.message,
+        "exported function `Flow::shout` has no documentation comment"
+    );
+    let (file, line, _) = input.location(warning.position.expect("positioned"));
+    assert!(file.ends_with("flow.ospml"), "{file}");
+    assert_eq!(line, 5);
+}

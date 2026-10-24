@@ -147,6 +147,96 @@ pub(crate) static JSON: &[BuiltinDoc] = &[
         ["document" => "Handle returned by jsonParse"],
         "jsonFree(doc)",
     ),
+    builtin_doc!(
+        "__jsonDecodeOpen",
+        "Internal primitive of jsonDecode: parses a document into slots for the typed walk. Call jsonDecode instead.",
+        ["text" => "The JSON text to decode"],
+        "jsonDecode(\"[1]\")",
+    ),
+    builtin_doc!(
+        "__jsonDecodeClose",
+        "Internal primitive of jsonDecode: frees a document the walk has finished with. Call jsonDecode instead.",
+        ["document" => "Handle from __jsonDecodeOpen"],
+        "jsonDecode(\"[1]\")",
+    ),
+    builtin_doc!(
+        "__jsonNodeKind",
+        "Internal primitive of jsonDecode: the kind code of one value. Call jsonDecode instead.",
+        ["document" => "Handle from __jsonDecodeOpen", "node" => "Slot of a value; the root is slot 0"],
+        "jsonDecode(\"[1]\")",
+    ),
+    builtin_doc!(
+        "__jsonNodeFirst",
+        "Internal primitive of jsonDecode: the first slot of a container's children. Call jsonDecode instead.",
+        ["document" => "Handle from __jsonDecodeOpen", "node" => "Slot of a container; the root is slot 0"],
+        "jsonDecode(\"[1]\")",
+    ),
+    builtin_doc!(
+        "__jsonNodeEnd",
+        "Internal primitive of jsonDecode: the slot after a container's last child. Call jsonDecode instead.",
+        ["document" => "Handle from __jsonDecodeOpen", "node" => "Slot of a container; the root is slot 0"],
+        "jsonDecode(\"[1]\")",
+    ),
+    builtin_doc!(
+        "__jsonNodeKey",
+        "Internal primitive of jsonDecode: the member name of an object's child. Call jsonDecode instead.",
+        ["document" => "Handle from __jsonDecodeOpen", "node" => "Slot of an object member; the root is slot 0"],
+        "jsonDecode(\"[1]\")",
+    ),
+    builtin_doc!(
+        "__jsonNodeText",
+        "Internal primitive of jsonDecode: a string's value. Call jsonDecode instead.",
+        ["document" => "Handle from __jsonDecodeOpen", "node" => "Slot of a string; the root is slot 0"],
+        "jsonDecode(\"[1]\")",
+    ),
+    builtin_doc!(
+        "__jsonNodeInt",
+        "Internal primitive of jsonDecode: an integer's value. Call jsonDecode instead.",
+        ["document" => "Handle from __jsonDecodeOpen", "node" => "Slot of an integer; the root is slot 0"],
+        "jsonDecode(\"[1]\")",
+    ),
+    builtin_doc!(
+        "__jsonNodeFloat",
+        "Internal primitive of jsonDecode: a float's value. Call jsonDecode instead.",
+        ["document" => "Handle from __jsonDecodeOpen", "node" => "Slot of a float; the root is slot 0"],
+        "jsonDecode(\"[1]\")",
+    ),
+    builtin_doc!(
+        "__jsonWriterOpen",
+        "Internal primitive of jsonEncode: opens a single-buffer writer. Call jsonEncode instead.",
+        [],
+        "jsonEncode(JsonNull)",
+    ),
+    builtin_doc!(
+        "__jsonWriteRaw",
+        "Internal primitive of jsonEncode: appends a structural token. Call jsonEncode instead.",
+        ["writer" => "Handle from __jsonWriterOpen", "token" => "Literal JSON text"],
+        "jsonEncode(JsonNull)",
+    ),
+    builtin_doc!(
+        "__jsonWriteString",
+        "Internal primitive of jsonEncode: appends one quoted, escaped string. Call jsonEncode instead.",
+        ["writer" => "Handle from __jsonWriterOpen", "text" => "The string to quote"],
+        "jsonEncode(JsonNull)",
+    ),
+    builtin_doc!(
+        "__jsonWriteInt",
+        "Internal primitive of jsonEncode: appends one integer. Call jsonEncode instead.",
+        ["writer" => "Handle from __jsonWriterOpen", "number" => "The integer"],
+        "jsonEncode(JsonNull)",
+    ),
+    builtin_doc!(
+        "__jsonWriteFloat",
+        "Internal primitive of jsonEncode: appends one finite float. Call jsonEncode instead.",
+        ["writer" => "Handle from __jsonWriterOpen", "number" => "The float"],
+        "jsonEncode(JsonNull)",
+    ),
+    builtin_doc!(
+        "__jsonWriterClose",
+        "Internal primitive of jsonEncode: closes a writer and returns its document, or the first refusal. Call jsonEncode instead.",
+        ["writer" => "Handle from __jsonWriterOpen"],
+        "jsonEncode(JsonNull)",
+    ),
 ];
 
 /// `concurrency` built-in documentation. Prose only — types come from the

@@ -53,6 +53,7 @@ module Money : MoneyApi
 
     positive amount = toCents amount > 0
 
+(** Hand-written JSON text for the account fixtures. *)
 module Json
     escape s =
         bslash = "\\"
@@ -64,10 +65,13 @@ module Json
         quote = "\""
         quote + escape s + quote
 
+    (** `"key":"value"`, with the value escaped as a JSON string. *)
     export strField key value = quoted key + ":" + quoted value
 
+    (** `"key":value` for a number. *)
     export numField key value = quoted key + ":" + toString value
 
+    (** A JSON object around already-joined `members`. *)
     export obj members = "{" + members + "}"
 
 type Account =
@@ -81,13 +85,18 @@ type Outcome =
     Refused
         why : string
 
+(** Account rules and renderings the bank's tests check. *)
 module Accounts
+    (** Whether `owner` is a usable account name: not empty. *)
     export namable owner = length owner > 0
 
+    (** Whether `cents` is an amount that can move: more than zero. *)
     export movable cents = Money::positive (Money::fromCents cents)
 
+    (** The account as a JSON object, balance in cents and as money text. *)
     export json a = Json::obj (Json::numField "id" a.id + "," + Json::strField "owner" a.owner + "," + Json::numField "cents" a.balance + "," + Json::strField "balance" (Money::show (Money::fromCents a.balance)))
 
+    (** The account as one fixed-width table row. *)
     export row a =
         owner = padEnd a.owner 12 " " ?: a.owner
         cash = padStart (Money::show (Money::fromCents a.balance)) 9 " " ?: Money::show (Money::fromCents a.balance)

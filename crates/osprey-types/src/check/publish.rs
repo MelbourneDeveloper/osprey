@@ -1,7 +1,7 @@
 //! Type checking: publish.
 use super::{
-    dedupe_sites, erased_type_params, resolve_op, resolve_positioned, type_name_to_type, Checker,
-    HashMap, Program, Type,
+    dedupe_sites, erased_type_params, open_lambda_vars, resolve_aliases, resolve_op,
+    resolve_positioned, type_name_to_type, Checker, HashMap, HashSet, Program, Type,
 };
 
 /// The erased view of every effect: each declared type parameter resolves to a
@@ -20,6 +20,16 @@ pub(super) fn publish_effects(
         })
         .collect()
 }
+/// Capability sites for the backend: position → the capability's effect.
+/// Implements [EFFECTS-INSTANCE].
+fn published_capabilities(checker: &Checker) -> HashMap<(u32, u32), String> {
+    checker
+        .capability_sites
+        .iter()
+        .map(|(position, effect, _)| ((position.line, position.column), effect.clone()))
+        .collect()
+}
+
 pub(super) fn publish_program(
     program: &Program,
     mut checker: Checker,
@@ -47,9 +57,21 @@ pub(super) fn publish_program(
     let lambda_tys = checker.lambda_tys.clone();
     let let_tys = checker.let_tys.clone();
     let list_tys = checker.list_tys.clone();
-    let lambdas = resolve_positioned(&mut checker.ctx, &lambda_tys);
-    let lets = resolve_positioned(&mut checker.ctx, &let_tys);
-    let lists = resolve_positioned(&mut checker.ctx, &list_tys);
+    let mut lambdas = resolve_positioned(&mut checker.ctx, &lambda_tys);
+    let mut lets = resolve_positioned(&mut checker.ctx, &let_tys);
+    let mut lists = resolve_positioned(&mut checker.ctx, &list_tys);
+    let handler_sites: HashSet<_> = checker
+        .handler_tys
+        .iter()
+        .map(|(position, _, _)| (position.line, position.column))
+        .collect();
+    let lambda_candidates = open_lambda_vars(&lambdas, &handler_sites, &mut checker.ctx);
+    resolve_aliases(
+        &lambda_candidates,
+        &mut [&mut lambdas, &mut lets, &mut lists],
+        &checker.instantiations,
+        &mut checker.ctx,
+    );
     let perform_tys = checker.perform_tys.clone();
     let performs = dedupe_sites(perform_tys.iter().map(|(pos, op, args)| {
         let site = crate::info::PerformSite {
@@ -83,6 +105,7 @@ pub(super) fn publish_program(
         lists,
         performs,
         handler_ops,
+        capabilities: published_capabilities(&checker),
         call_bindings,
         applications: checker
             .application_tys

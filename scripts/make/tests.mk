@@ -11,7 +11,8 @@
 # that says nothing about the code that changed. Build what the gate measures.
 _test_rust: _runtime_wasm
 	@echo "==> [rust] running tests with coverage..."
-	set -o pipefail && RUST_TEST_THREADS=$${RUST_TEST_THREADS:-4} cargo llvm-cov --workspace --profile ci --lcov --output-path lcov.info 2>&1 | tee test.log
+	@$(MKDIR) $(COVERAGE_DIR) $(LOG_DIR)
+	set -o pipefail && RUST_TEST_THREADS=$${RUST_TEST_THREADS:-4} cargo llvm-cov --workspace --profile ci --lcov --output-path $(RUST_LCOV) 2>&1 | tee $(RUST_LOG)
 
 # Per-crate enforcement: each rust crate NAMED IN $(COVERAGE_THRESHOLDS_FILE) is
 # gated independently against its own threshold (floor 95% + monotonic ratchet).
@@ -33,13 +34,13 @@ _test_rust: _runtime_wasm
 # ratcheted in at its measured value so the check can land without masking it.
 _coverage_check_rust:
 	@if [ ! -f "$(COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
-	if [ ! -f lcov.info ]; then echo "[rust] FAIL: lcov.info not produced"; exit 1; fi; \
+	if [ ! -f $(RUST_LCOV) ]; then echo "[rust] FAIL: $(RUST_LCOV) not produced"; exit 1; fi; \
 	fail=0; \
 	for crate in $$(jq -r '.projects | to_entries[] | select(.value.language=="rust") | .key' "$(COVERAGE_THRESHOLDS_FILE)"); do \
 	  threshold=$$(jq -r --arg c "$$crate" '.projects[$$c].threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
-	  set -- $$(awk -F: -v c="$$crate" 'index($$0,"SF:")==1{in_c=index($$2,"/crates/" c "/")>0} in_c&&/^LH:/{h+=$$2} in_c&&/^LF:/{f+=$$2} END{printf "%d %d",h+0,f+0}' lcov.info); \
+	  set -- $$(awk -F: -v c="$$crate" 'index($$0,"SF:")==1{in_c=index($$2,"/crates/" c "/")>0} in_c&&/^LH:/{h+=$$2} in_c&&/^LF:/{f+=$$2} END{printf "%d %d",h+0,f+0}' $(RUST_LCOV)); \
 	  lh=$$1; lf=$$2; \
-	  if [ "$$lf" -eq 0 ]; then echo "[rust] $$crate FAIL: no lines found in lcov.info"; fail=1; continue; fi; \
+	  if [ "$$lf" -eq 0 ]; then echo "[rust] $$crate FAIL: no lines found in $(RUST_LCOV)"; fail=1; continue; fi; \
 	  pct=$$(awk "BEGIN{printf \"%.1f\", $$lh/$$lf*100}"); \
 	  pct_int=$$(awk "BEGIN{printf \"%d\", $$lh/$$lf*100}"); \
 	  if [ "$$pct_int" -lt "$$threshold" ]; then \
@@ -67,8 +68,12 @@ _coverage_check_rust:
 # memory_arc_tests covers the counting itself.
 OSSL_CFLAGS = $(OSSL) `pkg-config --cflags openssl 2>/dev/null || echo ""`
 OSSL_LIBS   = `pkg-config --libs openssl 2>/dev/null || echo "-lssl -lcrypto"`
+# The profiler's sources, linked by every suite that links a thread-spawning
+# runtime unit [PROF-COLLECT-REGISTRY] [PROF-ATTACH-ENDPOINT].
+PROF_SRC    = runtime/profiler_runtime.c runtime/profiler_store.c runtime/profiler_dump.c \
+              runtime/profiler_sampler.c runtime/profiler_stream.c runtime/profiler_endpoint.c
 RT_THREADS  = runtime/fiber_runtime.c runtime/system_runtime.c runtime/file_runtime.c runtime/effects_runtime.c runtime/effects_coro.c \
-              runtime/profiler_runtime.c runtime/profiler_sampler.c
+              $(PROF_SRC)
 # Frame-pointer profile for the profiler suite: its unwind tests need -g and
 # real frame chains, and it predates the WARN core, so it keeps its own flags.
 PROF_T = -O2 -g -fno-omit-frame-pointer -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -std=c11 -D_GNU_SOURCE
@@ -82,12 +87,12 @@ PROF_T = -O2 -g -fno-omit-frame-pointer -D_FORTIFY_SOURCE=2 -fstack-protector-st
 # a suite into testing AND coverage measurement.
 C_TEST_SUITES ?= memory_gc_stack_root_tests memory_arc_tests memory_gc_tests \
   memory_pool_tests memory_runtime_tests memory_golden_tests gpu_runtime_tests gpu_shader_tests gpu_opencl_tests gpu_selection_tests gpu_no_device_tests \
-  list_tests map_tests string_runtime_tests json_runtime_tests \
+  list_tests map_tests string_runtime_tests float_spelling_portable_tests json_runtime_tests \
   effects_runtime_tests builtins_runtime_tests test_system_runtime \
   test_file_runtime tensor_list_tests \
   test_http_length_validation http_server_send_tests http_server_request_tests \
   fiber_runtime_tests http_runtime_tests http_shared_tests \
-  websocket_runtime_tests profiler_runtime_tests \
+  websocket_runtime_tests profiler_runtime_tests profiler_stream_tests \
   coverage_runtime_tests
 C_SRC_memory_gc_stack_root_tests = runtime/memory_gc_stack_root_tests.c runtime/memory_gc.c
 C_LIBS_memory_gc_stack_root_tests = -pthread
@@ -123,14 +128,17 @@ C_SRC_gpu_metal_tests = runtime/gpu_metal_tests.m runtime/gpu_metal.m runtime/fi
 C_FLAGS_gpu_metal_tests = -fobjc-arc -DOSPREY_GPU_METAL=1
 C_LIBS_gpu_metal_tests = -framework Foundation -framework Metal -pthread
 endif
-C_SRC_list_tests = runtime/list_tests.c runtime/list_runtime.c runtime/memory_runtime.c
+C_SRC_list_tests = runtime/list_tests.c runtime/list_sort_tests.c runtime/list_runtime.c runtime/memory_runtime.c
 C_SRC_map_tests = runtime/map_tests.c runtime/map_runtime.c runtime/map_runtime_hamt.c runtime/memory_runtime.c
-C_SRC_string_runtime_tests = runtime/string_runtime_tests.c runtime/string_runtime.c runtime/string_runtime_list.c runtime/list_runtime.c runtime/memory_runtime.c
-C_SRC_json_runtime_tests = runtime/json_runtime_tests.c runtime/json_grammar_tests.c runtime/json_runtime.c
+C_SRC_string_runtime_tests = runtime/string_runtime_tests.c runtime/string_runtime.c runtime/float_spelling.c runtime/string_runtime_list.c runtime/list_runtime.c runtime/memory_runtime.c
+# The same suite on the portable float-spelling path wasm32 uses.
+C_SRC_float_spelling_portable_tests = $(C_SRC_string_runtime_tests)
+C_FLAGS_float_spelling_portable_tests = -DOSP_FLOAT_SPELLING_PORTABLE
+C_SRC_json_runtime_tests = runtime/json_runtime_tests.c runtime/json_grammar_tests.c runtime/json_runtime.c runtime/json_text.c runtime/json_codec.c runtime/json_codec_tests.c runtime/file_runtime.c runtime/memory_runtime.c runtime/string_runtime.c runtime/float_spelling.c
 C_LIBS_json_runtime_tests = -pthread
-C_SRC_effects_runtime_tests = runtime/effects_runtime_tests.c runtime/effects_runtime.c runtime/effects_coro.c runtime/memory_arc.c runtime/gpu_runtime.c runtime/file_runtime.c runtime/profiler_runtime.c runtime/profiler_sampler.c
+C_SRC_effects_runtime_tests = runtime/effects_runtime_tests.c runtime/effects_runtime.c runtime/effects_coro.c runtime/memory_arc.c runtime/gpu_runtime.c runtime/file_runtime.c $(PROF_SRC)
 C_LIBS_effects_runtime_tests = -pthread
-C_SRC_builtins_runtime_tests = runtime/builtins_runtime_tests.c runtime/random_entropy_tests.c runtime/ffi_runtime.c runtime/random_runtime.c runtime/term_runtime.c runtime/test_runtime.c
+C_SRC_builtins_runtime_tests = runtime/builtins_runtime_tests.c runtime/random_entropy_tests.c runtime/term_tty_tests.c runtime/ffi_runtime.c runtime/random_runtime.c runtime/term_runtime.c runtime/test_runtime.c
 C_SRC_test_system_runtime = runtime/test_system_runtime.c runtime/test_system_failures.c runtime/system_runtime.c runtime/file_runtime.c runtime/memory_runtime.c
 C_LIBS_test_system_runtime = -pthread
 C_SRC_test_file_runtime = runtime/test_file_runtime.c runtime/file_runtime.c runtime/memory_runtime.c
@@ -146,7 +154,7 @@ C_LIBS_http_server_request_tests = -pthread
 C_SRC_fiber_runtime_tests = runtime/fiber_runtime_tests.c runtime/memory_runtime.c $(RT_THREADS)
 C_LIBS_fiber_runtime_tests = -pthread
 C_FLAGS_http_runtime_tests = $(OSSL_CFLAGS)
-C_SRC_http_runtime_tests = runtime/http_runtime_tests.c runtime/http_client_runtime.c runtime/http_server_runtime.c runtime/http_server_request.c runtime/http_server_response.c runtime/http_shared.c runtime/string_runtime.c runtime/memory_runtime.c runtime/random_runtime.c $(RT_THREADS)
+C_SRC_http_runtime_tests = runtime/http_runtime_tests.c runtime/http_client_runtime.c runtime/http_server_runtime.c runtime/http_server_request.c runtime/http_server_response.c runtime/http_shared.c runtime/string_runtime.c runtime/float_spelling.c runtime/memory_runtime.c runtime/random_runtime.c $(RT_THREADS)
 C_LIBS_http_runtime_tests = -pthread $(OSSL_LIBS)
 # http_shared.c's coverage number is OWNED by this suite: it is the only one
 # that drives every helper in the unit rather than the subset one transport
@@ -163,8 +171,12 @@ C_FLAGS_websocket_runtime_tests = $(OSSL_CFLAGS)
 C_SRC_websocket_runtime_tests = runtime/websocket_runtime_tests.c runtime/websocket_client_runtime.c runtime/websocket_server_runtime.c runtime/http_shared.c runtime/random_runtime.c runtime/memory_runtime.c
 C_LIBS_websocket_runtime_tests = -pthread $(OSSL_LIBS)
 C_PROFILE_profiler_runtime_tests = $(PROF_T)
-C_SRC_profiler_runtime_tests = runtime/profiler_runtime_tests.c runtime/profiler_runtime.c runtime/profiler_sampler.c
+C_SRC_profiler_runtime_tests = runtime/profiler_runtime_tests.c runtime/profiler_walk_tests.c runtime/profiler_spec_tests.c $(PROF_SRC)
 C_LIBS_profiler_runtime_tests = -pthread
+# Drives the live-attach endpoint over its real socket [PROF-ATTACH-ENDPOINT],
+# inside a private TMPDIR, so it never touches the user's diagnostics directory.
+C_SRC_profiler_stream_tests = runtime/profiler_stream_tests.c runtime/profiler_stream_test_support.c runtime/profiler_stream_lifecycle_tests.c $(PROF_SRC)
+C_LIBS_profiler_stream_tests = -pthread
 C_SRC_coverage_runtime_tests = runtime/coverage_runtime_tests.c runtime/coverage_runtime.c
 
 # Build + run one suite (expanded inside a `cd compiler` shell, hence bin/).
@@ -308,7 +320,7 @@ _conformance-arc:
 # checks out a tree with no bin/ and falls through to PATH — which makes it
 # exactly the kind of failure a developer cannot reproduce from a green CI run.
 # Restaging keeps `make test` honest about which compiler it just tested.
-_test_vscode_extension: _vsix_bundle $(EXT_NODE_DEPS)
+_test_vscode_extension: _vsix_bundle $(EXT_NODE_DEPS) $(PROFILER_UI_BUILT)
 	@echo "==> [vscode-extension] staging osprey as 'osprey' for LSP integration..."
 	$(MKDIR) target/path-bin
 	cp $(BIN) target/path-bin/osprey
@@ -380,11 +392,29 @@ _bank_test:
 	@echo "==> Bank native tests (osprey test)..."
 	./$(BIN) test examples/projects/modules/test
 
+# Osprey package system (registry/): one process runs every suite from the
+# registry/tests project with core, host and CLI sources assembled together,
+# because `osprey test` compiles suites in isolation and cannot import them.
+# The build-plan/lock/resolver fixtures under registry/tests/fixtures are read
+# by those suites. Run only through `make registry-test`: excluded from
+# `make test` and CI until the package system stabilises.
+_test_registry:
+	@echo "==> Registry (Osprey package system) tests..."
+	./$(BIN) registry/tests --run
+
+# Blocked host capabilities, each asserted as the behavior the package system
+# needs. Red is the documented state until the capability lands in Osprey;
+# a probe turning green is the signal to delete its entry from
+# registry/core/src/capabilities.osp.
+_test_registry_blockers:
+	@echo "==> Registry blocked-capability probes (expected red until each lands)..."
+	./$(BIN) registry/blockers --run
+
 # _language-test: Run the assertion-driven Default + ML core language corpus.
 _language-test: build
 	$(MAKE) _test_language_corpus
 
-_lint: $(EXT_NODE_DEPS)
+_lint: $(EXT_NODE_DEPS) $(PROFILER_UI_BUILT)
 	@echo "==> Linting..."
 	node scripts/verify-node-deps-guard.mjs
 	node scripts/verify-no-dead-code.mjs

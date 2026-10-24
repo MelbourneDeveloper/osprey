@@ -10,6 +10,8 @@ const { test, expect } = require("@playwright/test");
 const SITE = path.resolve(__dirname, "../_site");
 const ORIGIN = "https://www.ospreylang.dev";
 const WATCH = "/docs/tutorials/swift-interop/";
+/** Every watch page, each with its own video. */
+const WATCH_PAGES = [WATCH, "/docs/tutorials/profiler/"];
 const read = (file) => fs.readFileSync(path.join(SITE, file), "utf8");
 const jsonLd = (html) =>
   [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(([, json]) => JSON.parse(json));
@@ -23,8 +25,8 @@ test("the native chapter track loads its WebVTT file", async () => {
   expect(cues(source).length).toBeGreaterThan(3);
 });
 
-test("the watch page describes its video with VideoObject and key moments", () => {
-  const html = read("docs/tutorials/swift-interop/index.html");
+for (const watch of WATCH_PAGES) test(`${watch} describes its video with VideoObject and key moments`, () => {
+  const html = read(`${watch.slice(1)}index.html`);
   const video = jsonLd(html).find((data) => data["@type"] === "VideoObject");
   expect(video, "VideoObject").toBeTruthy();
   for (const key of ["name", "description", "thumbnailUrl", "uploadDate", "duration", "contentUrl"]) expect(video[key], key).toBeTruthy();
@@ -40,7 +42,7 @@ test("the watch page describes its video with VideoObject and key moments", () =
   for (const clip of video.hasPart) {
     expect(clip.name).toBeTruthy();
     expect(clip.endOffset).toBeGreaterThan(clip.startOffset);
-    expect(clip.url).toBe(`${ORIGIN}${WATCH}?t=${clip.startOffset}`);
+    expect(clip.url).toBe(`${ORIGIN}${watch}?t=${clip.startOffset}`);
   }
 });
 
@@ -79,7 +81,7 @@ test("the watch page's breadcrumb follows the docs sections", () => {
 test("only the watch page carries the video's markup", () => {
   const pages = fs.readdirSync(SITE, { recursive: true }).filter((file) => file.endsWith(".html"));
   const watchPages = pages.filter((file) => read(file).includes('"@type": "VideoObject"'));
-  expect(watchPages).toEqual(["docs/tutorials/swift-interop/index.html"]);
+  expect(watchPages.sort()).toEqual(WATCH_PAGES.map((watch) => `${watch.slice(1)}index.html`).sort());
 });
 
 test("a ?t= link starts the video there and a chapter seeks in place", async ({ page }) => {
@@ -106,4 +108,35 @@ test("WebVTT cues and durations parse the way the markup needs them", async () =
   expect(isoDuration(194.537)).toBe("PT3M14S");
   expect(isoDuration(3600)).toBe("PT1H");
   expect(isoDuration(0)).toBe("PT0S");
+});
+
+async function captureHomepage(page, width) {
+  await page.locator('.mobile-gallery').scrollIntoViewIfNeeded();
+  for (const image of await page.locator('.mobile-gallery img').all()) {
+    await image.evaluate((element) => element.decode());
+  }
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await page.screenshot({ path: `/tmp/osprey-home-${width}.png`, fullPage: true });
+  await page.screenshot({ path: `/tmp/osprey-hero-${width}.png` });
+}
+
+for (const width of [390, 1440]) {
+  test(`homepage overview plays with captions and sound at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const player = page.locator("#overview-video");
+    await player.scrollIntoViewIfNeeded();
+    await expect(player).toBeVisible();
+    await expect(player.locator('track[kind="captions"]')).toHaveAttribute("src", /overview\.en\.vtt$/);
+    await player.evaluate((video) => video.play());
+    await expect.poll(() => player.evaluate((video) => video.currentTime)).toBeGreaterThan(0.5);
+    expect(await player.evaluate((video) => video.muted)).toBe(false);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await captureHomepage(page, width);
+  });
+}
+
+test("homepage Python GPU excerpt includes the actual tensor operation", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator('#gpt2 code.language-python')).toContainText('return perform(Tensor.mat_mul(a, b, rows, inner, cols))');
 });

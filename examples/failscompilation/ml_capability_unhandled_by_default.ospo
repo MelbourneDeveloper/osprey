@@ -1,0 +1,10 @@
+// osprey: flavor=ml
+// [EFFECTS-INSTANCE]: the ML twin of `capability_unhandled_by_default.ospo`.
+effect Log
+    write : string => Unit
+
+audit = instance Log
+answer =
+    handle Log
+        write m => print m
+    perform audit.write "hi"

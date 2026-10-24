@@ -99,19 +99,22 @@ fn module_bearing_files_outside_project_roots_are_assembled_standalone() {
     // aliases must not reintroduce phantom warnings, and the `_` handler
     // parameters leave nothing unused.
     assert_warnings(&diagnostics, &[]);
-    // This edited buffer retains one intentional redundant signature, so
-    // warning identity and source mapping stay exact.
-    let source = "namespace test\n\nmodule Money\n    export positive : int -> bool\n    positive cents = cents > 0\n\ntest \"positive\" (\\() => expect (Money::positive 1) true)\n";
+    // This edited buffer retains one intentional redundant signature, on a
+    // private helper, so warning identity and source mapping stay exact. The
+    // exported member's signature is API and is never reported
+    // ([TYPE-ANNOTATION-REDUNDANT]).
+    let source = "namespace test\n\n(** Amounts. *)\nmodule Money\n    (** Whether `cents` is above zero. *)\n    export positive : int -> bool\n    positive cents = above cents\n    above : int -> bool\n    above cents = cents > 0\n\ntest \"positive\" (\\() => expect (Money::positive 1) true)\n";
     assert_redundant_annotations(
         &compute(source, &uri, U16),
         &[(
-            "redundant type signature on `test::Money::positive`: inference derives `(int) -> bool` without it",
-            (3, 11, 3, 33),
+            "redundant type signature on `test::Money::above`: inference derives `(int) -> bool` without it",
+            (7, 4, 7, 23),
         )],
     );
     let inferred = source
         .replace("    export positive : int -> bool\n", "")
-        .replace("    positive cents =", "    export positive cents =");
+        .replace("    positive cents =", "    export positive cents =")
+        .replace("    above : int -> bool\n", "");
     assert_warnings(&compute(&inferred, &uri, U16), &[]);
 }
 

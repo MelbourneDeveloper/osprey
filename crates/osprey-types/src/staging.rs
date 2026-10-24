@@ -1,5 +1,6 @@
 //! Validate staged data contracts before any operation or unused arm disappears.
 
+mod forwarders;
 mod signals;
 use signals::materialize_signal_queries;
 pub(crate) use signals::parameter_names as signal_parameter_names;
@@ -15,6 +16,10 @@ use osprey_ast::{mutate, walk_program, AstVisitor, Expr, Program, Stmt};
 /// # Errors
 /// Returns source type errors or violations of the staging rules.
 pub fn lower_static_checked(program: &Program) -> Result<Program, Vec<TypeError>> {
+    // The backend lowers what this returns, so the prelude a program uses is
+    // attached here, once, ahead of every later phase ([BUILTIN-JSON-TYPED]).
+    let attached = crate::prelude::with_prelude(program);
+    let program = attached.as_ref();
     // Declaration and syntax rules first: they name the exact defect, where
     // the residual row after inference would only report an unhandled
     // operation ([STAGE-GPU-DIAG], [EFFECTS-GENERIC-DECL]).
@@ -25,16 +30,28 @@ pub fn lower_static_checked(program: &Program) -> Result<Program, Vec<TypeError>
     if !has_staging(program) {
         return osprey_ast::stage::lower(program).map_err(stage_errors);
     }
-    let source_types = crate::check::infer_checked(program)?;
+    let checked = crate::check::infer_checked(program)?;
+    // A query reached through a helper reads its callback's signals only in a
+    // copy made for that callback ([STAGE-SIGNALS-EXACT]). A copy the checker
+    // cannot type keeps the original, conservative program.
+    let forwarded = forwarders::specialized(program).and_then(|copy| {
+        crate::check::infer_checked(&copy)
+            .ok()
+            .map(|types| (copy, types))
+    });
+    let (program, source_types) = match &forwarded {
+        Some((copy, types)) => (copy, types),
+        None => (program, &checked),
+    };
     // Static lowering compares source effect spellings. An inferred
     // `perform Echo.echo(42)` is nevertheless the same operation as the
     // enclosing `handle static Echo<int>`. Use the already checked site
     // instantiations for this backend copy before matching regions; otherwise
     // the rewrite silently leaves a request that the checker proved handled.
-    let mut resolved = materialize_signal_queries(program, &source_types);
+    let mut resolved = materialize_signal_queries(program, source_types);
     for statement in &mut resolved.statements {
         mutate::statement_children_mut(statement, &mut |expression| {
-            resolve_effect_mentions(expression, &source_types);
+            resolve_effect_mentions(expression, source_types);
         });
     }
     osprey_ast::stage::lower(&resolved).map_err(stage_errors)

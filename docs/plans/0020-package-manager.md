@@ -1,6 +1,18 @@
 # Plan 0020 — Package Registry and Manager
 
-**Status:** specified, not implemented. The normative contracts are
+> **ALL OSPREY. A WORKING API THAT SERVES WORKING PACKAGES COMES FIRST.**
+>
+> Milestone 0 below is the delivery priority of this whole plan. It stands up
+> an Osprey registry server that serves package source from a plain folder,
+> with no database, and an Osprey client that downloads and verifies it.
+> Anyone can run that server on any host or network and point a client at it.
+> No other phase may delay Milestone 0. Supabase is a later hosted data plane
+> (Phase 6) and is not needed to build, run, or use a registry. Every line of
+> executable code in this plan is Osprey: no Rust, no shim, no exceptions.
+
+**Status:** in progress. Milestone 0 is the active work. Milestone A Phase 0 is partly delivered under
+[`registry/`](../../registry/README.md), whose README records exactly what runs and
+which host capabilities block the rest. The normative contracts are
 [spec 0029](../specs/ecosystem/0029-PackageManagement.md) and
 [spec 0030](../specs/ecosystem/0030-PackageRegistryTrustAndDiscovery.md), with canonical
 types in [spec 0031](../specs/ecosystem/0031-PackageDomainModel.md) and score/ranking math
@@ -10,7 +22,9 @@ product decision gates: phases validate the fixed design rather than reopening i
 
 ## Outcome
 
-Ship a public, source-derived Osprey package registry with a small local command
+First, ship a working, self-hostable registry: an Osprey API that serves
+working packages from a folder, and an Osprey client that fetches and verifies
+them (`[PACKAGE-FOLDER-REGISTRY]`). Then grow it into a public, source-derived Osprey package registry with a small local command
 surface, complete deterministic dependency resolution, end-to-end provenance,
 non-executable installation, evidence-based maintenance scoring, and fair
 discovery. Local development can replace any canonical package key globally with
@@ -37,8 +51,11 @@ binaries, runs lifecycle hooks, or invokes those installers.
 - Osprey has HTTP/WebSocket and WebAssembly targets, but there is no registry
   service, browser package UI, Supabase schema, CAS, TUF client, transparency
   log, provenance pipeline, sandbox fleet, or search index.
-- The package system therefore starts with local identity/resolution tests and
-  does not put a network facade in front of unfinished trust semantics.
+- The package system therefore starts with a running service: the folder
+  registry serves digest-verified source over HTTP from day one. It proves
+  integrity, not publisher authority, and says so in every response contract.
+  TUF, the transparency log, and provenance layer onto the same endpoints in
+  Milestone B.
 
 These compiler crates are existing build tools, not implementation locations for this plan. Build the checked-in Osprey package application with the existing compiler. Do not add package commands, package-specific host code, or package semantics to compiler/runtime sources in another language. Missing Osprey capabilities are explicit delivery blockers with Osprey regression cases, never permission to implement a component elsewhere.
 
@@ -51,11 +68,13 @@ schemas/package-registry.td       canonical typeDiagram model
 registry/core/                    Osprey manifests, domain, policy, resolver, scoring
 registry/cli/                     Osprey command parsing, presentation, compiler invocation
 registry/host/                    Osprey effect handlers, crypto, filesystem and process adapters
-registry/api/                     Osprey REST application
+registry/api/                     Osprey REST server: folder registry first, hosted data plane later
+registry/sample-registry/         a folder of real packages the server serves and the tests fetch
 registry/web/                     Osprey browser application -> WebAssembly
 registry/tests/                   Osprey conformance tests, independent oracles, fuzz drivers
+registry/blockers/                Osprey probes for host capabilities Osprey lacks (red by design)
 registry/ops/                     Osprey publication, migration and operational tooling
-registry/supabase/migrations/     declarative PostgreSQL schema and RLS data
+registry/supabase/migrations/     declarative PostgreSQL schema and RLS data (Phase 6, after Milestone 0)
 ```
 
 `schemas/package-registry.td` is the source of generated Osprey domain types as
@@ -69,22 +88,84 @@ methodology, and ranking policy. `registry/host` implements effect handlers in O
 
 The Osprey command frontend owns the planned `osprey package`, `add`, `use`, `lock`, and other package commands. It invokes the existing compiler for compilation through Osprey process effects. Bootstrap and command routing must not require edits to the existing Rust CLI or a non-Osprey launcher.
 
+## Milestone 0 — Working registry API serving working packages
+
+**First and foremost.** Spec `[PACKAGE-FOLDER-REGISTRY]` is the contract. Exit
+criterion: one person starts the Osprey server over a folder of packages on
+one machine, and another fetches a package from it over the network, has its
+digest verified, and builds a project that uses it. All of it is Osprey, and
+every item lands with tests.
+
+### Phase F1 — Folder catalog and source bundles
+
+- [x] Parse a release directory path `@scope/name/<epoch>.<ordinal>` into key,
+      epoch, and ordinal, rejecting every malformed segment with a stable code.
+- [x] Walk the registry root through a `Host` directory effect. Until Osprey has
+      a directory builtin (`files.directory` blocker), the native handler lists
+      files through the `Process` effect, and the blocker records it.
+- [ ] Validate each release with the shared source rules, compute its
+      `SourceDigest`, and report every invalid release with its reason.
+- [x] Encode and decode the canonical JSON source bundle, with round-trip,
+      ordering, escaping, and tamper tests.
+- [x] Build the catalog keyed by digest and by key, ordered by key, epoch,
+      ordinal.
+
+### Phase F2 — Osprey registry server
+
+- [x] Serve `GET /v1/health`, `/v1/packages`, `/v1/packages/{scope}/{name}`,
+      `/v1/releases/{digest}`, and `/v1/releases/{digest}/source` from
+      `registry/api/`, with `ETag`s and `application/problem+json` errors.
+- [x] Route through one pure function from request to response, tested for
+      every endpoint and every error without opening a socket.
+- [x] Read root, bind address, and port from a JSON config file, because
+      Osprey has no argv or environment builtin yet.
+- [x] Ship `registry/sample-registry/` with at least three real packages, one
+      depending on another, each compiling with the existing compiler.
+- [ ] End-to-end test: start the server on a loopback port, request every
+      endpoint with the Osprey HTTP client, and assert the bodies byte for byte.
+- [x] `make registry-serve` starts the server over the sample registry.
+
+### Phase F3 — Download client
+
+- [x] `fetch @scope/name[@epoch]` and `fetch <digest>` download a bundle from
+      the configured registry URL, verify its digest, and write
+      `.osprey/packages/@scope/name/<digest>/`.
+- [x] Reject a tampered bundle, a wrong key, a missing release, and an
+      unreachable registry, each with a stable code and a test.
+- [ ] A consumer project builds against a fetched package: the end-to-end
+      demo of the exit criterion, run on loopback by `make registry-test`.
+
+### Phase F4 — Stand it up anywhere
+
+- [x] Document running a registry on any host, port, and folder, and pointing
+      a client at it, in `registry/README.md`.
+- [ ] Bind to a non-loopback address and serve a second machine on the same
+      network; record the measured result.
+
+Registry suites run through `make registry-test` only until the package system
+stabilises. Wiring them into `make test` and CI is deferred to the last phase
+of this plan, "Deferred — CI integration".
+
 ## Milestone A — Local package engine
 
 ### Phase 0 — Schemas and adversarial fixtures
 
-- [ ] Establish `registry/core`, `registry/cli`, `registry/host`, and `registry/tests` as ordinary Osprey projects built by the existing compiler; prove an Osprey command reaches the shared core and returns a tested result.
-- [ ] Inventory required argument, byte-buffer, filesystem, atomicity, process, cryptographic, and network capabilities. Exercise each through Osprey tests and record unavailable capabilities before depending on them. No substitute implementation in another language is permitted.
-- [ ] Add an Osprey conformance gate that rejects non-Osprey executable source in the package system, including tests, host adapters, operational tools, and handwritten browser glue; validate declarative inputs separately.
-- [ ] Extract the typeDiagram block from spec 0031 into
-      `schemas/package-registry.td` and make documentation import/render it.
+- [x] Establish `registry/core`, `registry/cli`, `registry/host`, and `registry/tests` as ordinary Osprey projects built by the existing compiler; prove an Osprey command reaches the shared core and returns a tested result. Projects share source through `source_roots`; `osprey-pkg doctor` reaches `registry::Capabilities` and `registry/tests` covers it with fixture hosts.
+- [ ] Inventory required argument, byte-buffer, filesystem, atomicity, process, cryptographic, and network capabilities. Exercise each through Osprey tests and record unavailable capabilities before depending on them. No substitute implementation in another language is permitted. Recorded in `registry/README.md` and `registry/core/src/capabilities.osp`; argv, exit status, environment, binary-safe reads, directory operations, a clock and bitwise operators are blocked. Network and atomicity are not yet exercised from `registry/`.
+- [x] Add an Osprey conformance gate that rejects non-Osprey executable source in the package system, including tests, host adapters, operational tools, and handwritten browser glue; validate declarative inputs separately. `registry::Conformance` plus the checked-in-tree suite.
+- [x] Extract the typeDiagram block from spec 0031 into
+      `schemas/package-registry.td` and make documentation import/render it. The spec keeps the rendered block and a suite fails when the two differ.
 - [ ] Add canonical JSON fixtures for manifests; proof-free publication payloads
       and detached ordered-proof envelopes; release IDs/statuses; typed TUF,
       inclusion/consistency and witness bundles; both locks/proofs; build receipts;
-      evidence, attestations, advisories, and state transitions.
+      evidence, attestations, advisories, and state transitions. Present so far in
+      `registry/tests/fixtures`: names, release IDs, paths, the spec manifest with
+      its canonical JSON and digest, `H(d, x)` cases and source trees.
 - [ ] Add malicious fixtures for path traversal, case collisions, symlinks,
       submodules, LFS pointers, devices, executable modes, Unicode confusables,
-      oversized trees, decompression bombs, and digest substitution.
+      oversized trees, decompression bombs, and digest substitution. All but
+      confusables and decompression bombs are in `fixtures/paths.json` and
+      `fixtures/source/minimal-tree.json`.
 - [ ] Add bounded dependency graphs covering satisfiable, unsatisfiable,
       downgrade, epoch, target, capability, revocation, technical-lag, and
       cycle-rejection cases, each with the one expected lock/explanation.
@@ -93,11 +174,16 @@ The Osprey command frontend owns the planned `osprey package`, `add`, `use`, `lo
 - [ ] Add golden vectors for exact UTC millisecond timestamps, every list sort/
       duplicate rule, detached PAE/WebAuthn bytes, every digest preimage/omission,
       and acyclic dependency-selection/build-plan/full-lock staging.
-- [ ] Make schema/fixture validation a fail-fast `make test` stage.
+- [ ] Run schema/fixture validation as a fail-fast stage of `make registry-test`, covering every suite and fixture. Joining `make test` is deferred to "Deferred — CI integration".
 
 Exit gate: the package application and test harness compile from Osprey source without a package-specific host or launcher in another language, and every serialized form and security state transition has a reviewed, byte-exact fixture before storage or API code exists.
 
 ### Phase 1 — Manifest and canonical identity
+
+The TOML parser and manifest validators live in `registry/manifest/`, outside
+the shared core, because the type checker's effect-row solver needs minutes
+for the parser today and would stall every project that loads it. The
+`doctor` manifest verdict returns once that is fixed.
 
 - [ ] Implement one typed TOML parser in `registry/core`, written in Osprey, that preserves current `[project]`/`[modules]` behavior and adds
       `[package]`, bounded discovery metadata, all three dependency tables,
@@ -110,7 +196,13 @@ Exit gate: the package application and test harness compile from Osprey source w
       epochs/minimum ordinals, and system-capability declarations.
 - [ ] Implement the exact ASCII path grammar, entry encoding, root selection and
       domain-separated SourceDigest in `[PACKAGE-SOURCE-CANONICAL]`, plus
-      manifest, build-plan, and ReleaseDigest generation.
+      manifest, build-plan, and ReleaseDigest generation. Path grammar, case-fold
+      collisions, exclusions, forbidden entry kinds, LFS pointers, submission
+      bounds, envelope bytes, `SourceDigest` and `H(d, x)` are in `registry::Paths`,
+      `registry::Source`, `registry::Digests` and a pure-Osprey `registry::Sha256`,
+      golden-tested against independently computed fixtures in
+      `registry/tests/fixtures/source`. Root selection and the manifest/build-plan
+      digests wait on the TOML and canonical-JSON modules.
 - [ ] Generate a deterministic build plan from the project graph, toolchain,
       target, dependencies, and inferred type/effect/capability surface.
 - [ ] Add cross-platform golden vectors proving identical digests on Linux,
@@ -181,7 +273,9 @@ termination at every write boundary leaves either the old graph or the new one.
       incompatibilities, restarts, clause minimization, and proof tracing.
 - [ ] Implement lexicographic partial-MaxSAT optimization in the exact order in
       `[PACKAGE-RESOLUTION]`, including its integer cost tuple and canonical final
-      graph vector; freeze every earlier component before optimizing the next.
+      graph vector; freeze every earlier component before optimizing the next. The
+      cost facts `V`, `D`, `L`, capped overdue days, the seven-component tuple order
+      and both tie-breaks are in `registry::Objective`; the optimizer is not.
 - [ ] Derive minimal conflict cores and human explanations from learned
       incompatibilities; never synthesize explanations after the fact.
 - [ ] Evaluate every time-dependent objective at the signed catalog `asOf`, not
@@ -262,7 +356,7 @@ Exit gate: no single compromised online component can cause acceptance of
 unauthorized, rolled-back, expired, targeted, substituted, or revoked source;
 acceptance of still-valid frozen state is bounded by its signed expiry.
 
-### Phase 6 — Supabase data plane and Osprey API
+### Phase 6 — Hosted Supabase data plane behind the same Osprey API
 
 - [ ] Create append-only identifiers plus mutable projections for principals,
       scopes, packages, release intents/releases, dependency edges,
@@ -369,7 +463,9 @@ or exercise authority unsupported by measured evidence.
 
 - [ ] Implement the fixed five-component, 24-month methodology and neutral
       confidence prior from spec 0032 in integer-only `registry/core`; version
-      and sign every calculation.
+      and sign every calculation. `registry::Arithmetic` holds the canonical
+      `roundDiv`/`higher`/`lower`/`ratio`/`weighted`/percentile primitives with
+      fault-on-domain-violation; the methodology itself is not started.
 - [ ] Measure median/p90 vulnerability response and propagation, reachable
       overdue risk, recurrence, continuity/handover, release reliability,
       tests/mutation/fuzz/client impact, normalized static findings, and response
@@ -436,6 +532,18 @@ lowering security eligibility or allowing the ranker to learn its own bias.
 
 Exit gate: every `[PACKAGE-CONFORMANCE]` and
 `[PACKAGE-REGISTRY-CONFORMANCE]` requirement passes with retained evidence.
+
+## Deferred — CI integration
+
+Lowest priority. Start only once the package system has stabilised. Until then
+every registry suite runs through `make registry-test` and stays out of
+`make test` and CI.
+
+- [ ] Run the end-to-end folder-registry demo, a consumer project building
+      against a fetched package, in CI on loopback.
+- [ ] Add the registry suites to `make test` once they type-check quickly.
+- [ ] Make schema/fixture validation a fail-fast `make test` stage. Today the
+      type checker's effect-row solver runs for minutes on the TOML parser.
 
 ## Fixed risk controls
 

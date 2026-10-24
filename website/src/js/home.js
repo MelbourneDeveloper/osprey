@@ -13,6 +13,7 @@ function showMotionState() {
 async function syncMotion() {
   showMotionState();
   if (!enabled || !visible || document.hidden) return video.pause();
+  video.muted = true;
   if (!video.getAttribute('src')) video.src = video.dataset.src;
   try {
     await video.play();
@@ -43,9 +44,19 @@ function selectFlavor(button) {
   for (const source of document.querySelectorAll('[data-source-flavor]')) {
     source.hidden = source.dataset.sourceFlavor !== flavor;
   }
-  document.querySelector('#source-extension').textContent = flavor === 'ml' ? '.ospml' : '.osp';
+  document.querySelector('#source-extension').textContent = { default: '.osp', ml: '.ospml', python: '.py' }[flavor];
 }
 
 for (const button of flavorControls) {
   button.addEventListener('click', () => selectFlavor(button));
 }
+
+const sections = document.querySelectorAll('.home .hero-content, .home .section-heading, .home .language-grid article');
+const reveal = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    entry.target.classList.add('is-revealed');
+    reveal.unobserve(entry.target);
+  }
+}, { threshold: 0.08 });
+for (const section of sections) reveal.observe(section);

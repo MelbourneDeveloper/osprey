@@ -33,7 +33,16 @@ impl Harness {
         let join = tokio::spawn(async move {
             let reader: BoxedReader = Box::new(server_reads);
             let mut reader = BufReader::new(reader);
-            serve(&mut reader, &writer, &engine_for_loop, &bus, &dispatcher).await
+            let host = ProfilerHost::new(&writer);
+            serve(
+                &mut reader,
+                &writer,
+                &engine_for_loop,
+                &bus,
+                &dispatcher,
+                &host,
+            )
+            .await
         });
         Self {
             to_server: client_writes,
@@ -195,6 +204,7 @@ fn find_by<'a>(items: &'a [Value], pointer: &str, expected: &str) -> &'a Value {
 }
 
 mod features;
+mod profiler;
 mod sync;
 mod transport;
 

@@ -1,0 +1,1 @@
+16:4: `mask Tile` would skip a compile-time handler of `Tile`, which discharge removes before the program runs; mask only runtime handlers

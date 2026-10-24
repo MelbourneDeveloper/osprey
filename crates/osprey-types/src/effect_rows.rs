@@ -11,11 +11,15 @@
 mod analyze;
 mod call_values;
 mod calls;
+mod capabilities;
 mod environment;
+mod field_rows;
 mod handlers;
 #[cfg(test)]
 mod identity_tests;
 mod index;
+#[cfg(test)]
+mod mask_tests;
 mod methods;
 mod model_values;
 mod names;
@@ -31,8 +35,9 @@ use names::{
 };
 mod value_shapes;
 use value_shapes::{
-    builtin_callable_value, builtin_return_shape, method_thunk, project_callable, project_element,
-    project_fiber_value, project_field, project_success_value,
+    builtin_callable_value, builtin_return_shape, method_thunk, project_callable, project_deep,
+    project_element, project_fiber_value, project_field, project_success_value,
+    stabilize_merged_callables,
 };
 mod provenance;
 use provenance::{
@@ -81,6 +86,9 @@ pub(crate) struct Instances {
     /// final fragment overwrite the others.
     pub(crate) performs: HashMap<(u32, u32), Vec<Vec<String>>>,
     pub(crate) handlers: HashMap<(u32, u32), Vec<String>>,
+    /// Capability sites: position → the effect the named capability performs
+    /// ([EFFECTS-INSTANCE]).
+    pub(crate) capabilities: HashMap<(u32, u32), String>,
     /// Explicit function-row arguments in source order, canonicalized by the
     /// type checker so a nominal record and its inferred row share an identity.
     pub(crate) declared_rows: HashMap<(u32, u32), Vec<Option<Vec<String>>>>,
@@ -93,6 +101,9 @@ pub(crate) struct Instances {
     pub(crate) handler_inference: RefCell<HandlerCandidates>,
     pub(crate) instantiations: HashMap<usize, HashMap<String, String>>,
     pub(crate) binders: HashMap<String, HashMap<String, String>>,
+    /// Constructions that store a function outside its field's written row
+    /// ([EFFECTS-FIELD-ROWS]).
+    pub(crate) field_row_violations: RefCell<field_rows::FieldRowViolations>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -100,9 +111,18 @@ struct Requirement {
     effect: String,
     operation: String,
     arguments: Vec<String>,
+    /// How many more activations answering this operation a `mask` still
+    /// skips: a handler discharges the requirement only at zero, and
+    /// otherwise lets it pass with one fewer ([EFFECTS-MASK]).
+    masked: u32,
 }
 
 type Requirements = BTreeSet<Requirement>;
+
+/// Mask levels and handler counts saturate here, so recursion under `mask`
+/// still reaches a fixed point. A request masked this deep is never proven
+/// discharged: the proof stays sound by rejecting it ([EFFECTS-MASK]).
+const MASK_LIMIT: u32 = 8;
 
 /// Provenance is an abstract value, not a runtime value tree. Recursive
 /// closures and aggregates grow across fixed-point iterations. Bound both
@@ -123,7 +143,23 @@ struct ParameterUse {
     index: usize,
     projection: Vec<Projection>,
     arguments: CallArguments,
-    excluded: Requirements,
+    /// The handlers and masks between the invocation and the function
+    /// boundary, innermost first; applied in order once the callback's own
+    /// requirements are known.
+    scopes: Vec<Scope>,
+}
+
+/// One layer a callback invocation sits under.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum Scope {
+    /// Handlers answering these requirements: how many answering activations
+    /// each passes, saturating at [`MASK_LIMIT`].
+    Handled(BTreeMap<Requirement, u32>),
+    /// A `mask` of one effect identity ([EFFECTS-MASK]).
+    Masked {
+        effect: String,
+        arguments: Vec<String>,
+    },
 }
 
 /// A callable can be stored below a record field or collection element. Keep
@@ -141,6 +177,29 @@ enum Projection {
     Element,
     SuccessValue,
     FiberValue,
+    /// Every callable stored anywhere below the parameter: the finite summary
+    /// of a recursive aggregate whose field/element structure repeats. A path
+    /// that repeats one structural cycle is replaced by this single step, so
+    /// the abstract value of the aggregate stays finite. Resolving it walks
+    /// the concrete argument and stays fail-closed at the provenance budget.
+    /// Implements [EFFECTS-PROVENANCE].
+    Deep,
+}
+
+impl Projection {
+    /// Structural steps traverse stored data, so repeating one describes a
+    /// recursive aggregate. The call-shaped steps can repeat without the
+    /// value itself being recursive, and a cycle through them is not sound to
+    /// summarise: invoking a stored closure is not storing one.
+    fn is_structural(&self) -> bool {
+        matches!(
+            self,
+            Projection::Field(_)
+                | Projection::Element
+                | Projection::SuccessValue
+                | Projection::FiberValue
+        )
+    }
 }
 
 /// A method on a symbolic receiver cannot select its UFCS fallback until the
@@ -199,7 +258,10 @@ struct Index<'a> {
     qualified: HashMap<String, usize>,
     bare: HashMap<String, Vec<usize>>,
     effects: HashMap<String, usize>,
+    /// Each declared effect's operation names, for a whole-effect row entry.
+    effect_operations: HashMap<String, Vec<String>>,
     constructors: HashMap<String, Vec<String>>,
+    field_rows: field_rows::FieldRows<'a>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]

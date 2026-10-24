@@ -5,16 +5,16 @@ import {
   escapeHtml,
   makeNonce,
   pathBasename,
-} from "../../client/src/profiler/flame-html";
+} from "@nimblesite/lsp-profiler-ui/out/src/flame-html";
 import {
   buildFlameModel,
   type SpeedscopeFile,
 } from "../../client/src/profiler/flame-model";
-import { FLAME_SCRIPT } from "../../client/src/profiler/flame-script";
+import { FLAME_SCRIPT } from "@nimblesite/lsp-profiler-ui/out/src/flame-script";
 import {
   clampViewRange,
   fitLabelText,
-} from "../../client/src/profiler/flame-script-helpers";
+} from "@nimblesite/lsp-profiler-ui/out/src/flame-script-helpers";
 import type { ProfileSummary } from "../../client/src/profiler/summary";
 
 const DOC: SpeedscopeFile = {
@@ -84,6 +84,19 @@ const html = buildFlameHtml({
 });
 
 suite("flame-html document structure", () => {
+  test("host palette controls canvas and chrome without dropping fiber views", () => {
+    const input = {
+      nonce: NONCE, title: "Profile", model: buildFlameModel(DOC), summary: SUMMARY,
+      palette: { critical: "#8b9254", hot: "#a39b67", warm: "#c0b587",
+        memory: "#84916b", memoryHot: "#a4b084", leak: "#f87171", success: "#34d399" },
+    };
+    const themed = buildFlameHtml(input);
+    assert.ok(themed.includes("--prof-critical: #8b9254"), "host palette must reach CSS");
+    assert.ok(themed.includes("#a39b67"), "host palette must reach flame colors");
+    assert.ok(themed.includes(">Time Order</button>"));
+    assert.ok(themed.includes("90% on-CPU"));
+  });
+
   test("is a complete themed document with canvas, tooltip, and toolbar", () => {
     assert.ok(html.startsWith("<!DOCTYPE html>"));
     assert.ok(html.includes('<canvas id="flame"></canvas>'));

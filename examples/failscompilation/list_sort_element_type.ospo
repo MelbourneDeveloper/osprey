@@ -1,0 +1,5 @@
+// [BUILTIN-LIST-SORT] listSort is constrained to List<int> and List<string>.
+// A float list would compare IEEE-754 bit patterns, a bool list its storage
+// words and a record list its heap addresses, so every other element type is
+// rejected before codegen instead of sorted in a meaningless order.
+fn main() = print(listLength(listSort([1.5, 2.5])))

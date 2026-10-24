@@ -1,0 +1,14 @@
+// [EFFECTS-INSTANCE]: a binding named in an effect form must be a capability;
+// an ordinary value cannot select handlers.
+effect Log {
+    /// Record one line.
+    write: fn(string) -> Unit
+}
+
+fn main() = {
+    let Log2 = 3
+    handle Log {
+        write m => print(m)
+    }
+    perform Log2.write("hi")
+}

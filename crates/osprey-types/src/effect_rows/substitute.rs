@@ -1,7 +1,7 @@
 //! Effect row substitute.
 use super::{
-    map_parameter_use_values, map_projection_values, shift_summary_levels, shift_value_levels,
-    Analyzer, Callable, Summary, Value,
+    map_parameter_use_values, map_projection_values, shift_value_levels, Analyzer, Callable,
+    Summary, Value,
 };
 
 impl Analyzer<'_> {
@@ -17,18 +17,26 @@ impl Analyzer<'_> {
                 *value = self.substitute_value_at(value.clone(), target_level, arguments);
             });
             if use_.level == target_level {
+                // The callback is caller provenance, but the arguments this
+                // use passes it already belong to the callee. Lift only the
+                // callback into the callee's levels: shifting the invoked
+                // summary instead re-attributes a returned closure's own
+                // parameter to its maker's caller, so `one(f) = fn(w) => f(w)`
+                // left `w` undischargeable at the entry. [EFFECTS-PROVENANCE]
                 let callback = arguments
                     .get(use_.index)
                     .and_then(Option::as_ref)
                     .cloned()
-                    .and_then(|value| self.project_path(value, &use_.projection))
+                    .and_then(|mut value| {
+                        shift_value_levels(&mut value, target_level, 0);
+                        self.project_path(value, &use_.projection)
+                    })
                     .and_then(|value| value.callable);
                 if let Some(callback) = callback {
-                    let mut invoked = self
-                        .invoke_with_arguments(callback, use_.arguments)
-                        .excluding(&use_.excluded);
-                    shift_summary_levels(&mut invoked, target_level);
-                    summary.union(invoked);
+                    summary.union(
+                        self.invoke_with_arguments(callback, use_.arguments)
+                            .within(&use_.scopes),
+                    );
                 } else if use_.index >= arguments.len() {
                     // No argument occupies this slot yet — the call is still
                     // under-applied, so the parameter stays symbolic for an

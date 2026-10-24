@@ -155,6 +155,7 @@ impl Lowerer<'_> {
             name: self.text(name).into(),
             ty: render(&ty),
             constraint: None,
+            effects: None,
         })
     }
 
@@ -166,6 +167,7 @@ impl Lowerer<'_> {
                 name: lowerer.text(name).into(),
                 ty: lowerer.signature_text(node)?,
                 constraint: None,
+                effects: None,
             })
         })
     }

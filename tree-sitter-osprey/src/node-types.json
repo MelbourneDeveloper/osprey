@@ -266,6 +266,25 @@
     }
   },
   {
+    "type": "closed_effect_set",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "effect_list",
+          "named": true
+        },
+        {
+          "type": "effect_ref",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "doc_comment",
     "named": true,
     "fields": {}
@@ -689,6 +708,16 @@
     "type": "field_declaration",
     "named": true,
     "fields": {
+      "effects": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "closed_effect_set",
+            "named": true
+          }
+        ]
+      },
       "name": {
         "multiple": false,
         "required": true,
@@ -1000,10 +1029,30 @@
           "named": true
         },
         {
+          "type": "handler_finally",
+          "named": true
+        },
+        {
           "type": "handler_return",
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "handler_finally",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -1092,6 +1141,10 @@
       "types": [
         {
           "type": "handler_arm",
+          "named": true
+        },
+        {
+          "type": "handler_finally",
           "named": true
         },
         {
@@ -1279,6 +1332,36 @@
     "type": "inner_doc_comment",
     "named": true,
     "fields": {}
+  },
+  {
+    "type": "instance_expression",
+    "named": true,
+    "fields": {
+      "effect": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "qualified_path",
+            "named": true
+          }
+        ]
+      },
+      "instantiation": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "type_arguments",
+            "named": true
+          }
+        ]
+      }
+    }
   },
   {
     "type": "kernel_arm",
@@ -1600,6 +1683,46 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "mask_expression",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "block",
+            "named": true
+          }
+        ]
+      },
+      "effect": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "qualified_path",
+            "named": true
+          }
+        ]
+      },
+      "instantiation": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "type_arguments",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -2281,11 +2404,19 @@
           "named": true
         },
         {
+          "type": "instance_expression",
+          "named": true
+        },
+        {
           "type": "lambda_expression",
           "named": true
         },
         {
           "type": "literal",
+          "named": true
+        },
+        {
+          "type": "mask_expression",
           "named": true
         },
         {
@@ -3467,6 +3598,10 @@
     "named": false
   },
   {
+    "type": "finally",
+    "named": false
+  },
+  {
     "type": "float",
     "named": true
   },
@@ -3495,6 +3630,10 @@
     "named": false
   },
   {
+    "type": "instance",
+    "named": false
+  },
+  {
     "type": "integer",
     "named": true
   },
@@ -3516,6 +3655,10 @@
   },
   {
     "type": "many",
+    "named": false
+  },
+  {
+    "type": "mask",
     "named": false
   },
   {

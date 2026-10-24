@@ -1,0 +1,1 @@
+10:4: handle static names unknown effect `audit`: a compile-time region needs an effect declaration, and a capability made by `instance` is a runtime identity it cannot answer

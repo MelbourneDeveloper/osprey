@@ -143,6 +143,33 @@ impl CompilationInput {
         }
     }
 
+    /// Every undocumented export, read from each source as written: project
+    /// assembly flattens modules away, so the flattened program cannot say
+    /// what was exported. Positions land in the flattened space, like every
+    /// other warning's ([DOC-EXPORT-REQUIRED]).
+    pub(crate) fn undocumented_exports(&self) -> Vec<osprey_types::TypeWarning> {
+        let CompilationUnit::Project(project) = &self.unit else {
+            return osprey_types::undocumented_exports(self.program());
+        };
+        project
+            .sources
+            .iter()
+            .flat_map(|source| {
+                let parsed =
+                    osprey_syntax::parse_program_with_flavor(&source.source, source.flavor);
+                osprey_types::undocumented_exports(&parsed.program)
+                    .into_iter()
+                    .map(|mut warning| {
+                        if let Some(position) = &mut warning.position {
+                            position.line = source.global_line(position.line);
+                        }
+                        warning
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
     /// All original source text used to discover project-wide link directives.
     pub(crate) fn source(&self) -> &str {
         &self.source
@@ -205,6 +232,29 @@ impl CompilationInput {
         match &self.unit {
             CompilationUnit::Project(project) => Some(&project.public_api),
             CompilationUnit::Script(_) => None,
+        }
+    }
+
+    /// The functions a library build publishes as C exports: those the entry
+    /// source declares, or none but the entry with `--entry-only`. A script
+    /// is its own entry source. Implements [IOS-HOST-ABI].
+    pub(crate) fn export_scope(&self, entry_only: bool) -> crate::ios_abi::ExportScope {
+        if entry_only {
+            return crate::ios_abi::ExportScope::EntryOnly;
+        }
+        crate::ios_abi::ExportScope::EntrySource(match &self.unit {
+            CompilationUnit::Project(project) => project
+                .entry()
+                .map(|entry| entry.global_line_start..=entry.global_line_end),
+            CompilationUnit::Script(_) => None,
+        })
+    }
+
+    /// Whether `symbol` is an exported module member, whose signature is API.
+    pub(crate) fn exported_member(&self, symbol: &str) -> bool {
+        match &self.unit {
+            CompilationUnit::Project(project) => project.exported_member(symbol),
+            CompilationUnit::Script(_) => false,
         }
     }
 

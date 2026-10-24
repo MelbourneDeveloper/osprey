@@ -1,0 +1,13 @@
+// A field whose function type writes `![]` admits only pure functions: storing
+// one that rings an alarm is rejected at the construction, where the row is
+// broken, rather than wherever the field is later called. Implements
+// [EFFECTS-FIELD-ROWS].
+effect Alarm { ring: fn() -> int }
+
+type Control = { label: string, press: fn(string) -> int ![] }
+
+fn main() = {
+    handle Alarm { ring => 7 }
+    let control = Control { label: "go", press: fn(text) => perform Alarm.ring() }
+    print(toString(control.press(control.label)))
+}

@@ -1,0 +1,54 @@
+(* A function is generalized before its callers use it, whatever the source
+   order: a caller defined above its helper still uses the caller at several
+   types (#287). [TYPE-BINDING-ORDER] *)
+
+(** Order two values, deferring ties and descents to a helper defined below. *)
+order (a, b) = match a < b
+    true => -1
+    false => after (a, b)
+
+(** The helper `order` calls, defined after it. *)
+after (a, b) = match a > b
+    true => 1
+    false => 0
+
+(** Count down to a parity through two functions defined below. *)
+parity n = match isEven n
+    true => "even"
+    false => "odd"
+
+(** Even through mutual recursion with `isOdd`. *)
+isEven n = match n == 0
+    true => true
+    false => isOdd (wrapSub n 1)
+
+(** Odd through mutual recursion with `isEven`. *)
+isOdd n = match n == 0
+    true => false
+    false => isEven (wrapSub n 1)
+
+(** Wrap a value through an identity defined below. *)
+boxed value = [same value]
+
+(** The identity `boxed` calls. *)
+same value = value
+
+(** Callers above their helpers use them at int and at string. *)
+orderCase () = checkAll "a caller above its helper is generic" [
+    order (1, 2) == -1,
+    order (2, 1) == 1,
+    order (3, 3) == 0,
+    order ("a", "b") == -1,
+    order ("b", "a") == 1,
+    join (boxed "x") "," == "x",
+    length (boxed 4) == 1
+]
+
+(** A recursive group below its caller still checks. *)
+recursionCase () = checkAll "a recursive group below its caller" [
+    parity 4 == "even",
+    parity 7 == "odd"
+]
+
+test "a caller above its helper is generic" orderCase
+test "a recursive group below its caller" recursionCase

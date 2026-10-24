@@ -1,5 +1,6 @@
 //! Type checking: sites.
-use super::{HashMap, HashSet, InferCtx, Type};
+use super::{HashMap, HashSet, InferCtx, Type, VarId};
+use std::collections::BTreeSet;
 
 /// The code generator's erased view assigns every declared generic parameter
 /// the uniform boxed type-variable representation.
@@ -90,4 +91,49 @@ pub(super) fn resolve_positioned(
         table.insert(function.as_deref(), (pos.line, pos.column), ctx.apply(ty));
     }
     table
+}
+
+/// The variables a published LAMBDA type still leaves open: a closure cell has
+/// one ABI, so these are the variables an agreeing use may resolve. A handler
+/// VALUE's open type is part of its quarantine contract
+/// ([EFFECTS-HANDLER-STATE]): the backend lifts its arms and rejects a state
+/// write that would lose the shared cell, so its variable stays open.
+pub(super) fn open_lambda_vars(
+    lambdas: &crate::info::SiteTable,
+    handler_sites: &HashSet<(u32, u32)>,
+    ctx: &mut InferCtx,
+) -> HashSet<VarId> {
+    let mut open = BTreeSet::new();
+    for ((line, column), ty) in lambdas.iter() {
+        if !handler_sites.contains(&(*line, *column)) {
+            ctx.free_vars(ty, &mut open);
+        }
+    }
+    open.into_iter().collect()
+}
+
+/// Resolve the variables a published LAMBDA type still leaves open through the
+/// one instantiation every recorded use of its generalized binding agrees on,
+/// then carry that resolution to the other site tables. Without this, a lambda
+/// passed to a generic function kept the `let`'s quantified variable even
+/// though its only later use pinned the type, so the backend rejected a
+/// closure `--check` had accepted. Only a lambda needs this: its cell has one
+/// ABI, while a let or list tolerates a generic type and a handler value's
+/// open type is part of its quarantine contract. Implements
+/// [TYPE-GENERICS-APPLY].
+pub(super) fn resolve_aliases(
+    candidates: &HashSet<VarId>,
+    tables: &mut [&mut crate::info::SiteTable],
+    sites: &HashMap<usize, HashMap<VarId, Type>>,
+    ctx: &mut InferCtx,
+) {
+    let aliases = crate::applications::alias_resolutions(sites, candidates, ctx);
+    if aliases.is_empty() {
+        return;
+    }
+    for table in tables {
+        table
+            .values_mut()
+            .for_each(|ty| *ty = crate::env::subst_vars(ty, &aliases));
+    }
 }

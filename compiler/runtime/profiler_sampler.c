@@ -148,6 +148,14 @@ static void remember_stack(OspProfSlot *slot, uint32_t stack) {
   }
 }
 
+static void discard_ring(OspProfSlot *slot);
+
+void osp_prof_sampler_reset_slot(OspProfSlot *slot) {
+  slot->has_last_stack = false;
+  slot->last_stack = 0;
+  discard_ring(slot);
+}
+
 #if defined(__APPLE__)
 
 // ---- macOS: suspend / read state / walk / resume ----------------------------
@@ -256,6 +264,7 @@ static bool platform_setup(void) {
   return mach_timebase_info(&g_timebase) == KERN_SUCCESS;
 }
 static void platform_teardown(void) {}
+static void discard_ring(OspProfSlot *slot) { (void)slot; } // no rings here
 
 #else
 
@@ -348,6 +357,18 @@ static void drain_ring(OspProfSlot *slot, uint8_t state) {
   }
 }
 
+// Entries a late signal wrote after the last session's final drain carry that
+// session's row, which the next session may have given to another thread.
+static void discard_ring(OspProfSlot *slot) {
+  Ring *ring = slot->ring;
+  if (ring) {
+    atomic_store_explicit(
+        &ring->tail, atomic_load_explicit(&ring->head, memory_order_acquire),
+        memory_order_release);
+    atomic_store_explicit(&ring->drops, 0, memory_order_relaxed);
+  }
+}
+
 static void sample_thread(const OspProfSnap *snap) {
   osp_prof_registry_lock();
   if (!osp_prof_snap_live(snap)) {
@@ -407,6 +428,7 @@ static void platform_teardown(void) {
 // ---- sampler thread lifecycle ------------------------------------------------
 
 static void sampler_tick(void) {
+  osp_prof_store_begin_tick();
   OspProfSnap snaps[OSP_PROF_MAX_THREADS];
   int n = osp_prof_snapshot(snaps, OSP_PROF_MAX_THREADS);
   for (int i = 0; i < n; i++) {
@@ -425,6 +447,7 @@ static void *sampler_main(void *arg) {
   while (!atomic_load_explicit(&g_sampler_stop, memory_order_relaxed)) {
     wait_until_next(&deadline);
     sampler_tick();
+    osp_diag_pump(); // the store's single writer streams it [PROF-ATTACH-PROTOCOL]
   }
   platform_teardown();
   return NULL;

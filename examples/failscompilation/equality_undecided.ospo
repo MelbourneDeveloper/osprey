@@ -1,0 +1,23 @@
+// [BOOL-EQUALITY] [BOOL-ORDERING] A comparison whose meaning is not decided is
+// a compile error. Each of these compiled before the rule: the aggregate ones
+// compared references, so equal contents compared unequal, silently, and the
+// ordered ones compared addresses or declaration order. [BUILTIN-LIST-CONTAINS]
+// searches by `==`, so its element type follows the same rule.
+type Route = { tab: string, depth: int }
+type Shape = Dot | Circle { r: int }
+type Area = Apps | Files
+
+fn home() = Route { tab: "home", depth: 1 }
+fn same(a, b) = a == b
+fn work(x) = x + 1
+
+fn viaRecord() = home() == home()
+fn viaList() = [1, 2] == [1, 2]
+fn viaPayloadUnion() = same(Circle { r: 2 }, Circle { r: 2 })
+fn viaFunction() = work == work
+fn viaGenericCaller() = same(home(), home())
+fn viaListContains() = listContains([home()], home())
+fn viaUnionOrder() = Apps < Files
+fn viaRecordOrder() = home() >= home()
+
+print("${viaRecord()} ${viaList()} ${viaPayloadUnion()} ${viaFunction()} ${viaGenericCaller()} ${viaListContains()} ${viaUnionOrder()} ${viaRecordOrder()}")

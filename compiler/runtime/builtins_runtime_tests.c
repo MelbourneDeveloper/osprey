@@ -1,7 +1,8 @@
 // Assertion-driven tests for four small builtin runtimes in one binary:
 //   ffi_runtime.c    — pointer cells for C out-parameters (Osprey `Ptr`)
 //   random_runtime.c — [BUILTIN-RANDOM], [BUILTIN-RANDOM-BELOW], [BUILTIN-INPUT]
-//   term_runtime.c   — [BUILTIN-TERM] raw mode, key decoding, ANSI writes
+//   term_runtime.c   — [BUILTIN-TERM] raw mode, key decoding, ANSI writes;
+//                      the real-terminal scenarios are in term_tty_tests.c
 //   test_runtime.c   — [TESTING-RUNTIME], [TESTING-TAP], [TESTING-EXIT],
 //                      [TESTING-FILTER] TAP state machine
 // random_runtime.c's entropy source is in the sibling random_entropy_tests.c,
@@ -392,9 +393,10 @@ static void t_term(void) {
                    0);
   run_child_expect(child_term_keys,
                    "\r\n\t\x7f\x08\x03x\x1b[A\x1b[B\x1b[C\x1b[D\x1b[H\x1b[F"
-                   "\x1b[3~\x1b[5~\x1b[6~\x1bOA\x1b",
+                   "\x1b[3~\x1b[5~\x1b[6~\x1bOA\x1b[Z\x1b[2~\x1b",
                    "Enter;Enter;Tab;Backspace;Backspace;Ctrl-C;x;Up;Down;"
-                   "Right;Left;Home;End;Delete;PageUp;PageDown;Up;Esc;NULL",
+                   "Right;Left;Home;End;Delete;PageUp;PageDown;Up;Esc;Esc;Esc;"
+                   "NULL",
                    0);
 }
 
@@ -613,6 +615,7 @@ int main(void) {
   // Last: it spends the bootstrap arena, and nothing after it may need one.
   t_bootstrap_arena_hands_out_only_its_own_bytes();
   t_term();
+  t_term_tty();
   t_tap();
   printf("[ok] builtins_runtime: %ld assertions\n", g_checks);
   return 0;

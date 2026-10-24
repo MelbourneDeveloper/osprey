@@ -14,7 +14,7 @@ Independent entries are processed concurrently and return their values through e
 
 1. Concurrency is work making progress together
 2. A current native fiber uses an operating-system thread
-3. Spawn work without coloring every caller
+3. Spawn work without a separate async function declaration
 4. Send values instead of sharing writable memory
 5. Receive, await, and yield deliberately
 6. Keep failures and effects visible across boundaries
@@ -24,11 +24,11 @@ Independent entries are processed concurrently and return their values through e
 
 - A normal native fiber is backed one-to-one by a pthread. Do not describe the current runtime as a pool of lightweight tasks multiplexed onto fewer threads, or promise that spawning thousands of fibers is inexpensive.
 - `spawn expression` returns `Fiber<T>`; `await` blocks and returns the complete `T`, including a `Result` when the computation produces one. There is no separate `async` function declaration. Awaiting the same completed fiber again returns the same result value.
-- `Channel(capacity)` requires positive capacity. `send` blocks while its buffer is full and returns `Unit`; `recv` blocks while it is empty and returns the channel's element type. One channel has one inferred element type. `select` is reserved syntax that the current checker rejects.
+- `Channel(capacity)` requires positive capacity. `send` blocks while its buffer is full and returns `Unit`; `recv` blocks while it is empty and returns the channel's element type. One channel has one inferred element type. Use the supported `send` and `recv` operations for this chapter.
 - Managed immutable values may be co-owned across fiber threads. “Send values” does not mean that every value is copied into an independent heap. The runtime handles ownership; this chapter must not teach shared-cell mutation as a coordination technique.
 - In normal execution, awaiting tasks in a chosen order gives a chosen order for collecting their results. It does not guarantee the order in which the workers run or print. The runtime's optional deterministic mode queues work and executes it sequentially when awaited; it does not simulate every possible interleaving.
 - Native `yield` offers the current thread's remaining time slice and returns its value. Native `sleep` blocks that thread. Neither operation provides the cancellation behavior described in the future structured-concurrency design.
-- Lexical `scope`, cancellation, `join` with `Outcome`, deadlines, and races remain planned work in plan 0026. The chapter must explicitly await its finite workers; it cannot promise that a lexical scope cancels them. WebAssembly excludes the native fiber/channel runtime.
+- Explicitly await finite workers; leaving a block does not cancel them. WebAssembly excludes the native fiber/channel runtime.
 
 ## Compiler-feedback exercise
 

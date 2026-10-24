@@ -1,0 +1,44 @@
+// The reporting boundary reads this program's own Verdict declaration, so the
+// payload fields may carry any name, and a test name that happens to contain
+// a skip directive is still the name of a case that ran.
+// [TESTING-VERDICT-DECLARED] [TESTING-TAP] [TESTING-TAP-AMBIGUITY]
+
+(** Three states whose payload fields use names the compiler never assumes. *)
+type Verdict =
+    Pass
+    Fail
+        problem : string
+    Skip
+        because : string
+
+(** Pass on equal canonical text, else Fail carrying the labelled mismatch. *)
+verdictOf label expected actual =
+    match expected == actual
+        true => Pass
+        false => Fail(problem = "${label}: expected ${expected}, got ${actual}")
+
+(** Render any Verdict through its declared binders. *)
+describe verdict =
+    match verdict
+        Pass => "pass"
+        Fail problem => "fail:${problem}"
+        Skip because => "skip:${because}"
+
+(** A skip reached through an ordinary function rather than a literal body. *)
+parked () = Skip(because = "waiting on the device lab")
+
+(** Verdicts are ordinary data before `test` reports them. *)
+verdictDataCase () =
+    checkAll "a declared Verdict is ordinary data" [
+        describe (verdictOf "sum" "5" "${wrapAdd 2 3}") == "pass",
+        describe (verdictOf "sum" "6" "${wrapAdd 2 3}") == "fail:sum: expected 6, got 5",
+        describe (parked ()) == "skip:waiting on the device lab",
+        describe (Fail(problem = "")) == "fail:",
+        describe Pass != describe (Skip(because = "pass"))
+    ]
+
+test "a renamed Verdict passes through the declared Pass" (\() => verdictOf "sum" "5" "${wrapAdd 2 3}")
+test "a renamed skip field still reports its reason" (\() => Skip(because = "blocked on #123"))
+test "a skip reached through a function reports its reason" parked
+test "declared Verdict values match on their own binders" verdictDataCase
+test "a name with # SKIP inside it still ran" (\() => Pass)

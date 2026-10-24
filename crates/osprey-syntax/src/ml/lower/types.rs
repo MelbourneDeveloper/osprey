@@ -33,6 +33,9 @@ pub(in crate::ml) fn lower_type_field(field: MlTypeField) -> TypeField {
         name: field.name,
         ty: render_type(&field.ty),
         constraint: None,
+        effects: field
+            .effects
+            .map(|row| row.into_iter().map(lower_effect_ref).collect()),
     }
 }
 

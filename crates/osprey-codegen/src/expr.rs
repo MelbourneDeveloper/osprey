@@ -22,46 +22,50 @@ mod lambdas;
 use lambdas::{apply_bound_lambda, apply_lambda, with_lambda_captures};
 pub(crate) use lambdas::{apply_lambda_values, fit_lambda_return, inline_sig, reduce_lambda};
 mod arguments;
-pub(crate) use arguments::call_with_values;
 use arguments::{binary_integer_builtin, eval_arg, gen_user_call, is_binary_integer_builtin};
+pub(crate) use arguments::{call_with_values, has_value_form};
 
 mod block;
 mod identifier;
 use block::gen_block;
 pub(crate) use block::{gen_block_with, gen_body};
 
-pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
-    let inferred = match expr {
-        Expr::Integer(_) => Some(osprey_types::Type::con(
-            osprey_types::names::INT,
-            Vec::new(),
-        )),
-        Expr::Float(_) => Some(osprey_types::Type::con(
-            osprey_types::names::FLOAT,
-            Vec::new(),
-        )),
-        Expr::Bool(_) => Some(osprey_types::Type::con(
-            osprey_types::names::BOOL,
-            Vec::new(),
-        )),
-        Expr::Str(_) | Expr::InterpolatedStr(_) => Some(osprey_types::Type::con(
-            osprey_types::names::STRING,
-            Vec::new(),
-        )),
-        Expr::Call { function, .. } => cg.callee_fn_type(function).and_then(|ty| match ty {
-            osprey_types::Type::Fun { ret, .. } => Some(*ret),
-            _ => None,
-        }),
-        Expr::List(_, position) => cg
-            .prog
-            .list_elem_type(cg.source_function.as_deref(), *position)
-            .cloned()
-            .map(|element| osprey_types::Type::con(osprey_types::names::LIST, vec![element])),
+/// The Osprey type an expression has before it is generated, where the
+/// checker published it or the expression's form decides it; `None` when
+/// only generating the value can tell.
+pub(crate) fn static_type(cg: &Codegen, expr: &Expr) -> Option<osprey_types::Type> {
+    let scalar = |name: &str| Some(osprey_types::Type::con(name, Vec::new()));
+    match expr {
+        Expr::Integer(_) => scalar(osprey_types::names::INT),
+        Expr::Float(_) => scalar(osprey_types::names::FLOAT),
+        Expr::Bool(_) => scalar(osprey_types::names::BOOL),
+        Expr::Str(_) | Expr::InterpolatedStr(_) => scalar(osprey_types::names::STRING),
+        Expr::Call { function, .. } => call_return_type(cg, function),
+        Expr::List(_, position) => list_type(cg, *position),
         Expr::Perform { position, .. } => position
             .and_then(|p| cg.prog.performs.get(&(p.line, p.column)))
             .map(|site| site.op.ret.clone()),
         _ => None,
-    };
+    }
+}
+
+fn call_return_type(cg: &Codegen, function: &Expr) -> Option<osprey_types::Type> {
+    match cg.callee_fn_type(function)? {
+        osprey_types::Type::Fun { ret, .. } => Some(*ret),
+        _ => None,
+    }
+}
+
+/// A list literal's type, from the element type inference published for it.
+fn list_type(cg: &Codegen, position: Option<Position>) -> Option<osprey_types::Type> {
+    cg.prog
+        .list_elem_type(cg.source_function.as_deref(), position)
+        .cloned()
+        .map(|element| osprey_types::Type::con(osprey_types::names::LIST, vec![element]))
+}
+
+pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
+    let inferred = static_type(cg, expr);
     let folded = osprey_types::fold_arithmetic(expr).map_err(CodegenError::invalid)?;
     let mut value = gen_expr_raw(cg, folded.as_ref().map_or(expr, |value| value))?;
     if let Some(ty) = inferred.filter(|ty| !osprey_types::has_type_var(ty)) {
@@ -134,12 +138,24 @@ fn gen_expr_raw(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
             effect,
             arms,
             return_clause,
+            finally,
             body,
             position,
-        } => {
-            crate::effects::gen_handler(cg, effect, arms, body, return_clause.as_deref(), *position)
-        }
+        } => crate::effects::gen_handler(
+            cg,
+            effect,
+            arms,
+            body,
+            [return_clause.as_deref(), finally.as_deref()],
+            *position,
+        ),
         Expr::Resume(value) => crate::effects::gen_resume(cg, value.as_deref()),
+        Expr::Mask {
+            effect,
+            body,
+            position,
+        } => crate::effects::gen_mask(cg, effect, body, *position),
+        Expr::Instance { .. } => Ok(crate::effects::gen_instance(cg)),
         // A lambda in plain value position (returned, block tail, stored in a
         // field) becomes a closure cell, typed by inference.
         Expr::Lambda {

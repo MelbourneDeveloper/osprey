@@ -22,5 +22,27 @@
       "Xcode",
       "algebraic effects"
     ]
+  },
+  "profiler": {
+    "name": "Profiling Osprey in VS Code: CPU, memory and leaks",
+    "description": "A two-minute video tutorial. Run and profile the open file, read the flame graph and the heat on your source, attach to a program that is already running, then see how Osprey's memory backends work and check a program for leaks with ARC.",
+    "content": "/assets/videos/osprey-profiler.mp4",
+    "poster": "/assets/videos/osprey-profiler-poster.jpg",
+    "posterAlt": "The Profiling Osprey title card with the Osprey bird and the words CPU, memory, leaks, in VS Code",
+    "captions": "/assets/videos/osprey-profiler.en.vtt",
+    "chapters": "/assets/videos/osprey-profiler.chapters.vtt",
+    "width": 1920,
+    "height": 1080,
+    "uploadDate": "2026-10-23T15:26:00+11:00",
+    "tags": [
+      "Osprey",
+      "profiler",
+      "CPU profiling",
+      "flame graph",
+      "VS Code",
+      "memory management",
+      "ARC",
+      "leak detection"
+    ]
   }
 }

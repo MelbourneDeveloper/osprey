@@ -14,6 +14,8 @@
 //! inferrer would have derived on its own ([TYPE-ANNOTATION-REDUNDANT]).
 
 mod applications;
+#[cfg(test)]
+mod applications_tests;
 mod arithmetic;
 pub use arithmetic::fold_arithmetic;
 mod builtin_constraints;
@@ -26,6 +28,7 @@ mod callback;
 #[cfg(test)]
 mod callback_tests;
 mod check;
+mod comparison;
 mod convert;
 mod ctx;
 mod effect_rows;
@@ -33,6 +36,8 @@ mod effect_rows;
 mod effect_rows_exports_tests;
 #[cfg(test)]
 mod effect_rows_expr_tests;
+#[cfg(test)]
+mod effect_rows_field_tests;
 #[cfg(test)]
 mod effect_rows_tests;
 #[cfg(test)]
@@ -57,22 +62,33 @@ mod generics_variance_builtin_tests;
 mod generics_variance_shape_tests;
 #[cfg(test)]
 mod generics_variance_tests;
+mod handler_scope;
 mod info;
 mod init_order;
 mod methods;
 mod multiplicity;
 mod pattern;
+mod prelude;
+pub use prelude::{is_prelude_line, PRELUDE_LINE_BASE};
 mod redundant;
+#[cfg(test)]
+mod redundant_contract_tests;
 mod redundant_sites;
 #[cfg(test)]
 mod redundant_tests;
+#[cfg(test)]
+mod redundant_window_tests;
 mod staging;
+mod structural_equals;
 #[cfg(test)]
 #[path = "../../testkit.rs"]
 mod testkit;
 #[cfg(test)]
 mod testutil;
 mod ty;
+mod undocumented;
+#[cfg(test)]
+mod undocumented_tests;
 mod unify;
 mod unused;
 #[cfg(test)]
@@ -91,12 +107,13 @@ pub use info::{
     CtorLayout, EffectRequirements, HandlerSite, OpType, PerformSite, ProgramTypes, SiteTable,
 };
 pub use redundant::{
-    redundant_annotation_sites, redundant_annotation_sites_where, redundant_annotations,
-    redundant_annotations_where, RedundantAnnotation, RedundantTarget, TypeWarning,
-    REDUNDANT_ANNOTATION,
+    redundant_annotation_sites, redundant_annotation_sites_for, redundant_annotation_sites_where,
+    redundant_annotations, redundant_annotations_where, RedundantAnnotation, RedundantTarget,
+    TypeWarning, REDUNDANT_ANNOTATION,
 };
 pub use staging::{lower_static_checked, signal_dependencies};
 pub use ty::{has_type_var, names, render_with_holes, Scheme, Type, VarId, HOLE};
+pub use undocumented::{undocumented_exports, UNDOCUMENTED_EXPORT};
 pub use unused::{unused_symbols, UnusedKind, UnusedSymbol};
 
 #[cfg(test)]

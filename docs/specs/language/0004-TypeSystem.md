@@ -65,6 +65,13 @@ i = identity 42          // identity<int>
 s = identity "hello"     // identity<string>
 ```
 
+`[TYPE-BINDING-ORDER]` Source order does not decide what generalizes. Each top-level
+function is checked after the functions it calls, so a caller defined above
+its helper still uses the caller at several types. Functions that call each
+other form one recursive group, which is checked together and stays
+monomorphic inside the group. A function that reads a top-level `let` which has
+not run yet is checked at its own position.
+
 ### Reporting a Partly Inferred Type — [TYPE-RENDER-HOLES]
 
 Inference does not always reach a single ground type, and what a tool reports
@@ -183,6 +190,12 @@ load-bearing exactly when a parameter must relate two or more positions
 caller must pin an otherwise-unconstrained variable. HM inference is
 unchanged: unannotated functions stay implicitly polymorphic, and a
 polymorphic function is monomorphised independently at each call site.
+A declared binder closes the signature, so the scheme is quantified at the
+declaration — before any call site is inferred — whatever order the files are
+checked in and across a mutually recursive group: every call site, including
+one in an earlier file or a sibling of a recursive cycle, instantiates fresh
+variables. The Default/ML `generic_mutual_recursion` pair pins a two-function
+cycle used at two types in one program.
 Variance markers are **not** permitted on function binders (variance is
 declaration-site on types and effects only — [TYPE-VARIANCE-DECL]).
 
@@ -213,6 +226,16 @@ indirectly. An expected result type can also pin a binder absent from the
 parameters: `let xs: List<int> = empty()` fixes `T` for
 `fn empty<T>() -> List<T> = []`. Explicit type arguments are the only spelling
 that can pin a phantom binder absent from both parameter and result types.
+
+A `let`-generalized variable carries its resolution to the published site
+types: a closure inside the initializer keeps the binding's quantified
+variable while inference runs, and the one instantiation every later use of
+the binding agrees on settles it — so a lambda handed to a generic function
+still lowers at the ABI its only consuming use pinned, even when that use
+appears after the binding. Uses that disagree leave the variable open, and
+so does a use inside a generic function, which is a different type at each of
+that function's instantiations: the closure is then specialised per use, or
+rejected as still generic, never pinned to one caller's type.
 
 ```osprey
 fn identity<T>(x: T) -> T = x
@@ -621,6 +644,13 @@ collection's element may be a record, and an unresolved type variable may still
 infer to one, so none of those are rejected here. Without the check, codegen
 emitted invalid LLVM and the failure surfaced from `clang` against a temporary
 `.ll` file instead of the user's source.
+
+A receiver whose inferred type names a record takes THAT record's layout: for
+a generic record the instantiation's layout follows from the declaration
+([TYPE-GENERICS-DECL](#generics-and-variance)), wherever the value was constructed,
+so two records sharing a field name never make the read ambiguous. Choosing a
+record by field name alone is a fallback for an untracked receiver and fails
+loudly when two records declare the name.
 
 ```osprey
 let n = person.name        // ok
@@ -1031,16 +1061,17 @@ seen : List<int>
 seen = []
 ```
 
-**What is never redundant.** Four constructs carry types as part of their
+**What is never redundant.** Five constructs carry types as part of their
 declaration rather than as a constraint on an inferred one, and no annotation
 in them is ever reported:
 
+- an exported module member's signature: its parameter, return and header annotations are the module's API, consumed by projects the analysis cannot see. Whether one program still needs them says nothing about the next, so they are held fixed while the rest is judged. Annotations inside the member's body, and the signatures of private members and namespace-level functions, are judged as usual;
 - a `signature` block's members ([MODULES-SIGNATURE](0025-ModulesAndNamespaces.md#signatures-modules-signature)) — a signature *is* the module's public contract. Elaboration copies a signature's types onto the members that left them off, and it marks every type it supplies, so a member that wrote nothing is never blamed for the copy. A member that *writes* the same type again is judged like any other function: that duplicate is a real line, and deleting it changes nothing;
 - record field declarations and union variant payloads, whose types are their definition;
 - `extern` and foreign declarations ([Foreign Function Interface](../compiler/0019-ForeignFunctionInterface.md)), which have no body to infer from;
 - an annotation whose erasure changes a type variable's constraints or its relationship to a declared binder.
 
-Types inserted by module-signature elaboration are compiler-generated constraints and never receive a redundancy warning. A written annotation in a module body is checked normally, even if its spelling equals the module's signature. The compiler records this provenance when it inserts a constraint; matching member names or type spellings is not evidence that an annotation was generated.
+Types inserted by module-signature elaboration are compiler-generated constraints and never receive a redundancy warning. A written annotation in a private member's body or signature is checked normally, even if its spelling equals the module's signature; an exported member's signature is held fixed as above. The compiler records this provenance when it inserts a constraint; matching member names or type spellings is not evidence that an annotation was generated.
 
 An annotation that would erase a `Result` is not redundant either — it is a
 type error ([Result Preservation](#result-preservation)), reported as one.
@@ -1107,7 +1138,7 @@ print(relay(|| => work())) // warning: pass `work` directly
 
 Write `print(relay(work))` to remove the wrapper. The same rule applies to `\() => work ()` in ML syntax. The diagnostic names the replacement: `redundant callback wrapper: pass ` followed by the function name in backticks and ` directly; it already takes no arguments`. The CLI reports the source location; the editor shows a Warning and marks the wrapper unnecessary. Warnings do not change generated code or exit status.
 
-This is a conservative simplification. A callback that supplies arguments, performs additional work, installs a handler, or reads a mutable or shadowed callee is not reported. Stored callbacks and consumers that could retain or inspect the callback are excluded: function identity is observable. Both the consumer and the forwarded function must resolve to unambiguous immutable declarations. Explicit lambda return constraints, unresolved generic types, and contexts that adapt the callback's result representation are also excluded. Unrelated comparisons, interpolation and foreign declarations do not suppress the rule.
+This is a conservative simplification. A callback that supplies arguments, performs additional work, installs a handler, or reads a mutable or shadowed callee is not reported. Stored callbacks and consumers that could retain the callback are excluded. Comparing functions is a compile error ([BOOL-EQUALITY](0009-BooleanOperations.md#what--and--compare-bool-equality)), so no comparison can observe whether a wrapper was removed. Both the consumer and the forwarded function must resolve to unambiguous immutable declarations. Explicit lambda return constraints, unresolved generic types, and contexts that adapt the callback's result representation are also excluded. Unrelated comparisons, interpolation and foreign declarations do not suppress the rule.
 
 A handler still needs a callback to delay execution until its scope is installed: `policy(work)` preserves that delay. `policy(work())` does not.
 

@@ -13,6 +13,7 @@
 
 namespace "bank/web"
 
+(** The web client's static pages: the React shell, its bundle and a 404. *)
 module Pages
     response status contentType body =
         headers = "Content-Type: ${contentType}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n"
@@ -27,6 +28,8 @@ module Pages
         body = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Not found · Talon Bank</title><link rel=\"stylesheet\" href=\"/app.css\"></head><body><main class=\"not-found\"><span>404</span><h1>That route has flown the coop.</h1><p>The banking app is waiting back at the dashboard.</p><a href=\"/\">Return to Talon Bank</a></main></body></html>"
         response 404 "text/html; charset=utf-8" body
 
+    (** The HTTP response for a browser `path`: the shell, the bundle's CSS or
+        JavaScript, or a 404 page. *)
     export render path = match path
         "/" => html (shell ())
         "/app.css" => response 200 "text/css; charset=utf-8" (Bundle::style ())

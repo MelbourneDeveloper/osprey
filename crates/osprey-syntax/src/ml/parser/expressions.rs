@@ -266,6 +266,8 @@ impl Parser<'_> {
             TokKind::KwPerform => self.perform_expr(),
             TokKind::KwHandler => self.handler_value_expr(),
             TokKind::KwResume => self.resume_expr(),
+            TokKind::KwMask => self.mask_expr(),
+            TokKind::KwInstance => self.instance_expr(),
             TokKind::KwAwait => self.await_expr(),
             TokKind::KwYield => self.yield_expr(),
             TokKind::KwSend => self.send_expr(),

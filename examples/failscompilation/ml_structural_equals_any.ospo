@@ -1,0 +1,10 @@
+// osprey: flavor=ml
+// [BUILTIN-STRUCTURAL-EQUALS] The ML half of `structural_equals_any.ospo`:
+// `any` is erased and a `Result` carries an error channel, so neither has a
+// decided equality in this flavor either.
+viaAny (a : any, b : any) = structuralEquals(a, b)
+viaAnyElement (a : any, b : any) = structuralEquals([a], [b])
+viaResult () = structuralEquals(Success(value = 1), Success(value = 2))
+viaResultField () = structuralEquals({ load = Success(value = 1) }, { load = Success(value = 2) })
+
+print "${toString (viaAny (1, 2))} ${toString (viaAnyElement (1, 2))} ${toString (viaResult ())} ${toString (viaResultField ())}"

@@ -36,6 +36,9 @@ static int64_t g_checks = 0;
   } while (0)
 #define NELEMS(a) (sizeof(a) / sizeof((a)[0]))
 
+/* list_sort_tests.c: the listSort half of the suite, counted here. */
+int64_t run_list_sort_tests(void);
+
 /* Counts straddling every structural boundary: tail full (32), first push into
    the tree (33), root internal (64/65), level-1 (1024/1025), first NULL-child
    wrap_path at level 10 (2081), level-2 (32768/32801). */
@@ -534,6 +537,7 @@ void run_list_tests(void) {
   test_random_ops();
   test_builder_paths();
   test_element_kind_flags();
+  g_checks += run_list_sort_tests();
 }
 
 /* collection_tests.c supplies its own main and calls run_list_tests(); define

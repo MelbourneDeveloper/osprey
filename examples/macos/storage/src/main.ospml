@@ -27,6 +27,16 @@ extern storage_photos_kind_bytes (kind : string) -> int
 
 entry index = Entry(path = storage_entry_path index, bytes = storage_entry_bytes index, visible = storage_entry_visible index, hidden = storage_entry_hidden index, folder = storage_entry_folder index, guarded = storage_entry_guarded index)
 
+(** `bytes` in decimal units, published to the host from the entry source,
+    which is what crosses the C boundary ([IOS-HOST-ABI]). *)
+formatBytes bytes = Disk::formatBytes bytes
+
+(** `count` with thousands separators, for the host. *)
+formatCount count = Disk::formatCount count
+
+(** The whole percent `part` is of `whole`, for the host; 0 for an empty whole. *)
+percent (part, whole) = Disk::percent (part, whole)
+
 photoKind name = PhotoKind(name = name, items = storage_photos_kind_items name, bytes = storage_photos_kind_bytes name)
 
 photoKinds () =

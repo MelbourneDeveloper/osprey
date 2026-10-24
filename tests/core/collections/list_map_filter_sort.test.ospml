@@ -1,0 +1,106 @@
+/// [BUILTIN-LIST-MAP], [BUILTIN-LIST-FILTER] and [BUILTIN-LIST-FOLD] traverse a
+/// runtime list eagerly in index order; [BUILTIN-LIST-SORT] returns a new list
+/// sorted ascending by the elements' natural order; [BUILTIN-LIST-SORT-BY]
+/// sorts any element type by a comparator, stably.
+
+double n = satMul n 2
+
+weave (acc, value) = satAdd (satMul acc 10) value
+
+upper word = toUpperCase word
+
+(** mapList/filterList/foldList over a list built with listAppend (a runtime
+    handle) and over a flat literal (rebuilt at the call boundary). *)
+eagerCombinatorsCase () =
+    ints = listAppend (listAppend (listAppend (List ()) 3) 1) 2
+    words = ["beta", "alpha", "gamma"]
+
+    checkAll "mapList transforms each element in index order" [
+        (listGet (mapList ints double) 0 ?: 0) == 6,
+        (listGet (mapList ints double) 1 ?: 0) == 2,
+        (listGet (mapList ints double) 2 ?: 0) == 4,
+        listLength (mapList ints double) == 3,
+        join (mapList words upper) "," == "BETA,ALPHA,GAMMA",
+        join (mapList ["a", "b"] upper) "," == "A,B"
+    ]
+
+    checkAll "filterList keeps matching elements in index order" [
+        join (filterList words (\word => word != "beta")) "," == "alpha,gamma",
+        listLength (filterList ints (\n => n > 1)) == 2,
+        (listGet (filterList ints (\n => n > 1)) 0 ?: 0) == 3,
+        (listGet (filterList ints (\n => n > 1)) 1 ?: 0) == 2,
+        join (filterList ["a", "b", "c"] (\w => w != "b")) "," == "a,c"
+    ]
+
+    checkAll "foldList reduces in index order" [
+        foldList ints 0 weave == 312,
+        foldList words "" (\(acc, word) => acc + word) == "betaalphagamma",
+        foldList [1, 2, 3] 0 weave == 123
+    ]
+
+(** listSort is ascending and total for int and string lists; a float, bool or
+    record element is rejected by the type checker ([BUILTIN-LIST-SORT]). *)
+sortCase () =
+    ints = listSort [3, 1, 2]
+    words = listSort ["beta", "alpha", "gamma"]
+
+    checkAll "listSort orders int lists ascending" [
+        listLength ints == 3,
+        (listGet ints 0 ?: 0) == 1,
+        (listGet ints 1 ?: 0) == 2,
+        (listGet ints 2 ?: 0) == 3,
+        (listGet (listSort [-1, 5, 0]) 0 ?: 0) == -1,
+        (listGet (listSort [-1, 5, 0]) 1 ?: 0) == 0,
+        (listGet (listSort [-1, 5, 0]) 2 ?: 0) == 5,
+        (listGet (listSort (listAppend (listAppend (listAppend (List ()) 30) 10) 20)) 0 ?: 0) == 10,
+        (listGet (listSort (listAppend (listAppend (listAppend (List ()) 30) 10) 20)) 2 ?: 0) == 30,
+        listLength (listSort [7]) == 1,
+        listLength (listSort (List ())) == 0
+    ]
+
+    checkAll "listSort orders string lists ascending" [
+        join words "," == "alpha,beta,gamma",
+        join (listSort ["z", "a", "m"]) "," == "a,m,z",
+        join (listSort [""]) "," == "",
+        join (listSort ["same", "same"]) "," == "same,same"
+    ]
+
+type Evidence =
+    title : string
+    at : int
+
+after (a, b) = match a > b
+    true => 1
+    false => 0
+
+order (a, b) = match a < b
+    true => -1
+    false => after (a, b)
+
+byTitle (x, y) = order (x.title, y.title)
+
+titles items = join (mapList items (\item => item.title)) ","
+
+scrambled i = "w${toString (satMul i 7919 % 1009)}"
+
+(** listSortBy orders by any comparator, a named function or a lambda that
+    captures its scope; equal elements keep their order ([BUILTIN-LIST-SORT-BY]). *)
+sortByCase () =
+    evidence = [Evidence(title = "crash", at = 3), Evidence(title = "alert", at = 1),
+        Evidence(title = "boot", at = 1), Evidence(title = "disk", at = 2)]
+    newestFirst = -1
+    words = range 0 200 |> map scrambled |> toList
+
+    checkAll "listSortBy sorts stably by the comparator" [
+        titles (listSortBy evidence byTitle) == "alert,boot,crash,disk",
+        titles (listSortBy evidence (\(x, y) => order (x.at, y.at))) == "alert,boot,disk,crash",
+        titles (listSortBy evidence (\(x, y) => satMul newestFirst (order (x.at, y.at)))) == "crash,disk,alert,boot",
+        join (mapList (listSortBy [2.5, -1.0, 0.5] order) toString) "," == "-1.0,0.5,2.5",
+        join (listSortBy words order) "," == join (listSort words) ",",
+        listLength (listSortBy (List ()) order) == 0,
+        titles (listSortBy [Evidence(title = "only", at = 0)] byTitle) == "only"
+    ]
+
+test "list map/filter/fold traverse eagerly" (\() => eagerCombinatorsCase ())
+test "listSort orders int and string lists ascending" (\() => sortCase ())
+test "listSortBy sorts any element type stably" (\() => sortByCase ())

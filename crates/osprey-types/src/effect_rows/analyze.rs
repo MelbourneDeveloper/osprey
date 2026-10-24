@@ -133,6 +133,8 @@ impl Analyzer<'_> {
             | Expr::Bool(_)
             | Expr::Identifier(_)
             | Expr::Path(_)
+            // A fresh capability is a plain value ([EFFECTS-INSTANCE]).
+            | Expr::Instance { .. }
             // Constructing a closure is pure. Its latent row is included only
             // when the closure is called or passed to an eager callback slot.
             | Expr::Lambda { .. } => Summary::default(),
@@ -154,9 +156,11 @@ impl Analyzer<'_> {
                 }
                 out
             }
-            Expr::Object(fields)
-            | Expr::TypeConstructor { fields, .. }
-            | Expr::Update { fields, .. } => {
+            Expr::TypeConstructor { name, fields, .. } => {
+                self.check_field_rows(super::expression_site(expression), name, fields, scope, env);
+                self.union_over(fields.iter().map(|field| &field.value), scope, env)
+            }
+            Expr::Object(fields) | Expr::Update { fields, .. } => {
                 self.union_over(fields.iter().map(|field| &field.value), scope, env)
             }
             Expr::Binary { left, right, .. } => {
@@ -246,11 +250,24 @@ impl Analyzer<'_> {
                 }
                 out
             }
+            // A mask passes its body's requests one answering activation
+            // further out ([EFFECTS-MASK]); a capability is a plain value.
+            Expr::Mask {
+                effect,
+                body,
+                position,
+            } => {
+                let arguments =
+                    self.instance_arguments(effect, *position, &self.instances.handlers, "mask");
+                self.expression(body, scope, env)
+                    .masked(osprey_ast::effect_name::base(effect), &arguments)
+            }
             Expr::Handler {
                 effect,
                 arms,
                 body,
                 return_clause,
+                finally,
                 position,
                 stage,
             } => {
@@ -296,6 +313,11 @@ impl Analyzer<'_> {
                 if let Some(clause) = return_clause {
                     let callee = self.callable(clause, scope, env).unwrap_or(Callable::Unknown);
                     out.union(self.invoke_with_values(callee, &[self.value(body, scope, &local)]));
+                }
+                // Cleanup runs outside this activation, so its requirements
+                // belong to the enclosing row ([EFFECTS-FINALIZATION]).
+                if let Some(cleanup) = finally {
+                    out.union(self.expression(cleanup, scope, env));
                 }
                 out
             }

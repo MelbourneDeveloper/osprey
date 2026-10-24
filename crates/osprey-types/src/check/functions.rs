@@ -1,4 +1,5 @@
 //! Type checking: functions.
+use super::binding_order::BindingOrder;
 use super::{
     BTreeSet, Checker, EffectRef, Expr, HashMap, Parameter, Position, Program, Scheme, Stmt, Type,
     TypeEnv,
@@ -15,22 +16,11 @@ impl Checker {
         statements: &mut dyn Iterator<Item = &Stmt>,
         env: &mut TypeEnv,
     ) {
-        for stmt in statements {
-            match stmt {
-                Stmt::Function {
-                    name,
-                    parameters,
-                    effects,
-                    body,
-                    position,
-                    ..
-                } => {
-                    let outer = std::mem::replace(&mut self.site, name.clone());
-                    let outer_site = self.ctx.enter(name.clone());
-                    self.check_function(name, parameters, effects, body, env, *position);
-                    let _ = self.ctx.enter(outer_site);
-                    self.site = outer;
-                }
+        let statements: Vec<&Stmt> = statements.collect();
+        let mut order = BindingOrder::new(statements.clone());
+        for (cursor, statement) in statements.into_iter().enumerate() {
+            match statement {
+                Stmt::Function { .. } => self.check_callees_first(&mut order, cursor, cursor, env),
                 Stmt::Module { body, .. } => {
                     let mut inner = env.child();
                     // Module declarations live in their own lexical scope. Run
@@ -56,6 +46,46 @@ impl Checker {
                 other => self.infer_block_stmt(other, env),
             }
         }
+    }
+
+    /// Check the function at `index` after the later-defined functions it
+    /// calls, so each is generalized before its caller uses it. A function
+    /// already started (a recursive group) keeps its monomorphic signature,
+    /// and one reading a `let` that has not run yet keeps its source position.
+    /// Implements [TYPE-BINDING-ORDER].
+    fn check_callees_first(
+        &mut self,
+        order: &mut BindingOrder<'_>,
+        index: usize,
+        cursor: usize,
+        env: &mut TypeEnv,
+    ) {
+        let Some(statement) = order.start(index) else {
+            return;
+        };
+        for callee in order.callees(index, cursor) {
+            self.check_callees_first(order, callee, cursor, env);
+        }
+        self.check_function_stmt(statement, env);
+    }
+
+    fn check_function_stmt(&mut self, statement: &Stmt, env: &mut TypeEnv) {
+        let Stmt::Function {
+            name,
+            parameters,
+            effects,
+            body,
+            position,
+            ..
+        } = statement
+        else {
+            return;
+        };
+        let outer = std::mem::replace(&mut self.site, name.clone());
+        let outer_site = self.ctx.enter(name.clone());
+        self.check_function(name, parameters, effects, body, env, *position);
+        let _ = self.ctx.enter(outer_site);
+        self.site = outer;
     }
 
     pub(super) fn check_function(
@@ -113,10 +143,7 @@ impl Checker {
         // variables would count as "free in the environment" and nothing would
         // generalize.
         let fun_ty = Type::fun(params, ret);
-        let declared = env
-            .applied(&mut self.ctx, name)
-            .map(|applied| applied.params)
-            .unwrap_or_default();
+        let declared = env.declared_params(name);
         env.remove(name);
         let mut scheme = self.generalize_with_obligations(env, &fun_ty);
         // Explicit binders are quantified even when the signature never uses

@@ -62,17 +62,30 @@ fn walk(e: &Expr, bound: &mut Vec<String>, out: &mut BTreeSet<String>) {
             note(name, bound, out);
             walk_slice(fields, bound, out, |field| &field.value);
         }
+        // An effect form may name a capability binding: that name is read
+        // ([EFFECTS-INSTANCE]). An effect declaration's name binds nothing.
+        Expr::Perform { effect, .. } | Expr::Mask { effect, .. } => {
+            note(crate::effect_name::base(effect), bound, out);
+            AstNode::Expression(e).for_each_child(|child| {
+                if let AstNode::Expression(expression) = child {
+                    walk(expression, bound, out);
+                }
+            });
+        }
         Expr::Handler {
+            effect,
             arms,
             body,
             return_clause,
+            finally,
             ..
         } => {
+            note(crate::effect_name::base(effect), bound, out);
             for arm in arms {
                 scoped(bound, arm.params.clone(), out, |b, o| walk(&arm.body, b, o));
             }
             walk(body, bound, out);
-            if let Some(clause) = return_clause {
+            for clause in return_clause.iter().chain(finally) {
                 walk(clause, bound, out);
             }
         }

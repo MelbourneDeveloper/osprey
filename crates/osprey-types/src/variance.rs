@@ -211,6 +211,7 @@ mod tests {
                     name: (*n).to_string(),
                     ty: (*t).to_string(),
                     constraint: None,
+                    effects: None,
                 })
                 .collect(),
         }

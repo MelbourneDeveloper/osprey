@@ -1,0 +1,70 @@
+(** A helper that builds or forwards a signal snapshot can name its type in a
+    signature, so one shared helper serves every slice at its own value type
+    (#284). Implements [STAGE-SIGNALS-CACHE]. *)
+
+static effect Signal T
+    read : Unit => T
+
+type Count =
+    value : int
+
+type Title =
+    text : string
+
+count () = (perform Signal<Count>.read ()).value
+title () = (perform Signal<Title>.read ()).text
+countLabel () = "count=${count ()}"
+titleLength () = length (title ())
+
+(** A never-built snapshot: its unknown dependency makes the first refresh rebuild. *)
+blank<T> : T -> SignalSnapshot<T>
+blank seed = { dependencies = ["<unknown>"], revision = 0, value = seed }
+
+(** One refresh of `cached`, whatever its value type. *)
+refreshed<T> : (SignalSnapshot<T>, List<string>, Unit -> T) -> SignalSnapshot<T>
+refreshed (cached, changed, work) = signalRefresh cached changed work
+
+labels (n, cached) =
+    handle static Signal<Count>
+        read => Count(value = n)
+    refreshed (cached, ["<unknown>"], countLabel)
+
+lengths (text, cached) =
+    handle static Signal<Title>
+        read => Title(text = text)
+    refreshed (cached, ["<unknown>"], titleLength)
+
+oneHelperServesEveryValueType () =
+    label = labels (4, blank "")
+    size = lengths ("osprey", blank 0)
+    print "${label.value} ${size.value}"
+    checkAll "the annotated helpers keep each slice's type" [
+        label.value == "count=4", label.revision == 1,
+        size.value == 6, size.revision == 1,
+        length label.dependencies == 1, length size.dependencies == 1,
+    ]
+
+directLabels (n, cached, changed) =
+    handle static Signal<Count>
+        read => Count(value = n)
+    signalRefresh cached changed countLabel
+
+trackedLabels (n, cached, changed) =
+    handle static Signal<Count>
+        read => Count(value = n)
+    refreshed (cached, changed, countLabel)
+
+theHelperTracksWhatTheDirectFormTracks () =
+    built = trackedLabels (1, blank "", ["<unknown>"])
+    unrelated = trackedLabels (2, built, signalDependencies title)
+    related = trackedLabels (3, unrelated, signalDependencies count)
+    direct = directLabels (1, blank "", ["<unknown>"])
+    checkAll "a refresh through the helper reads the callback's own signals" [
+        join built.dependencies "," == join direct.dependencies ",",
+        join built.dependencies "," == join (signalDependencies countLabel) ",",
+        unrelated.revision == 1, unrelated.value == "count=1",
+        related.revision == 2, related.value == "count=3",
+    ]
+
+test "one helper serves every value type" oneHelperServesEveryValueType
+test "the helper tracks what the direct form tracks" theHelperTracksWhatTheDirectFormTracks

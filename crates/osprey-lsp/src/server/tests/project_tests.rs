@@ -8,15 +8,15 @@ async fn state_advice_tracks_unsaved_edits_and_never_survives_errors(
     for (extension, state, plain, invalid) in [
         (
             "osp",
-            "state module Store { export fn zero() = 0 }\n",
-            "module Store { export fn zero() = 0 }\n",
-            "state module Store { export fn zero() = missing }\n",
+            "/// Counts.\nstate module Store { /// Zero.\n export fn zero() = 0 }\n",
+            "/// Counts.\nmodule Store { /// Zero.\n export fn zero() = 0 }\n",
+            "/// Counts.\nstate module Store { /// Zero.\n export fn zero() = missing }\n",
         ),
         (
             "ospml",
-            "state Store\n    export zero () = 0\n",
-            "module Store\n    export zero () = 0\n",
-            "state Store\n    export zero () = missing\n",
+            "(** Counts. *)\nstate Store\n    (** Zero. *)\n    export zero () = 0\n",
+            "(** Counts. *)\nmodule Store\n    (** Zero. *)\n    export zero () = 0\n",
+            "(** Counts. *)\nstate Store\n    (** Zero. *)\n    export zero () = missing\n",
         ),
     ] {
         state_advice_changes(extension, [state, plain, invalid]).await?;

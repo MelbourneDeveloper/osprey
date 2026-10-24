@@ -98,6 +98,14 @@ impl Codegen {
         self.rodata_regs.contains(reg)
     }
 
+    /// An entry-block `alloca` of `ty`: a slot claimed inside a loop body is
+    /// then one frame slot, not a fresh stack allocation every iteration.
+    pub(crate) fn hoist_slot(&mut self, ty: &str) -> String {
+        let reg = self.fresh_reg();
+        self.cur_lines.insert(1, format!("  {reg} = alloca {ty}"));
+        reg
+    }
+
     pub(crate) fn hoist_arc_slot(&mut self) -> String {
         let name = format!("%arc.s{}", self.arc_slot_count);
         self.arc_slot_count += 1;

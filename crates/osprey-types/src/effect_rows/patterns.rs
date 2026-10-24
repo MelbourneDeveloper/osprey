@@ -26,17 +26,19 @@ pub(super) fn bind_pattern(
             for field in fields {
                 let _ = env.shadowed.insert(field.clone());
                 let projected = value.and_then(|value| {
-                    // Elvis binds the same success payload under a reserved
-                    // name; losing it would discard the successful arm's
-                    // callable effects at the fallback join. [PATTERN-RESULT-DEFAULT]
-                    if name == "Success"
-                        && (field == "value" || field == osprey_ast::RESULT_DEFAULT_PAYLOAD)
-                    {
+                    // `Success` carries its payload in the result slot under
+                    // whatever binder the flavor chooses (`value`, `?:`'s
+                    // reserved name, or a positional ML binder). Projecting by
+                    // that binder's spelling would discard the successful
+                    // arm's callable effects at the fallback join.
+                    // [PATTERN-RESULT-DEFAULT]
+                    if name == "Success" {
                         project_success_value(value.clone())
                     } else {
                         project_field(value.clone(), field)
                     }
                 });
+                let projected = index.field_value(field, projected);
                 if let Some(projected) = projected {
                     let _ = env.values.insert(field.clone(), projected);
                 } else {
@@ -44,21 +46,32 @@ pub(super) fn bind_pattern(
                 }
             }
             for (position, sub_pattern) in sub_patterns.iter().enumerate() {
+                let field = index
+                    .constructors
+                    .get(name)
+                    .and_then(|fields| fields.get(position));
                 let projected = value.and_then(|value| {
-                    index
-                        .constructors
-                        .get(name)
-                        .and_then(|fields| fields.get(position))
-                        .and_then(|field| project_field(value.clone(), field))
+                    // A positional ML binder is the same payload: `Success`
+                    // is a builtin, so the constructor table has no field
+                    // name for it. [PATTERN-RESULT-DEFAULT]
+                    if name == "Success" {
+                        project_success_value(value.clone())
+                    } else {
+                        field.and_then(|field| project_field(value.clone(), field))
+                    }
                 });
+                let projected = match field {
+                    Some(field) if name != "Success" => index.field_value(field, projected),
+                    _ => projected,
+                };
                 bind_pattern(sub_pattern, projected.as_ref(), index, env);
             }
         }
         Pattern::Structural { fields, .. } => {
             for (field, binder) in fields {
                 let _ = env.shadowed.insert(binder.clone());
-                if let Some(projected) = value.and_then(|value| project_field(value.clone(), field))
-                {
+                let projected = value.and_then(|value| project_field(value.clone(), field));
+                if let Some(projected) = index.field_value(field, projected) {
                     let _ = env.values.insert(binder.clone(), projected);
                 } else {
                     let _ = env.values.remove(binder);

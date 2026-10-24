@@ -31,6 +31,8 @@ node_modules/**/tests
 node_modules/**/*.test.js
 node_modules/**/*.spec.js
 node_modules/**/.*
+# The shared profiler UI's contract suites run only in this repo's tests.
+node_modules/@nimblesite/lsp-profiler-ui/out/src/testing/**
 
 # Documentation and development files
 TESTING.md

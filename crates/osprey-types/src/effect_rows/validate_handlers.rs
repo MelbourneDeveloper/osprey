@@ -29,6 +29,7 @@ pub(super) fn validate_handler_arms(
         arms,
         body,
         return_clause,
+        finally,
         stage,
         ..
     } = expression
@@ -73,7 +74,7 @@ pub(super) fn validate_handler_arms(
         }
         let body_env = env.under_handler(effect, arms, *stage);
         validate_handler_arms(analyzer, axis, body, scope, &body_env, errors);
-        if let Some(clause) = return_clause {
+        for clause in return_clause.iter().chain(finally) {
             validate_handler_arms(analyzer, axis, clause, scope, env, errors);
         }
         return;

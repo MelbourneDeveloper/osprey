@@ -194,16 +194,12 @@ fn push_container(
 }
 
 fn declaration(statement: &Stmt) -> Option<(&str, &'static str, Option<&DocComment>)> {
-    match statement {
-        Stmt::Function { name, doc, .. } => Some((name, "Function", doc.as_ref())),
-        Stmt::Let { name, doc, .. } => Some((name, "Value", doc.as_ref())),
-        Stmt::Extern { name, doc, .. } => Some((name, "Extern", doc.as_ref())),
-        Stmt::Type { name, doc, .. } => Some((name, "Type", doc.as_ref())),
-        Stmt::Effect { name, doc, .. } => Some((name, "Effect", doc.as_ref())),
-        Stmt::Signature { name, doc, .. } => Some((name, "Signature", doc.as_ref())),
-        Stmt::Expr { doc: Some(doc), .. } => Some(("Test", "Test", Some(doc))),
-        _ => None,
+    if let Stmt::Expr { doc: Some(doc), .. } = statement {
+        return Some(("Test", "Test", Some(doc)));
     }
+    statement
+        .documented()
+        .map(|declared| (declared.name, declared.kind, declared.doc))
 }
 
 fn entry(

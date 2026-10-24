@@ -186,3 +186,52 @@ test("arguments run once while clean computations stay cached", evaluationAndNoO
 test("unknown changes cannot retain a stale snapshot", unresolvedChangesRebuild)
 test("cached results retain whole variants across rebuilds", cachedResultsKeepBothVariants)
 test("cached callables retain their captured values across rebuilds", callableSnapshotsKeepTheirCapturedValues)
+
+/// A rebuild is an ordinary record wherever it flows: passed into a call, from
+/// either arm of a match, it keeps its layout (#272).
+type Region = { region: string, dependencies: List<string>, revision: int, json: string }
+fn describeSnapshot(next) = "${next.value}@${next.revision}"
+fn named(key, next) = Region { region: key, dependencies: next.dependencies, revision: next.revision, json: next.value }
+fn blankSnapshot() = { dependencies: ["<unknown>"], revision: 0, value: "" }
+fn pickRow(cached, flag) = {
+    let row = match flag { true => { revision: 1, value: "fresh" } false => cached }
+    describeSnapshot(row)
+}
+fn refreshArgumentsKeepTheirLayout() = {
+    let first = {
+        handle static Signal<Count> { read => Count { value: 2 } }
+        signalSnapshot(counterLabel)
+    }
+    let direct = {
+        handle static Signal<Count> { read => Count { value: 3 } }
+        describeSnapshot(signalRefresh(blankSnapshot(), [], counterLabel))
+    }
+    let built = {
+        handle static Signal<Count> { read => Count { value: 3 } }
+        named("list", signalRefresh(blankSnapshot(), [], counterLabel))
+    }
+    let kept = {
+        handle static Signal<Count> { read => Count { value: 9 } }
+        named("kept", signalRefresh(first, [], counterLabel))
+    }
+    let bound = {
+        handle static Signal<Count> { read => Count { value: 4 } }
+        let next = signalRefresh(blankSnapshot(), [], counterLabel)
+        describeSnapshot(next)
+    }
+    let snapshot = {
+        handle static Signal<Count> { read => Count { value: 5 } }
+        describeSnapshot(signalSnapshot(counterLabel))
+    }
+    print("refresh arguments: ${direct} ${built.region}=${built.json}@${built.revision} ${kept.region}=${kept.json}@${kept.revision} ${bound} ${snapshot} ${describeSnapshot(first)}")
+    checkAll("refreshed snapshots keep their record layout as call arguments", [
+        direct == "count=3@1", built.region == "list", built.json == "count=3", built.revision == 1,
+        join(built.dependencies, ";") == join(signalDependencies(counterLabel), ";"),
+        kept.region == "kept", kept.json == "count=2", kept.revision == 1,
+        join(kept.dependencies, ";") == join(first.dependencies, ";"),
+        bound == "count=4@1", snapshot == "count=5@1", describeSnapshot(first) == "count=2@1",
+        pickRow({ revision: 9, value: "cached" }, false) == "cached@9", pickRow({ revision: 9, value: "cached" }, true) == "fresh@1"
+    ])
+}
+
+test("refreshed snapshots keep their layout as call arguments", refreshArgumentsKeepTheirLayout)

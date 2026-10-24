@@ -116,6 +116,11 @@ pub(crate) struct Codegen {
     /// Erased-`any` descriptors, deep-box functions and the candidate row
     /// table ([`crate::anybox`], [TYPE-ANY]).
     pub(crate) anys: crate::anybox::AnyState,
+    /// One deep-comparison function per distinct compared type, memoised by
+    /// its rendered type so two call sites sharing a type share the function
+    /// and a recursive type calls its own comparator
+    /// ([`crate::structural_equals`], [BUILTIN-STRUCTURAL-EQUALS]).
+    pub(crate) seq_fns: HashMap<String, String>,
     /// Stream-fusion pipelines: the `map`/`filter` stages recorded on each
     /// iterator, keyed by the operand naming it, and replayed in source order
     /// by whichever `forEach`/`fold` consumes THAT iterator. One function-wide
@@ -384,6 +389,7 @@ impl Codegen {
             arc_slot_count: 0,
             rodata_regs: HashSet::new(),
             anys: crate::anybox::AnyState::default(),
+            seq_fns: HashMap::new(),
         }
     }
 }

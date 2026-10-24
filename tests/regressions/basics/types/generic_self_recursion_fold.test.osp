@@ -1,0 +1,27 @@
+/// Generic self-recursion through a fold lambda over a recursive generic
+/// union. The `all` function recurses from inside the lambda passed to `fold`,
+/// so its single emitted instantiation must keep the `List<Tree<T>>` field's
+/// element owner tag. Losing it made `listGet` answer a bare `i64` storage
+/// word and the `?:` default beside it disagreed on type (#279).
+/// Implements [TYPE-UNION-REC], [BUILTIN-LIST-GET], [TYPE-GENERICS-FN].
+type Tree<T> =
+    Leaf { item: T }
+    | Node { kids: List<Tree<T>> }
+
+fn all<T>(tree) -> List<T> = match tree {
+    Leaf { item } => [item]
+    Node { kids } => range(0, length(kids)) |> fold([], fn(out, index) => listConcat(out, all(listGet(kids, index) ?: Node { kids: [] })))
+}
+
+print(toString(length(all(Node { kids: [Leaf { item: 1 }, Leaf { item: 2 }] }))))
+
+fn genericSelfRecursionFoldCase() = {
+    let leaves = all(Node { kids: [Leaf { item: 1 }, Leaf { item: 2 }, Leaf { item: 3 }] })
+    checkAll("generic self-recursion through a fold lambda", [
+        length(leaves) == 3,
+        (listGet(leaves, 0) ?: 0) == 1,
+        (listGet(leaves, 1) ?: 0) == 2,
+        (listGet(leaves, 2) ?: 0) == 3
+    ])
+}
+test("generic self-recursion through a fold lambda flattens a tree", genericSelfRecursionFoldCase)

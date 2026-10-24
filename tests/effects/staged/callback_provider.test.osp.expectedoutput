@@ -1,0 +1,10 @@
+list:x
+ok 1 - a provider discharges a snapshot callback
+shelf:jam
+ok 2 - a non-generic provider works the same way
+crated:pear
+ok 3 - an inline lambda callback is discharged too
+shelf:tin
+ok 4 - a forwarded callback reaches the provider's region
+1..4
+# tests=4 passed=4 failed=0 skipped=0

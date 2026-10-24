@@ -21,6 +21,7 @@ impl Analyzer<'_> {
                 let projected = self
                     .value(parts.target, scope, env)
                     .and_then(|value| project_field(value, field));
+                let projected = self.index.field_value(field, projected);
                 let callee = projected.as_ref().and_then(|value| value.callable.clone());
                 if let Some(callee) = callee {
                     let arguments = self

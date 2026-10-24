@@ -1,7 +1,7 @@
 //! Effect row solver.
 use super::{
     map_parameter_use_values, map_projection_values, Analyzer, Callable, CallableEnv, Expr,
-    Function, Index, Instances, Stmt, Summary, Value,
+    Function, HashMap, Index, Instances, Stmt, Summary, Value,
 };
 
 /// Advance one function's inferred row and return provenance by a single
@@ -12,6 +12,7 @@ pub(super) fn advance_function(
     function: &Function<'_>,
     rows: &mut [Summary],
     returns: &mut [Option<Value>],
+    history: &mut ReturnHistory,
 ) -> bool {
     let mut changed = false;
     let mut actual = analyzer.function_body(function);
@@ -34,12 +35,49 @@ pub(super) fn advance_function(
             // Recompute rather than merge with the previous iteration.
             // `function_return` already merges every return path of the body,
             // so each pass yields a COMPLETE answer for the rows it was given;
-            // unioning across passes only preserves superseded ones.
-            *slot = Some(returned.widened().widened());
+            // unioning across passes only preserves superseded ones. The one
+            // feedback a pass cannot complete on its own — `fold`'s accumulator
+            // carrying its callback's return — is cut in `fold_value`, which
+            // stabilises that contribution instead of unrolling it. A return
+            // that cycles instead of settling is joined; see `ReturnHistory`.
+            let computed = returned.widened().widened();
+            *slot = Some(history.settle(id, before.as_ref(), computed));
             changed |= *slot != before;
         }
     }
     changed
+}
+
+/// Every return value each function has had during one fixed point, and
+/// which functions' returns have been seen to cycle. Recomputing a return
+/// each pass keeps it precise, but nothing makes that sequence monotone: a
+/// walk that hands its whole node to a helper falling back to the walk
+/// flipped between two returns forever. Widening bounds the values, so a
+/// sequence that never settles must revisit one it already left; from then
+/// on that function's return is joined with its previous one, which only
+/// grows and so converges. Implements [EFFECTS-PROVENANCE].
+#[derive(Default)]
+pub(super) struct ReturnHistory(HashMap<usize, Returns>);
+
+/// One function's returns so far, and whether they have cycled.
+#[derive(Default)]
+struct Returns {
+    seen: Vec<Value>,
+    joined: bool,
+}
+
+impl ReturnHistory {
+    fn settle(&mut self, id: usize, before: Option<&Value>, computed: Value) -> Value {
+        let returns = self.0.entry(id).or_default();
+        returns.joined |= before != Some(&computed) && returns.seen.contains(&computed);
+        if !returns.joined {
+            returns.seen.push(computed.clone());
+            return computed;
+        }
+        let mut joined = before.cloned().unwrap_or_default();
+        joined.union(computed);
+        joined.widened().widened()
+    }
 }
 
 /// The provenance environment the file-scope statements establish, threaded in
@@ -77,6 +115,7 @@ pub(super) fn converge(
     rows: &mut Vec<Summary>,
     returns: &mut Vec<Option<Value>>,
 ) {
+    let mut history = ReturnHistory::default();
     loop {
         let analyzer = Analyzer {
             index,
@@ -92,7 +131,14 @@ pub(super) fn converge(
             .iter()
             .enumerate()
             .fold(false, |changed, (id, function)| {
-                advance_function(&analyzer, id, function, &mut next, &mut next_returns) || changed
+                advance_function(
+                    &analyzer,
+                    id,
+                    function,
+                    &mut next,
+                    &mut next_returns,
+                    &mut history,
+                ) || changed
             });
         // `analyzer` borrows `rows`/`returns`; its last use is the fold above,
         // so the borrow has ended by the time the new state is written back.

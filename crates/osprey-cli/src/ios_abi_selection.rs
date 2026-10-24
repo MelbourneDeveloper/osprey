@@ -1,39 +1,42 @@
 //! Select the callable mobile C boundary from the compiled program.
 
 use super::{
-    c_signature, defines, export, reject_clashes, Export, HostAbi, Import, Program, ProgramTypes,
-    Stmt, SOURCE_MAIN,
+    c_signature, defines, export, reject_clashes, Export, ExportScope, HostAbi, Import, Program,
+    ProgramTypes, Stmt, SOURCE_MAIN,
 };
 
 /// Derive the host ABI of `program` from its resolved types and the IR codegen
-/// emitted for it. A function is exported only when codegen actually defined
-/// it — a generic function is inlined at each call site and has no symbol.
+/// emitted for it. A generic function is inlined at each call site and has no
+/// symbol, so it has no C signature either; every function that does have one
+/// must have been defined.
 ///
 /// # Errors
 ///
-/// Two functions whose C names coincide (`app::x_y` and `app_x::y`), or an
-/// export whose name an import already takes, would silently shadow one
-/// another at link time, so the ABI refuses to be generated.
+/// A scalar function codegen did not define is refused by name. Two functions
+/// whose C names coincide (`app::x_y` and `app_x::y`), or an export whose name
+/// an import already takes, would silently shadow one another at link time, so
+/// the ABI refuses to be generated.
 #[cfg(test)]
 pub(super) fn host_abi(
     program: &Program,
     types: &ProgramTypes,
     ir: &str,
 ) -> Result<HostAbi, String> {
-    host_abi_selected(program, types, ir, true)
+    host_abi_selected(program, types, ir, &ExportScope::EntrySource(None))
 }
 
 pub(super) fn host_abi_selected(
     program: &Program,
     types: &ProgramTypes,
     ir: &str,
-    export_functions: bool,
+    scope: &ExportScope,
 ) -> Result<HostAbi, String> {
-    let exports = program
+    let (exports, undefined): (Vec<_>, Vec<_>) = program
         .statements
         .iter()
-        .filter_map(|statement| function_export(statement, types, ir, export_functions))
-        .collect();
+        .filter_map(|statement| function_export(statement, types, scope))
+        .partition(|export| defines(ir, &export.symbol));
+    reject_undefined(program, &undefined)?;
     let imports = program
         .statements
         .iter()
@@ -44,36 +47,53 @@ pub(super) fn host_abi_selected(
         .collect();
     let abi = HostAbi { exports, imports };
     reject_clashes(&abi, program, ir)?;
-    check_export_effects(program, &abi)?;
-    Ok(abi)
-}
-
-fn check_export_effects(program: &Program, abi: &HostAbi) -> Result<(), String> {
-    let exports: Vec<_> = abi.exports.iter().map(|e| e.symbol.as_str()).collect();
-    let errors = osprey_types::check_program_exports(program, &exports);
-    if !errors.is_empty() {
-        return Err(errors
-            .iter()
-            .map(|e| e.message.as_str())
-            .collect::<Vec<_>>()
-            .join("\n"));
+    let symbols: Vec<_> = abi.exports.iter().map(|e| e.symbol.as_str()).collect();
+    let errors = export_effect_errors(program, &symbols);
+    if errors.is_empty() {
+        Ok(abi)
+    } else {
+        Err(errors.join("\n"))
     }
-    Ok(())
 }
 
-fn function_export(
-    statement: &Stmt,
-    types: &ProgramTypes,
-    ir: &str,
-    enabled: bool,
-) -> Option<Export> {
+/// A scalar function codegen emitted no definition for would be missing from
+/// the archive and header with no diagnostic, so the build fails and names it
+/// -- with the effect check's reason when there is one (#281).
+fn reject_undefined(program: &Program, undefined: &[Export]) -> Result<(), String> {
+    if undefined.is_empty() {
+        return Ok(());
+    }
+    let symbols: Vec<_> = undefined.iter().map(|e| e.symbol.as_str()).collect();
+    let mut reasons = export_effect_errors(program, &symbols);
+    for symbol in symbols {
+        let named = format!("library export `{symbol}`");
+        if !reasons.iter().any(|reason| reason.contains(&named)) {
+            reasons.push(format!(
+                "{named} has a C signature but codegen emitted no definition for it"
+            ));
+        }
+    }
+    Err(reasons.join("\n"))
+}
+
+fn export_effect_errors(program: &Program, symbols: &[&str]) -> Vec<String> {
+    osprey_types::check_program_exports(program, symbols)
+        .into_iter()
+        .map(|error| error.message)
+        .collect()
+}
+
+fn function_export(statement: &Stmt, types: &ProgramTypes, scope: &ExportScope) -> Option<Export> {
     let Stmt::Function {
-        name, parameters, ..
+        name,
+        parameters,
+        position,
+        ..
     } = statement
     else {
         return None;
     };
-    if !enabled || name == SOURCE_MAIN || !defines(ir, name) {
+    if !scope.publishes(*position) || name == SOURCE_MAIN {
         return None;
     }
     let names = parameters.iter().map(|p| p.name.as_str());

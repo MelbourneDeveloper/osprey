@@ -112,8 +112,10 @@ pub(crate) fn gen(
         "listPrepend" => list_insert(cg, "osprey_list_prepend_of", args)?,
         "listConcat" => list_concat(cg, args)?,
         "listReverse" => one_list_handle(cg, "osprey_list_reverse", args)?,
+        "listSort" => one_list_handle(cg, "osprey_list_sort", args)?,
         "listGet" => list_get(cg, args)?,
         "listContains" => list_contains(cg, args)?,
+        "structuralEquals" => crate::structural_equals::structural_equals(cg, args)?,
         "Map" => map_empty(cg),
         "mapLength" => one_list_i64(cg, "osprey_map_length", args)?,
         "mapSet" => map_set(cg, args)?,
@@ -335,9 +337,15 @@ pub(crate) fn concat_handles(cg: &mut Codegen, a: &Value, b: &Value) -> Value {
 
 /// `listGet(l, i) -> Result<T, _>` gated on `osprey_list_in_bounds`.
 fn list_get(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
+    let (l, i) = list_get_operands(cg, args)?;
+    runtime_list_get(cg, &l, &i)
+}
+
+/// `listGet`'s list handle and boxed index, evaluated left to right.
+pub(crate) fn list_get_operands(cg: &mut Codegen, args: &[Expr]) -> Result<(Value, Value)> {
     let l = handle_arg(cg, args, 0)?;
     let i = boxed_arg(cg, args, 1)?;
-    runtime_list_get(cg, &l, &i)
+    Ok((l, i))
 }
 
 /// Shared runtime list read → `Result<T, _>`, gated on `osprey_list_in_bounds`.
@@ -375,21 +383,13 @@ fn list_contains(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
             "listContains cannot compare an unhandled Result element",
         ));
     }
-    let is_str = needle.ty == LType::Str;
     let boxed = box_to_i64(cg, needle.clone());
 
     let res = cg.emit_reg("alloca i1");
     cg.emit(format!("store i1 0, i1* {res}"));
 
     let lp = open_list_loop(cg, &l.operand);
-    let eq = cg.fresh_reg();
-    if is_str {
-        let ep = cg.emit_reg(format!("inttoptr i64 {} to i8*", lp.elem));
-        let c = cg.call("i32", "strcmp", "i8*, i8*", &[&ep, &needle.operand]);
-        cg.emit(format!("{eq} = icmp eq i32 {c}, 0"));
-    } else {
-        cg.emit(format!("{eq} = icmp eq i64 {}, {}", lp.elem, boxed.operand));
-    }
+    let eq = element_equals(cg, &lp.elem, &needle, &boxed.operand);
     let found = cg.fresh_label();
     let cont = cg.fresh_label();
     cg.emit(format!("br i1 {eq}, label %{found}, label %{cont}"));
@@ -401,6 +401,27 @@ fn list_contains(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 
     let out = cg.emit_reg(format!("load i1, i1* {res}"));
     Ok(Value::new(out, LType::I1))
+}
+
+/// Whether one stored element word equals the needle, by the same `==` the
+/// operator uses ([BOOL-EQUALITY], [BUILTIN-LIST-CONTAINS]): strings by bytes,
+/// floats under [FLOAT-COMPARE] so NaN is never found, and every other decided
+/// element (int, bool, payload-free variant) by its word.
+fn element_equals(cg: &mut Codegen, elem: &str, needle: &Value, boxed: &str) -> String {
+    let eq = cg.fresh_reg();
+    match needle.ty {
+        LType::Str => {
+            let ep = cg.emit_reg(format!("inttoptr i64 {elem} to i8*"));
+            let c = cg.call("i32", "strcmp", "i8*, i8*", &[&ep, &needle.operand]);
+            cg.emit(format!("{eq} = icmp eq i32 {c}, 0"));
+        }
+        LType::Double => {
+            let ed = cg.emit_reg(format!("bitcast i64 {elem} to double"));
+            cg.emit(format!("{eq} = fcmp oeq double {ed}, {}", needle.operand));
+        }
+        _ => cg.emit(format!("{eq} = icmp eq i64 {elem}, {boxed}")),
+    }
+    eq
 }
 
 /// `mapSet(m, k, v) -> Map`. Both key and value are STORED; the key's kind is

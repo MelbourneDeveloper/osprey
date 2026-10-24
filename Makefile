@@ -19,7 +19,7 @@ include scripts/android.mk
 # =============================================================================
 
 ## build: C runtime archives + Rust workspace (release) + VSCode extension
-build: _runtime $(EXT_NODE_DEPS)
+build: _runtime $(EXT_NODE_DEPS) $(PROFILER_UI_BUILT)
 	@echo "==> Building..."
 	cargo build --release --workspace
 	cd $(EXT_DIR) && npm run compile
@@ -47,6 +47,24 @@ test: build
 	$(MAKE) _test_vscode_extension
 	$(MAKE) _coverage_check_vscode_extension
 	$(MAKE) _test_bench_tools
+
+## registry-test: Osprey package-system suites (registry/tests) under the
+##                registry/core arithmetic policy. Excluded from `test` and
+##                CI until the package system stabilises (maintainer decision).
+registry-test: build
+	$(MAKE) _test_registry
+
+## registry-serve: Serve registry/sample-registry over HTTP on
+##                 127.0.0.1:8787 with the Osprey folder-registry server
+##                 (settings in registry/api/registry-server.json).
+registry-serve: build
+	cd registry/api && ../../$(BIN) . --run
+
+## registry-blockers: Probe the host capabilities plan 0020 still needs
+##                    (argv, exit status, binary-safe reads, ...). Expected to
+##                    FAIL until each capability lands; never part of `test`.
+registry-blockers: build
+	$(MAKE) _test_registry_blockers
 
 ## bank: Rebuild and run the Talon Bank showcase for manual testing.
 ##       Opens http://127.0.0.1:18790 (dashboard) / /api/accounts (JSON API).
@@ -153,7 +171,7 @@ fmt: $(EXT_NODE_DEPS)
 clean:
 	@echo "==> Cleaning..."
 	cargo clean
-	$(RM) $(RTB) compiler/lib outputs lcov.info test.log
+	$(RM) $(RTB) compiler/lib outputs
 	cd $(EXT_DIR) && $(RM) out dist coverage test.log
 
 ## ci: lint + hawk + test + bank-test + bank-e2e + build (full CI simulation)

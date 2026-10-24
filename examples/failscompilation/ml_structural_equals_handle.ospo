@@ -1,0 +1,16 @@
+// osprey: flavor=ml
+// [BUILTIN-STRUCTURAL-EQUALS] The ML half of `structural_equals_handle.ospo`:
+// a fiber or a channel names an external resource, so neither has contents to
+// compare — either one in a `structuralEquals` operand is a compile error.
+work n = n
+
+fiberA = spawn (work 1)
+fiberB = spawn (work 1)
+channelA = Channel(1)
+channelB = Channel(1)
+
+viaFiber () = structuralEquals(fiberA, fiberB)
+viaChannel () = structuralEquals(channelA, channelB)
+viaField () = structuralEquals({ task = fiberA }, { task = fiberB })
+
+print "${toString (viaFiber ())} ${toString (viaChannel ())} ${toString (viaField ())}"

@@ -1,0 +1,6 @@
+ok 1 - a return clause converts the body's normal completion
+ok 2 - control arms answer without the return clause
+ok 3 - handler factories share state per call and isolate it across calls
+ok 4 - nested handlers compose answers innermost first
+1..4
+# tests=4 passed=4 failed=0 skipped=0

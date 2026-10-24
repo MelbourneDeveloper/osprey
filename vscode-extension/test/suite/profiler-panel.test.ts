@@ -4,17 +4,19 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
+import { handleFlamegraphMessage } from "@nimblesite/lsp-profiler-ui/out/src/profiler-flamegraph-html";
+import {
+  handleSourceNavigation,
+  revealProfileSource as revealSource,
+  webviewMessage,
+} from "@nimblesite/lsp-profiler-ui/out/src/profiler-webview";
 import {
   buildFlameModel,
   type SpeedscopeFile,
 } from "../../client/src/profiler/flame-model";
-import {
-  handlePanelMessage,
-  parseSelectMessage,
-  revealSource,
-  showFlamePanel,
-} from "../../client/src/profiler/profiler-panel";
+import { flamePanel, showFlamePanel } from "../../client/src/profiler/profiler-panel";
 import type { ProfileSummary } from "../../client/src/profiler/summary";
+import { COMMAND_MS, waitFor } from "./profiler-kit";
 
 const DOC: SpeedscopeFile = {
   shared: { frames: [{ name: "main", file: "/w/fib.osp", line: 1 }] },
@@ -44,24 +46,26 @@ const SUMMARY: ProfileSummary = {
   hotLines: [],
 };
 
-suite("profiler-panel parseSelectMessage", () => {
-  test("accepts a well-formed select and rejects everything else", () => {
+suite("profiler-panel message validation", () => {
+  test("only a well-formed message reaches the router, and only a located one navigates", () => {
     const good = { type: "select", file: "/w/fib.osp", line: 3 };
-    assert.deepStrictEqual(parseSelectMessage(good), good);
+    assert.deepStrictEqual(webviewMessage(good), good);
     for (const bad of [
       undefined,
       null,
       "select",
-      { type: "other", file: "/w/fib.osp", line: 3 },
-      { type: "select", file: "", line: 3 },
-      { type: "select", line: 3 },
+      { type: 5, file: "/w/fib.osp", line: 3 },
+      { type: "select", file: 5, line: 3 },
       { type: "select", file: "/w/fib.osp", line: "3" },
     ]) {
-      assert.strictEqual(
-        parseSelectMessage(bad),
-        undefined,
-        `expected rejection: ${JSON.stringify(bad)}`,
-      );
+      assert.strictEqual(webviewMessage(bad), undefined, `expected rejection: ${JSON.stringify(bad)}`);
+    }
+    for (const unlocated of [
+      { type: "other", file: "/w/fib.osp", line: 3 },
+      { type: "navigateToSource", line: 3 },
+      { type: "navigateToSource", file: "/w/fib.osp" },
+    ]) {
+      assert.strictEqual(handleSourceNavigation(unlocated), false, `expected no navigation: ${JSON.stringify(unlocated)}`);
     }
   });
 });
@@ -100,18 +104,16 @@ suite("profiler-panel revealSource", () => {
     );
   });
 
-  test("handlePanelMessage ignores junk and survives unopenable files", async () => {
-    await handlePanelMessage({ type: "noise" });
-    await handlePanelMessage({
-      type: "select",
-      file: "/definitely/not/here.osp",
-      line: 1,
-    });
-    await handlePanelMessage({ type: "select", file: filePath, line: 3 });
-    assert.strictEqual(
-      vscode.window.activeTextEditor?.selection.active.line,
-      2,
-    );
+  test("the router ignores junk, survives unopenable files, and opens a selected line", async () => {
+    const activeLine = (): number | undefined =>
+      vscode.window.activeTextEditor?.document.uri.fsPath === filePath
+        ? vscode.window.activeTextEditor.selection.active.line : undefined;
+    handleFlamegraphMessage({ type: "noise" });
+    handleFlamegraphMessage({ type: "select", file: "/definitely/not/here.osp", line: 1 });
+    handleFlamegraphMessage({ type: "select", file: filePath, line: 3 });
+    await waitFor(activeLine, (line) => line === 2, COMMAND_MS, "a canvas select opens its line");
+    handleFlamegraphMessage({ type: "navigateToSource", file: filePath, line: 1 });
+    await waitFor(activeLine, (line) => line === 0, COMMAND_MS, "a table row opens its line");
   });
 });
 
@@ -122,20 +124,19 @@ suite("profiler-panel singleton", () => {
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
   });
 
-  test("creates, reuses, and recreates after dispose", async () => {
-    const first = showFlamePanel(model, SUMMARY, "/w/fib.osp");
-    assert.strictEqual(first.title, "Profile: fib.osp");
-    assert.ok(first.webview.html.includes('id="flame-data"'));
-    assert.ok(first.webview.html.includes("<canvas"));
+  test("creates, reuses, and recreates after dispose", () => {
+    showFlamePanel(model, SUMMARY, "/w/fib.osp");
+    assert.deepStrictEqual(flamePanel.describe(), { viewType: "ospreyProfiler", title: "Profile: fib.osp" });
+    assert.ok(flamePanel.html()?.includes('id="flame-data"'));
+    assert.ok(flamePanel.html()?.includes("<canvas"));
 
-    const second = showFlamePanel(model, SUMMARY, "/w/other.ospml");
-    assert.strictEqual(second, first, "panel is a singleton");
-    assert.strictEqual(second.title, "Profile: other.ospml");
+    showFlamePanel(model, SUMMARY, "/w/other.ospml");
+    assert.strictEqual(flamePanel.describe()?.title, "Profile: other.ospml", "the one panel is retitled");
 
-    first.dispose();
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const third = showFlamePanel(model, SUMMARY, "/w/fib.osp");
-    assert.notStrictEqual(third, first, "a disposed panel is recreated");
-    third.dispose();
+    flamePanel.dispose();
+    assert.ok(!flamePanel.isOpen(), "a disposed panel is forgotten");
+    showFlamePanel(model, SUMMARY, "/w/fib.osp");
+    assert.ok(flamePanel.isOpen(), "a disposed panel is recreated");
+    flamePanel.dispose();
   });
 });

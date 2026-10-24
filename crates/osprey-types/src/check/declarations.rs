@@ -188,7 +188,7 @@ impl Checker {
 
     /// Parse an effect's raw operation signatures against an instantiation of
     /// its type parameters.
-    pub(super) fn instantiate_ops(
+    pub(crate) fn instantiate_ops(
         info: &EffectInfo,
         pmap: &HashMap<String, Type>,
     ) -> HashMap<String, crate::info::OpType> {

@@ -1,0 +1,14 @@
+// Builds and drops thousands of strings and lists, then exits: ARC frees each
+// one the moment its last owner lets go, and the leak report counts what is left.
+
+fn label(n) = "word-${n}"
+
+fn total(n, acc) = match n {
+    0 => acc
+    _ => total(n - 1, acc + length(label(n)))
+}
+
+fn main() = {
+    handle Arith { overflow _ _ _ wrapped => wrapped }
+    print("characters: ${total(50000, 0)}")
+}

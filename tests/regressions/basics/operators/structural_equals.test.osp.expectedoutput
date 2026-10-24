@@ -1,0 +1,19 @@
+scalars true false true false
+ok 1 - scalars compare by value
+float true false nan false
+ok 2 - floats compare by value, so NaN is unequal to itself
+records true false pair true false
+ok 3 - records compare every field; a tuple is a row
+unions true false true false
+ok 4 - unions compare variant then payload
+ok 5 - lists compare length then elements in order
+ok 6 - maps compare keys then values
+tree true false deep false true
+ok 7 - a recursive tree compares through its own comparator
+nan-in-record false true
+ok 8 - a value holding NaN is unequal to itself
+ok 9 - a generic caller is checked at each call site
+constructors true false
+ok 10 - constructor operands instantiate their generic fields
+1..10
+# tests=10 passed=10 failed=0 skipped=0

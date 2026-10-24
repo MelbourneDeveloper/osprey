@@ -13,7 +13,7 @@ fn activityLabel(active) = match active {
 }
 ```
 
-`match` examines the value after its name. Each line inside the braces is an **arm**: a pattern on the left of `=>`, followed by the expression to evaluate when that pattern matches. Here the patterns are the two boolean values.
+`match` examines the expression after the keyword. Each line inside the braces is an **arm**: a pattern on the left of `=>`, followed by the expression to evaluate when that pattern matches. Here the patterns are the two boolean values.
 
 Calling `activityLabel(true)` returns `"ready to learn"`. Calling it with `false` returns `"taking a break"`. The function returns text; its caller decides whether to print it.
 

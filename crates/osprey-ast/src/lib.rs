@@ -7,6 +7,7 @@
 
 pub mod canonical;
 mod doc;
+mod documented;
 pub mod effect_name;
 pub mod freevars;
 mod generics;
@@ -15,17 +16,20 @@ mod kernel;
 mod lower_static;
 pub mod multiplicity;
 pub mod mutate;
+pub mod positional;
 mod resume;
 #[cfg(test)]
 mod resume_tests;
+pub mod span;
 mod stack;
 pub mod stage;
 mod stage_rows;
 pub mod symbol;
 mod visit;
 pub use doc::{DocComment, DocExample, DocScope};
+pub use documented::Documented;
 pub use generics::{EffectRef, TypeParam, Variance};
-pub use handler_value::{handler_function, handler_value};
+pub use handler_value::{handler_function, handler_value, Clauses};
 pub use multiplicity::{
     Multiplicity, OperationMode, OperationTable, CONTROL_KEYWORD, REPLAYABLE_KEYWORD,
 };
@@ -372,6 +376,11 @@ pub struct TypeField {
     pub ty: String,
     /// An optional `where` validation expression over the field.
     pub constraint: Option<Box<Expr>>,
+    /// The closed effect row written on a function-typed field
+    /// (`edit: fn(string) -> A ![]`), or `None` when the row is left to
+    /// inference. A construction must satisfy it and a call through the field
+    /// trusts it. Implements [EFFECTS-FIELD-ROWS].
+    pub effects: Option<Vec<EffectRef>>,
 }
 
 /// An operation declared inside an `effect` block.
@@ -990,11 +999,36 @@ pub enum Expr {
         /// Optional normal-completion transformation, represented as a unary
         /// lambda. It executes outside this activation. [EFFECTS-HANDLER-ARMS]
         return_clause: Option<Box<Expr>>,
+        /// Optional `finally => cleanup` clause: a `Unit` expression that runs
+        /// exactly once when the activation ends, after the return clause and
+        /// outside this activation. [EFFECTS-FINALIZATION]
+        finally: Option<Box<Expr>>,
         /// The handled body expression.
         body: Box<Expr>,
         /// Source position — the key under which inference publishes this
         /// handler's instantiated operation signatures. Implements
         /// [EFFECTS-GENERIC-INSTANTIATION].
+        position: Option<Position>,
+    },
+    /// `mask E { body }` — evaluate `body` with the activation currently
+    /// answering `E` (an effect, or a capability bound by `instance`) hidden,
+    /// so its requests reach the next one out. Implements [EFFECTS-MASK].
+    Mask {
+        /// The masked effect or capability name.
+        effect: String,
+        /// The masked body.
+        body: Box<Expr>,
+        /// Source position — the key under which inference publishes the
+        /// masked effect's instantiation.
+        position: Option<Position>,
+    },
+    /// `instance E` — a fresh capability identity for effect `E`, with no
+    /// implementation installed. Implements [EFFECTS-INSTANCE].
+    Instance {
+        /// The effect the capability performs.
+        effect: String,
+        /// Source position — the key under which inference publishes the
+        /// capability's instantiation.
         position: Option<Position>,
     },
     /// `resume(value)` — resume the performer's delimited continuation with

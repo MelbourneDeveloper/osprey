@@ -83,10 +83,13 @@ function violation(token: Token): string | undefined {
       /^(true|false)$/.test(text) && !scopes.includes("boolean"),
       "boolean lost its scope",
     ],
+    // ML frees every reserved word in an operation-name position
+    // [FLAVOR-ML-EFFECT-OP-NAME]; Default reserves them everywhere.
     [
       ALWAYS_KEYWORD.test(text) &&
         !CONTEXTUAL.has(text) &&
-        !/keyword|storage/.test(scopes),
+        !/keyword|storage/.test(scopes) &&
+        !scopes.includes("entity.name.function.effect.osprey-ml"),
       "keyword read as an identifier",
     ],
     [

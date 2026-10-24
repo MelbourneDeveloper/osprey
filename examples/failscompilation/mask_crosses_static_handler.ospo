@@ -1,0 +1,19 @@
+// [EFFECTS-MASK] [STAGE-LOWER-ORDER]: a `mask` skips one runtime activation.
+// Here the activation it would skip to is a compile-time handler, which
+// discharge removes before the program runs, so there is nothing to skip into.
+effect Tile {
+    /// Scale one extent.
+    size: fn(int) -> int
+}
+
+fn main() = {
+    handle static Tile {
+        size n => wrapAdd(n, 1)
+    }
+    handle Tile {
+        size n => wrapAdd(n, 2)
+    }
+    mask Tile {
+        print("${perform Tile.size(2)}")
+    }
+}

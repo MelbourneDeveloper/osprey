@@ -1,0 +1,9 @@
+first: route@1 panel@1 second: route@2 panel@1
+ok 1 - keyed regions rebuild only the changed slice
+idle: route@1 panel@1 forced: route@2 panel@1
+ok 2 - a forced key rebuilds while others retain
+ok 3 - an unseen key has an unknown dependency set
+frames: [{"key":"one","dependencies":["a.one"],"revision":3},{"key":"two","dependencies":[],"revision":7}] decoded: one a.one@3 restored: route@1 panel@1/0
+ok 4 - frames survive the json round trip
+1..4
+# tests=4 passed=4 failed=0 skipped=0

@@ -1,4 +1,5 @@
 //! Typed operation requests and arithmetic dispatch.
+use super::scope::lookup;
 use super::{
     declare_stack, emit_unhandled_guard, gen_expr, op_sig_for, Codegen, CodegenError, Expr, OpSig,
     Result, Value,
@@ -16,7 +17,8 @@ pub(crate) fn gen_perform(
     position: Option<osprey_ast::Position>,
 ) -> Result<Value> {
     declare_stack(cg);
-    let effect = osprey_ast::effect_name::base(effect);
+    let target = super::scope::target(cg, effect, position)?;
+    let effect = target.effect.as_str();
     let sig = op_sig_for(cg, effect, operation)?;
     let site = crate::effect_generics::site_perform_op(cg, position)?;
     // Look up the handler under the instantiation-mangled key, so a
@@ -49,7 +51,20 @@ pub(crate) fn gen_perform(
         typed.push(v.typed());
     }
 
-    dispatch_request(cg, &lookup_key, operation, &sig, &site.op.ret, typed)
+    let request = Request {
+        lookup_key: &lookup_key,
+        operation,
+        instance: &target.instance,
+    };
+    dispatch_request(cg, &request, &sig, &site.op.ret, typed)
+}
+
+/// What one request asks for: the operation of an effect instantiation,
+/// answered at a capability identity ([EFFECTS-INSTANCE]).
+pub(super) struct Request<'a> {
+    lookup_key: &'a str,
+    operation: &'a str,
+    instance: &'a str,
 }
 
 /// Implicit arithmetic requests use the same value-operation ABI as `perform`.
@@ -68,10 +83,14 @@ pub(crate) fn gen_arithmetic_request(
         .and_then(|ops| ops.get(operation))
         .map(|op| op.ret.clone())
         .ok_or_else(|| CodegenError::invalid("missing Arith signature"))?;
+    let request = Request {
+        lookup_key: osprey_ast::ARITH_EFFECT,
+        operation,
+        instance: super::scope::DEFAULT_INSTANCE,
+    };
     dispatch_request(
         cg,
-        osprey_ast::ARITH_EFFECT,
-        operation,
+        &request,
         &sig,
         &ret,
         args.iter().map(Value::typed).collect(),
@@ -80,28 +99,28 @@ pub(crate) fn gen_arithmetic_request(
 
 pub(super) fn dispatch_request(
     cg: &mut Codegen,
-    lookup_key: &str,
-    operation: &str,
+    request: &Request<'_>,
     sig: &OpSig,
     ret: &osprey_types::Type,
     typed: Vec<String>,
 ) -> Result<Value> {
-    let op_id = cg.operation_id(lookup_key, operation)?.to_string();
-    let raw = cg.emit_reg(format!("call i8* @__osprey_handler_lookup(i32 {op_id})"));
+    let instance = request.instance;
+    let op_id = cg
+        .operation_id(request.lookup_key, request.operation)?
+        .to_string();
+    let raw = lookup(cg, "lookup", "i8*", &op_id, instance);
     // A missed lookup returns null — abort with a message instead of calling
     // a null pointer (an instantiation mismatch on a generic effect misses by
     // design, [EFFECTS-GENERIC-RUNTIME]).
-    emit_unhandled_guard(cg, &raw, lookup_key, operation);
-    let env = cg.emit_reg(format!(
-        "call i8* @__osprey_handler_lookup_env(i32 {op_id})"
-    ));
+    emit_unhandled_guard(cg, &raw, request.lookup_key, request.operation);
+    let env = lookup(cg, "lookup_env", "i8*", &op_id, instance);
     let fp = cg.emit_reg(format!("bitcast i8* {raw} to {}", sig.fn_ptr_ty()));
     let ret_ty = sig.ret_ty();
     let r = cg.fresh_reg();
     let mut call_args = vec![format!("i8* {env}")];
     call_args.extend(typed);
-    let scope = (!sig.mode.is_control())
-        .then(|| cg.call("i8*", "__osprey_handler_suspend_scope", "i32", &[&op_id]));
+    let scope =
+        (!sig.mode.is_control()).then(|| lookup(cg, "suspend_scope", "i8*", &op_id, instance));
     cg.emit(format!(
         "{r} = call {ret_ty} {fp}({})",
         call_args.join(", ")

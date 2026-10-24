@@ -125,6 +125,7 @@ impl Resolver {
                 arms,
                 body,
                 return_clause,
+                finally,
                 ..
             } => {
                 for arm in arms {
@@ -135,7 +136,7 @@ impl Resolver {
                     self.expression(&mut arm.body, &nested);
                 }
                 self.expression(body, scope);
-                if let Some(clause) = return_clause {
+                for clause in return_clause.iter_mut().chain(finally.iter_mut()) {
                     self.expression(clause, scope);
                 }
             }

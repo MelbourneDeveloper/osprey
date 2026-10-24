@@ -49,11 +49,23 @@ pub(super) fn binary_integer_builtin(
     }
 }
 
+/// Whether `name` is a builtin [`call_builtin_with_values`] lowers from
+/// already-evaluated values. Any other builtin named as a callback is
+/// eta-expanded into an ordinary call instead ([`crate::iter`]).
+pub(crate) fn has_value_form(name: &str) -> bool {
+    matches!(name, "print" | "toString" | "toFloat" | "abs")
+        || crate::arithmetic::is_float_function(name)
+        || is_binary_integer_builtin(name)
+}
+
 /// Lower a builtin that was passed as a first-class callback — `forEach(xs,
 /// print)`, `gpuMap(toFloat)`. Each arm has a value form needing no argument
 /// expressions, so it lowers once per element. `None` means `name` has no such
 /// form. Implements [BUILTIN-ITER-CALLBACK].
 fn call_builtin_with_values(cg: &mut Codegen, name: &str, args: &[Value]) -> Option<Result<Value>> {
+    if !has_value_form(name) {
+        return None;
+    }
     let arg = || args.first().cloned().unwrap_or_else(Value::unit);
     Some(match name {
         "print" => gen_print(cg, arg()),
@@ -66,11 +78,10 @@ fn call_builtin_with_values(cg: &mut Codegen, name: &str, args: &[Value]) -> Opt
         name if crate::arithmetic::is_float_function(name) => {
             crate::arithmetic::float_function(cg, name, arg())
         }
-        name if is_binary_integer_builtin(name) => match args {
+        _ => match args {
             [left, right] => binary_integer_builtin(cg, name, left.clone(), right.clone()),
             _ => Err(CodegenError::invalid(format!("{name} needs two arguments"))),
         },
-        _ => return None,
     })
 }
 

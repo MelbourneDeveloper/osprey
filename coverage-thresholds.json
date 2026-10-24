@@ -26,6 +26,10 @@
       "threshold": 95,
       "language": "rust"
     },
+    "lsp-profiler-osprey": {
+      "threshold": 95,
+      "language": "rust"
+    },
     "osprey-runtime-sys": {
       "threshold": 99,
       "language": "rust"
@@ -91,6 +95,18 @@
       "threshold": 95,
       "language": "c"
     },
+    "json_text": {
+      "threshold": 95,
+      "language": "c"
+    },
+    "json_codec": {
+      "threshold": 95,
+      "language": "c"
+    },
+    "float_spelling": {
+      "threshold": 95,
+      "language": "c"
+    },
     "ffi_runtime": {
       "threshold": 90,
       "language": "c"
@@ -149,6 +165,22 @@
     },
     "profiler_sampler": {
       "threshold": 90,
+      "language": "c"
+    },
+    "profiler_store": {
+      "threshold": 89,
+      "language": "c"
+    },
+    "profiler_dump": {
+      "threshold": 93,
+      "language": "c"
+    },
+    "profiler_stream": {
+      "threshold": 91,
+      "language": "c"
+    },
+    "profiler_endpoint": {
+      "threshold": 91,
       "language": "c"
     },
     "http_shared": {

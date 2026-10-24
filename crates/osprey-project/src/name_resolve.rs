@@ -115,6 +115,12 @@ impl Resolver<'_> {
         context: &Context,
         locals: &mut Locals,
     ) {
+        // A local capability (`let db = instance Store`) names a value, not
+        // a declaration, so module resolution leaves it alone
+        // ([EFFECTS-INSTANCE]).
+        if locals.values.contains(name.as_str()) {
+            return;
+        }
         let arguments = osprey_ast::effect_name::instantiation(name).map(str::to_owned);
         let mut head = osprey_ast::effect_name::base(name).to_owned();
         let qualified = head.contains("::");

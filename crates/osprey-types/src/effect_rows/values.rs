@@ -102,9 +102,12 @@ impl Analyzer<'_> {
                     },
                 ))))
             }
-            Expr::FieldAccess { target, field } => self
-                .value(target, scope, env)
-                .and_then(|value| project_field(value, field)),
+            Expr::FieldAccess { target, field } => {
+                let projected = self
+                    .value(target, scope, env)
+                    .and_then(|value| project_field(value, field));
+                self.index.field_value(field, projected)
+            }
             Expr::List(items, _) => {
                 let mut element = None;
                 for item in items {
@@ -271,6 +274,8 @@ impl Analyzer<'_> {
                 arms,
                 body,
                 return_clause,
+                // Cleanup returns `Unit`; it never contributes the answer.
+                finally: _,
                 position,
                 stage,
             } => {
@@ -321,6 +326,8 @@ impl Analyzer<'_> {
                     .as_deref()
                     .and_then(|value| self.value(value, scope, &local))
             }
+            // A mask changes which activation answers, not the value.
+            Expr::Mask { body, .. } => self.value(body, scope, env),
             Expr::Resume(value) | Expr::Yield(value) => value
                 .as_deref()
                 .and_then(|value| self.value(value, scope, env)),

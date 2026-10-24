@@ -289,16 +289,20 @@ fn main() = {
 
 #[test]
 fn version_plain_and_json() {
-    // [SWR-VERSION-BUILD-STAMPING] [SWR-VERSION-CLI-OUTPUT]
+    // [SWR-VERSION-BUILD-STAMPING] [SWR-VERSION-CLI-OUTPUT] The first line is
+    // exactly `name version`, as a version probe parses it; the commit the
+    // binary was built from follows, so a stale build is visible.
+    let commit = env!("OSPREY_COMMIT");
+    assert!(commit.len() >= 7, "{commit}");
     let plain = run_args(&["--version"]);
     assert_eq!(plain.code, Some(0));
-    assert_eq!(plain.stdout, "osprey 0.0.0-dev\n");
+    assert_eq!(plain.stdout, format!("osprey 0.0.0-dev\ncommit {commit}\n"));
 
     let json = run_args(&["--version", "--json"]);
     assert_eq!(json.code, Some(0));
     assert_eq!(
         json.stdout,
-        "{\"manifestVersion\":1,\"name\":\"osprey\",\"version\":\"0.0.0-dev\",\"kind\":\"cli\",\"product\":\"osprey\"}\n"
+        format!("{{\"manifestVersion\":1,\"name\":\"osprey\",\"version\":\"0.0.0-dev\",\"kind\":\"cli\",\"product\":\"osprey\",\"commit\":\"{commit}\"}}\n")
     );
 }
 

@@ -19,7 +19,7 @@ _runtime:
 	@set -e; config_tmp="$(NATIVE_RUNTIME_CONFIG).$$$$"; \
 	  { printf '%s\n' \
 	      "CC=$(CC)" "AR=$(AR)" "A=$(A)" "B=$(B)" "WARN_MAX=$(WARN_MAX)" "GPU_DEVICE_FLAGS=$(GPU_DEVICE_FLAGS)" \
-	      "OSSL=$(OSSL)" "FIB_OBJ=$(FIB_OBJ)" "HTTP_OBJ=$(HTTP_OBJ)" \
+	      "OSSL=$(OSSL)" "OSPREY_VERSION=$(OSPREY_VERSION)" "FIB_OBJ=$(FIB_OBJ)" "HTTP_OBJ=$(HTTP_OBJ)" \
 	      "FIB_OBJ_GC=$(FIB_OBJ_GC)" "HTTP_OBJ_GC=$(HTTP_OBJ_GC)" \
 	      "FIB_OBJ_ARC=$(FIB_OBJ_ARC)" "HTTP_OBJ_ARC=$(HTTP_OBJ_ARC)"; \
 	    command -v "$(firstword $(CC))" 2>/dev/null || true; \
@@ -65,6 +65,8 @@ $(NATIVE_RUNTIME_STAMP): $(NATIVE_RUNTIME_INPUTS) $(NATIVE_RUNTIME_CONFIG) Makef
 	  $(CC) $(A) -include runtime/osp_arc_shim.h runtime/string_runtime.c      -o bin/arc/string_runtime.o && \
 	  $(CC) $(A) -include runtime/osp_arc_shim.h runtime/string_runtime_list.c -o bin/arc/string_runtime_list.o && \
 	  $(CC) $(B) -include runtime/osp_arc_shim.h runtime/json_runtime.c        -o bin/arc/json_runtime.o && \
+	  $(CC) $(B) -include runtime/osp_arc_shim.h runtime/json_text.c           -o bin/arc/json_text.o && \
+	  $(CC) $(B) -include runtime/osp_arc_shim.h runtime/json_codec.c          -o bin/arc/json_codec.o && \
 	  $(CC) $(A) -include runtime/osp_arc_shim.h runtime/file_runtime.c        -o bin/arc/file_runtime.o && \
 	  $(CC) -c -fPIC -O2 $(WARN_MAX) -Wpedantic -std=c11 -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime.o && \
 	  $(CC) $(A) runtime/system_runtime.c       -o bin/system_runtime.o && \
@@ -73,10 +75,13 @@ $(NATIVE_RUNTIME_STAMP): $(NATIVE_RUNTIME_INPUTS) $(NATIVE_RUNTIME_CONFIG) Makef
 	  $(CC) $(A) runtime/effects_coro.c         -o bin/effects_coro.o && \
 	  $(CC) $(A) runtime/string_runtime.c       -o bin/string_runtime.o && \
 	  $(CC) $(A) runtime/string_runtime_list.c  -o bin/string_runtime_list.o && \
+	  $(CC) $(B) runtime/float_spelling.c       -o bin/float_spelling.o && \
 	  $(CC) $(B) runtime/list_runtime.c         -o bin/list_runtime.o && \
 	  $(CC) $(B) runtime/map_runtime.c          -o bin/map_runtime.o && \
 	  $(CC) $(B) runtime/map_runtime_hamt.c     -o bin/map_runtime_hamt.o && \
 	  $(CC) $(B) runtime/json_runtime.c         -o bin/json_runtime.o && \
+	  $(CC) $(B) runtime/json_text.c            -o bin/json_text.o && \
+	  $(CC) $(B) runtime/json_codec.c           -o bin/json_codec.o && \
 	  $(CC) $(B) runtime/ffi_runtime.c          -o bin/ffi_runtime.o && \
 	  $(CC) $(B) runtime/term_runtime.c         -o bin/term_runtime.o && \
 	  $(CC) $(B) runtime/random_runtime.c       -o bin/random_runtime.o && \
@@ -88,6 +93,10 @@ $(NATIVE_RUNTIME_STAMP): $(NATIVE_RUNTIME_INPUTS) $(NATIVE_RUNTIME_CONFIG) Makef
 	  $(CC) $(B) runtime/coverage_runtime.c     -o bin/coverage_runtime.o && \
 	  $(CC) $(B) runtime/profiler_runtime.c     -o bin/profiler_runtime.o && \
 	  $(CC) $(B) runtime/profiler_sampler.c     -o bin/profiler_sampler.o && \
+	  $(CC) $(B) runtime/profiler_store.c       -o bin/profiler_store.o && \
+	  $(CC) $(B) runtime/profiler_dump.c        -o bin/profiler_dump.o && \
+	  $(CC) $(B) -DOSP_RUNTIME_VERSION='"$(OSPREY_VERSION)"' runtime/profiler_stream.c -o bin/profiler_stream.o && \
+	  $(CC) $(B) runtime/profiler_endpoint.c     -o bin/profiler_endpoint.o && \
 	  $(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong $(WARN_MAX) \
 	        -Wformat -Werror=format-security -Werror=implicit-function-declaration \
 	        -Werror=incompatible-pointer-types -Werror=int-conversion -Warray-bounds -ftrapv \

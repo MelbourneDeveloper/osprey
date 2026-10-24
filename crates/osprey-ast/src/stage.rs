@@ -188,6 +188,20 @@ pub fn lower(program: &Program) -> Result<Program, Vec<StageError>> {
     crate::lower_static::run(program)
 }
 
+/// Every named function definition in `program`, at any nesting depth.
+#[must_use]
+pub fn function_definitions(program: &Program) -> BTreeMap<String, Stmt> {
+    crate::lower_static::function_definitions(program)
+}
+
+/// `program` with every local binding renamed to a name unique in the
+/// program; top-level names are kept. Substituting into a body is then
+/// capture-free.
+#[must_use]
+pub fn resolve_bindings(program: &Program) -> Program {
+    crate::lower_static::resolve_bindings(program)
+}
+
 /// [`validate`] then [`lower`]: discharge every static handler in `program`,
 /// returning the rewritten program.
 ///
@@ -350,7 +364,7 @@ fn undeclared_region(stage: Stage, base: &str) -> String {
     if base == crate::ARITH_EFFECT {
         format!("`{region} Arith` is not available: `Arith` has runtime policies only; install one with `handle Arith`")
     } else {
-        format!("{region} names unknown effect `{base}`")
+        format!("{region} names unknown effect `{base}`: a compile-time region needs an effect declaration, and a capability made by `instance` is a runtime identity it cannot answer")
     }
 }
 

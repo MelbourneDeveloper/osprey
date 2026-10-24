@@ -9,10 +9,14 @@
 //! and renders the terminal report ([PROF-CLI-REPORT]).
 
 mod export;
+mod live;
 mod model;
 mod raw;
 mod report;
 mod symbolize;
+
+pub use live::{LiveFrame, LiveSymbols};
+pub use raw::Image;
 
 #[cfg(test)]
 mod e2e;

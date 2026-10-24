@@ -97,6 +97,21 @@ pub(crate) fn analyze_cached(
     let mut analysis = project_diagnostics(source, path, encoding, snapshot, cache)
         .or_else(|| standalone_diagnostics(source, path, flavor, &parsed.program, encoding))
         .unwrap_or_else(|| type_diagnostics(source, &parsed.program, flavor, encoding));
+    // Like every other warning, documentation advice waits for a file that
+    // checks: an error is the only finding worth reading until it is fixed.
+    if analysis
+        .diagnostics
+        .iter()
+        .all(|d| d.severity != Severity::Error)
+    {
+        analysis
+            .diagnostics
+            .extend(crate::undocumented::diagnostics(
+                source,
+                &parsed.program,
+                encoding,
+            ));
+    }
     analysis
         .diagnostics
         .extend(skip_diagnostics(source, &parsed.program, encoding));
@@ -217,7 +232,7 @@ fn assembly_diagnostics(
         Ok(project) => {
             let errors = osprey_types::check_program(&project.program);
             let warnings = if errors.is_empty() {
-                crate::warning_actions::Warnings::of(&project.program)
+                crate::warning_actions::Warnings::of_project(&project)
             } else {
                 crate::warning_actions::Warnings::none()
             };

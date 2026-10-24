@@ -1,0 +1,4 @@
+ok 1 - a caller above its helper is generic
+ok 2 - a recursive group below its caller
+1..2
+# tests=2 passed=2 failed=0 skipped=0

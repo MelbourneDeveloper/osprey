@@ -29,6 +29,7 @@ impl Lowerer<'_> {
         for (index, (effect, arms)) in self.kernel_arms(node).into_iter().enumerate().rev() {
             region = Expr::Handler {
                 return_clause: None,
+                finally: None,
                 stage: region_stage(index),
                 effect,
                 arms,

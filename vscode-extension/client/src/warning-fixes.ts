@@ -153,13 +153,14 @@ function matchesFreshAction(
     changes[0].textDocument.version !== fix.version
   )
     return false;
-  const edits = changes[0].edits.map(({ range, newText }) => ({
-    newText,
+  // A snippet edit carries no `newText`, so it never matches the offered fix.
+  const edits = changes[0].edits.map((edit) => ({
+    newText: "newText" in edit ? edit.newText : undefined,
     range: [
-      range.start.line,
-      range.start.character,
-      range.end.line,
-      range.end.character,
+      edit.range.start.line,
+      edit.range.start.character,
+      edit.range.end.line,
+      edit.range.end.character,
     ],
   }));
   return JSON.stringify(edits) === JSON.stringify(fix.edits);

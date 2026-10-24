@@ -26,7 +26,7 @@ The formatting command keeps the selected source flavor. It does not translate a
 
 ## Appendix B — Default syntax on one page
 
-Planned scan sheet for bindings, functions, calls, blocks, records, unions, matching, lists, maps, pipelines, Results, effects, and fibers. It is a memory aid, not a second specification. Until it is completed, the examples in Chapters 1–3 and 8–10 are the checked teaching reference.
+Planned scan sheet for bindings, functions, calls, blocks, records, unions, matching, lists, maps, pipelines, Results, effects, and fibers. It is a memory aid, not a second specification. Until it is completed, the examples in Chapters 1–4 and 8–10 are the checked teaching reference.
 
 The effects entries must use `effect`, `perform`, callable `handler` values, and rest-of-block `handle`. `h(work)` installs a handler before invoking its zero-argument function. Value arms return to the request; declared `control` operations have the separate continuation behavior discussed in Chapter 9. Removed `handle ... in` and `handle ... do` forms must not reappear in the sheet.
 
@@ -42,7 +42,7 @@ The following qualifications describe the current implementation. A future desig
 
 | Area | Current boundary |
 |---|---|
-| Effects | Callable value handlers and static discharge have native, WebAssembly, and mobile paths. Dynamic control handlers are native-only. Independently quantified effect rows, reusable or escaping continuations, and the wider staged design remain delivery work. |
+| Effects | Callable value handlers and static discharge have native, WebAssembly, and mobile paths. Dynamic control handlers are native-only. Native resumptions are single-shot: each paused computation resumes at most once. |
 | Concurrency | Normal native fibers use one pthread each. Channels have a positive-capacity typed buffer. WebAssembly excludes this runtime; lexical scopes, cancellation, deadlines, and races are planned. |
 | Ownership | Managed immutable values may be co-owned across fiber threads. Message passing does not promise physically separate heaps or a deep copy of every value. |
 | Native memory | `default`, `gc`, and `arc` are build options. Default retains general allocations. Conservative GC is supported on Apple and glibc-Linux, is not supported on Windows, and disables collection after another allocator thread appears. |
@@ -50,8 +50,8 @@ The following qualifications describe the current implementation. A future desig
 | WebAssembly | Emits a WASI command module; browser execution needs the supported host bridge. Files depend on host access. Native HTTP/WebSocket, process, terminal, fiber, and arbitrary-FFI facilities are unavailable. |
 | Mobile | iOS device/simulator and Android ARM64/x86-64 targets emit archives and headers for native hosts. The host supplies UI, networking, lifecycle, and asynchronous completion events. |
 | Modules and packages | Project discovery, namespaces, modules, and cross-flavor imports work. The package manager and registry remain design work. |
-| Flavors | Default and ML are currently available. One source selects one flavor; a project may mix them. Formatting does not convert flavors. |
-| Optimization and GPU | Tail-call optimization is not implemented. Current GPU kernel execution uses host loops; device execution remains planned. |
+| Flavors | Default and ML are available; the Python flavor implements a subset of its specified surface. One source selects one flavor; a project may mix them. Formatting does not convert flavors. |
+| Optimization and GPU | Tail-call optimization is not implemented. Supported GPU kernels can execute on Metal or OpenCL. Check kernel and device support before choosing this path; a GPU API call alone does not prove acceleration. |
 | Foreign resources | C integration crosses Osprey's memory-safety boundary. Files, response handles, sockets, and other external resources still need their explicit cleanup APIs. |
 
 The narrow authorities are the [effects delivery plan](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0016-algebraic-effects-and-handlers.md), [fiber contract](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0011-LightweightFibersAndConcurrency.md), [memory contract](https://github.com/Nimblesite/osprey/blob/main/docs/specs/compiler/0018-MemoryManagement.md), and the target specifications linked in Chapter 12. Package, structured-concurrency, and GPU delivery status lives in plans 0020, 0026, and 0023 respectively.
@@ -65,6 +65,7 @@ The current checked source lives under `Book/examples/`:
 | 1 | `chapter-01/` | First output and the optional ML twin. |
 | 2 | `chapter-02/` | Named values and the Flight Log summary. |
 | 3 | `chapter-03/` | Inference, a record, and a stored type rejection. |
+| 4 | `chapter-04/` | Boolean and union matches, missing cases, and unreachable-arm rejections. |
 | 8 | `chapter-08/` | Executed assertions and a Flight Log test suite. |
 | 9 | `chapter-09/` | Handler choice, scope, static selection, control behavior, and required-handler/type errors. |
 | 10 | `chapter-10/` | Scripted failures, actual file persistence, and an optional local HTTP adapter. |

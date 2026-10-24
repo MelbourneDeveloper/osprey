@@ -49,14 +49,7 @@ fn randomness(e: &mut TypeEnv) {
 
 fn signals(e: &mut TypeEnv) {
     let work = Type::fun(vec![], Type::Var(0));
-    let snapshot = Type::Record {
-        name: String::new(),
-        fields: std::collections::BTreeMap::from([
-            ("dependencies".to_owned(), Type::list(s())),
-            ("value".to_owned(), Type::Var(0)),
-            ("revision".to_owned(), i()),
-        ]),
-    };
+    let snapshot = Type::signal_snapshot(Type::Var(0));
     poly(
         e,
         "signalDependencies",

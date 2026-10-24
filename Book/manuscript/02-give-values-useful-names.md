@@ -156,7 +156,7 @@ The call `checkedMul(3, 25)` checks whether the product fits in an integer. It r
 
 The full summary prints the successful result as `Mika | goal: Build a small Osprey CLI | active: true | sessions: 3 | minutes: Success(75)`. That wrapper is evidence, not clutter added by the example.
 
-For now, leave the result visible. Chapter 7 will open both branches with `match` and decide what the Flight Log should do on failure. Introducing the shape now prevents a dangerous assumption: integer operations do not silently wrap around to a different number.
+For now, leave the result visible. Chapter 7 will open both branches with `match` and decide what the Flight Log should do on failure. Here, `checkedMul` reports overflow instead of wrapping to a different number.
 
 The name `checkedMul` selects this explicit `Result` contract. Plain integer `*` produces an integer and requires an `Arith` handler for overflow; Chapter 9 introduces handlers. Floating-point arithmetic has different machine rules. For this count of minutes, `checkedMul` makes both success and failure visible without an effect handler.
 

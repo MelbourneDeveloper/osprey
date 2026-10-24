@@ -121,7 +121,7 @@ impl Lowering {
             .flatten()
     }
 
-    fn is_callback(&self, argument: &Expr) -> bool {
+    pub(super) fn is_callback(&self, argument: &Expr) -> bool {
         match argument {
             Expr::Lambda { .. } => true,
             Expr::Identifier(name) => {
@@ -131,7 +131,10 @@ impl Lowering {
         }
     }
 
-    fn inline(&self, parameters: &[Parameter], body: &Expr, arguments: &[Expr]) -> Expr {
+    /// Inline one application: callback arguments are substituted so a static
+    /// region inside the body sees them, and every other argument is bound
+    /// once, in order, so it is still evaluated exactly once.
+    pub(super) fn inline(&self, parameters: &[Parameter], body: &Expr, arguments: &[Expr]) -> Expr {
         let mut applied = body.clone();
         let mut statements = Vec::new();
         for (parameter, argument) in parameters.iter().zip(arguments) {

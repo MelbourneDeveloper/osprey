@@ -44,11 +44,15 @@
 # CST-walk shapes that don't factor without obscuring intent.
 # 2026-10-16: latest Deslop 0.38.0 measures 3460/114390 LOC (3.0247%).
 # The same version measured main at 3460/114342 LOC (3.0260%).
-# Ratchet down after the structural cleanup; use the same CLI on both trees.
-max_duplication_percent = 3.03
+# 2026-10-23: capped at 3%. The staged-signal forwarder pass reuses
+# osprey_ast's function_definitions and the signal callee helper instead of
+# restating them.
+max_duplication_percent = 3.0
 
 [defaults]
 exclude = [
+  # The lspkit submodule (https://github.com/Nimblesite/lspkit) is gated in its own repo.
+  "lspkit/**",
   # Test code, in every layout the repo uses. The gate scopes to hand-written
   # PRODUCT code; test suites intentionally repeat setup/fixture scaffolding
   # (that repetition is what keeps each test independently readable), so

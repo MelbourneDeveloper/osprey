@@ -73,6 +73,7 @@ static void fn_b(void) {}
 static int env_a, env_b;
 
 #include "effects_scope_tests.h"
+#include "effects_finally_tests.h"
 
 // Push/lookup/pop with exact depths; the INNERMOST matching handler wins and
 // its fnptr and env always come from the SAME entry.
@@ -564,6 +565,7 @@ int main(void) {
   osp_mem_boot();
   t_stack_shadowing();
   t_handler_scope();
+  t_finally_mask_and_instances();
   t_evidence_shadows_by_operation();
   t_operation_id_bound();
   t_overflow_exact();

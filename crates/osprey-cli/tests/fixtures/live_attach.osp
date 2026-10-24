@@ -1,0 +1,18 @@
+// The live-attach fixture [PROF-ATTACH-ENDPOINT]: burns CPU in `spin` far
+// longer than any test runs, so a test can attach, sample and stop it, then
+// kill it. Each leaf formats its argument, so some of the time is spent in the
+// C runtime's own frames, which a profile shows only on request.
+fn add(a, b) = a + b
+fn sub(a, b) = a - b
+fn leaf(n) = length(toString(n))
+
+fn spin(n) = match n {
+    0 => 0
+    1 => leaf(n)
+    _ => add(spin(sub(n, 1)), spin(sub(n, 2)))
+}
+
+fn main() = {
+    handle Arith { overflow _ _ _ wrapped => wrapped }
+    print("${spin(48)}")
+}

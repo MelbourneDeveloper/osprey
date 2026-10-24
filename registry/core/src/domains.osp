@@ -1,0 +1,68 @@
+namespace registry;
+
+/// The domain-separation strings of every `H(d, x)` in spec 0031, in one
+/// place so no digest can be computed under a misspelled domain. Each name
+/// is the field or object it hashes. Implements [PACKAGE-TYPE-INVARIANTS].
+module Domains {
+    let sourceTree = "osprey.source.v1"
+    let sourceFile = "osprey.source-file.v1"
+    let manifest = "osprey.manifest.v1"
+    let buildPlan = "osprey.build-plan.v1"
+    let release = "osprey.release.v1"
+    let verificationBundle = "osprey.verification-bundle.v1"
+    let logCheckpointRecord = "osprey.log-checkpoint-record.v1"
+    let logCheckpoint = "osprey.log-checkpoint.v1"
+    let witnessReceipt = "osprey.witness-receipt.v1"
+    let resolutionContext = "osprey.resolution-context.v1"
+    let dependencySelection = "osprey.dependency-selection.v1"
+    let releaseLock = "osprey.release-lock.v1"
+    let developmentLock = "osprey.development-lock.v1"
+    let moduleGraph = "osprey.module-graph.v1"
+    let compilerInvocation = "osprey.compiler-invocation.v1"
+    let testPlan = "osprey.test-plan.v1"
+    let outputLayout = "osprey.output-layout.v1"
+    let publicInterface = "osprey.public-interface.v1"
+    let developmentBuildReceipt = "osprey.development-build-receipt.v1"
+    let developmentOverlay = "osprey.development-overlay.v1"
+    let resolutionProof = "osprey.resolution-proof.v1"
+    let developmentGeneration = "osprey.development-generation.v1"
+    let workspaceTransaction = "osprey.workspace-transaction.v1"
+    let releaseStatus = "osprey.release-status.v1"
+    let envelope = "osprey.envelope.v1"
+    let webAuthn = "osprey.webauthn.v1"
+
+    /// The domain of the source-tree envelope, used without `H`'s length prefix.
+    export fn sourceTreeDomain() = sourceTree
+    export fn sourceFileDomain() = sourceFile
+    export fn manifestDomain() = manifest
+    export fn buildPlanDomain() = buildPlan
+    export fn releaseDomain() = release
+    export fn verificationBundleDomain() = verificationBundle
+    export fn logCheckpointRecordDomain() = logCheckpointRecord
+    export fn logCheckpointDomain() = logCheckpoint
+    export fn witnessReceiptDomain() = witnessReceipt
+    export fn resolutionContextDomain() = resolutionContext
+    export fn dependencySelectionDomain() = dependencySelection
+    export fn releaseLockDomain() = releaseLock
+    export fn developmentLockDomain() = developmentLock
+    export fn moduleGraphDomain() = moduleGraph
+    export fn compilerInvocationDomain() = compilerInvocation
+    export fn testPlanDomain() = testPlan
+    export fn outputLayoutDomain() = outputLayout
+    export fn publicInterfaceDomain() = publicInterface
+    export fn developmentBuildReceiptDomain() = developmentBuildReceipt
+    export fn developmentOverlayDomain() = developmentOverlay
+    export fn resolutionProofDomain() = resolutionProof
+    export fn developmentGenerationDomain() = developmentGeneration
+    export fn workspaceTransactionDomain() = workspaceTransaction
+    export fn releaseStatusDomain() = releaseStatus
+    export fn envelopeDomain() = envelope
+    export fn webAuthnDomain() = webAuthn
+
+    /// Every domain, for uniqueness and spelling checks.
+    export fn all() = [sourceTree, sourceFile, manifest, buildPlan, release, verificationBundle,
+        logCheckpointRecord, logCheckpoint, witnessReceipt, resolutionContext, dependencySelection,
+        releaseLock, developmentLock, moduleGraph, compilerInvocation, testPlan, outputLayout,
+        publicInterface, developmentBuildReceipt, developmentOverlay, resolutionProof,
+        developmentGeneration, workspaceTransaction, releaseStatus, envelope, webAuthn]
+}

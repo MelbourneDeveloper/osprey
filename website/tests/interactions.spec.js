@@ -16,7 +16,8 @@ async function verifyDraftExample(source, file) {
   expect(await executeExample(source, file)).toBe("Saved / Retry: offline\n");
   expect(await readFile(path.join(path.dirname(file), "draft.txt"), "utf8")).toBe("Ship it.");
   const offline = source.replace('print("${disk(saveDraft)} / ${offline(saveDraft)}")', 'print(offline(saveDraft))')
-    .replace('print "${disk saveDraft} / ${offline saveDraft}"', 'print (offline saveDraft)');
+    .replace('print "${disk saveDraft} / ${offline saveDraft}"', 'print (offline saveDraft)')
+    .replace('print(f"{disk(saveDraft)} / {offline(saveDraft)}")', 'print(offline(saveDraft))');
   const isolated = path.join(path.dirname(file), "offline", path.basename(file));
   expect(offline).not.toBe(source);
   expect(await executeExample(offline, isolated)).toBe("Retry: offline\n");
@@ -33,9 +34,9 @@ async function exampleResult(source, file) {
 }
 
 test.describe("homepage flight and source examples", () => {
-  test("both syntax examples execute with the displayed output", async ({ page }, testInfo) => {
+  test("all three flavor examples execute with the displayed output", async ({ page }, testInfo) => {
     await page.goto("/");
-    for (const [flavor, extension] of [["default", "osp"], ["ml", "ospml"]]) {
+    for (const [flavor, extension] of [["default", "osp"], ["ml", "ospml"], ["python", "py"]]) {
       await page.locator(`.flavor-controls button[data-flavor="${flavor}"]`).click();
       const source = page.locator(`#example-${flavor}`);
       await expect(source).toBeVisible();
@@ -90,6 +91,7 @@ test.describe("homepage flight and source examples", () => {
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.goto("/");
     const video = page.locator("#flight-video");
+    await expect(video).toHaveAttribute("autoplay", "");
     await expect.poll(() => video.evaluate((el) => el.currentTime)).toBeGreaterThan(2);
     expect(await video.evaluate((el) => el.getVideoPlaybackQuality().totalVideoFrames)).toBeGreaterThan(15);
     await page.getByRole("button", { name: "Pause motion", exact: true }).click();
@@ -106,7 +108,7 @@ test.describe("homepage flight and source examples", () => {
   test("reduced motion loads the poster without fetching the film", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     const requests = [];
-    page.on("request", (request) => { if (request.url().endsWith(".webm")) requests.push(request.url()); });
+    page.on("request", (request) => { if (/osprey-flight\.(webm|mp4)$/.test(request.url())) requests.push(request.url()); });
     await page.goto("/", { waitUntil: "networkidle" });
     await expect(page.getByRole("button", { name: "Play motion", exact: true })).toBeVisible();
     expect(requests).toEqual([]);

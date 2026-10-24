@@ -3,7 +3,7 @@ use super::{bind_catch_all, bind_value, emit_arm, finish_phi};
 use crate::builder::Codegen;
 use crate::error::Result;
 use crate::llty::{LType, Value};
-use osprey_ast::{MatchArm, Pattern};
+use osprey_ast::{Expr, MatchArm, Pattern};
 
 pub(super) fn is_result_arm(p: &Pattern) -> bool {
     result_variant(p).is_some()
@@ -90,6 +90,87 @@ fn result_arm<'a>(arms: &'a [MatchArm], variant: &str) -> Option<&'a MatchArm> {
     })
 }
 
+/// `match listGet(xs, i) { … }` without the Result: branch on the bounds check
+/// itself, read the element only on the Success path, and bind the constant
+/// reason on the Error one. The Result block the call would allocate exists
+/// only to be taken apart by these arms, so a lookup costs no allocation --
+/// and a scan over a list is a loop of lookups [BUILTIN-LIST-GET].
+///
+/// `None` when the scrutinee is not a builtin `listGet` call, or when an arm
+/// binds the whole Result and so needs it to exist.
+pub(super) fn gen_list_get_match(
+    cg: &mut Codegen,
+    value: &Expr,
+    arms: &[MatchArm],
+) -> Result<Option<Value>> {
+    let Expr::Call {
+        function,
+        arguments,
+        named_arguments,
+    } = value
+    else {
+        return Ok(None);
+    };
+    let mut callee = function.as_ref();
+    let mut applications = Vec::new();
+    while let Expr::TypeApply {
+        function, position, ..
+    } = callee
+    {
+        applications.push(*position);
+        callee = function;
+    }
+    let builtin = matches!(callee, Expr::Identifier(name) if name == "listGet")
+        && named_arguments.is_empty()
+        && arguments.len() == 2
+        && cg.lookup("listGet").is_none()
+        && cg.lambda_def("listGet").is_none();
+    let fusible = arms
+        .iter()
+        .all(|arm| is_result_arm(&arm.pattern) || matches!(arm.pattern, Pattern::Wildcard));
+    if !builtin || !fusible {
+        return Ok(None);
+    }
+    within(cg, &applications, &mut |cg| {
+        fused_list_get(cg, arguments, arms)
+    })
+    .map(Some)
+}
+
+/// Run `generate` inside each generic application the callee carried,
+/// outermost first, exactly as an ordinary call would be generated.
+fn within(
+    cg: &mut Codegen,
+    applications: &[Option<osprey_ast::Position>],
+    generate: &mut dyn FnMut(&mut Codegen) -> Result<Value>,
+) -> Result<Value> {
+    match applications.split_first() {
+        Some((position, rest)) => {
+            crate::expr::with_application(cg, *position, |cg| within(cg, rest, generate))
+        }
+        None => generate(cg),
+    }
+}
+
+fn fused_list_get(cg: &mut Codegen, arguments: &[Expr], arms: &[MatchArm]) -> Result<Value> {
+    let (list, index) = crate::collections::list_get_operands(cg, arguments)?;
+    let operands = [list.operand.as_str(), index.operand.as_str()];
+    let in_bounds = cg.call("i32", "osprey_list_in_bounds", "i8*, i64", &operands);
+    let cond = cg.emit_reg(format!("icmp ne i32 {in_bounds}, 0"));
+    let (sl, el, end) = cg.diamond(&cond);
+    let mark = crate::arc::frame_mark(cg);
+    let mut phi_in: Vec<(Value, String)> = Vec::new();
+    cg.start_block(&sl);
+    let raw = cg.call("i64", "osprey_list_get", "i8*, i64", &operands);
+    let element = crate::collections::elem_value(cg, &list, &raw);
+    emit_result_body(cg, result_arm(arms, "Success"), element, None, &mut phi_in)?;
+    cg.start_block(&el);
+    let reason = cg.string_constant(crate::collections::INDEX_OOB).operand;
+    let reason = Value::new(reason, LType::Str);
+    emit_result_body(cg, result_arm(arms, "Error"), reason, None, &mut phi_in)?;
+    finish_phi(cg, &phi_in, &end, mark)
+}
+
 /// Bind a variant's payload or a catch-all's complete discriminant and emit
 /// its value. A missing arm is unreachable for a checked exhaustive Result;
 /// it cannot contribute an empty predecessor to the result phi.
@@ -102,18 +183,30 @@ fn emit_result_arm(
     phi_in: &mut Vec<(Value, String)>,
 ) -> Result<()> {
     cg.start_block(label);
-    if let Some(arm) = arm {
-        emit_arm(cg, arm, phi_in, |cg| {
-            if let Pattern::Constructor { fields, .. } = &arm.pattern {
-                if let Some(f) = fields.first() {
-                    bind_value(cg, f.clone(), bound);
-                }
-            } else if !is_result_arm(&arm.pattern) {
-                bind_catch_all(cg, &arm.pattern, disc);
-            }
-        })?;
-    } else {
+    emit_result_body(cg, arm, bound, Some(disc), phi_in)
+}
+
+/// The arm's bindings and body in the current block. A catch-all binds the
+/// whole discriminant, which a fused match does not have (`disc` is `None`)
+/// and so never offers to one.
+fn emit_result_body(
+    cg: &mut Codegen,
+    arm: Option<&MatchArm>,
+    bound: Value,
+    disc: Option<&Value>,
+    phi_in: &mut Vec<(Value, String)>,
+) -> Result<()> {
+    let Some(arm) = arm else {
         cg.emit("unreachable");
-    }
-    Ok(())
+        return Ok(());
+    };
+    emit_arm(cg, arm, phi_in, |cg| {
+        if let Pattern::Constructor { fields, .. } = &arm.pattern {
+            if let Some(f) = fields.first() {
+                bind_value(cg, f.clone(), bound);
+            }
+        } else if let (false, Some(disc)) = (is_result_arm(&arm.pattern), disc) {
+            bind_catch_all(cg, &arm.pattern, disc);
+        }
+    })
 }

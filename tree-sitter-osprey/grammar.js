@@ -295,6 +295,7 @@ module.exports = grammar({
         field('name', $.identifier),
         ':',
         field('type', $._type),
+        optional(field('effects', $.closed_effect_set)),
         optional(seq('where', $.call_expression)),
       ),
 
@@ -371,6 +372,10 @@ module.exports = grammar({
         seq('!', $.effect_ref),
         seq('!', '[', optional($.effect_list), optional(seq('|', field('tail', $.identifier))), ']'),
       ),
+    // A function-typed field's row names exactly what a call through the
+    // field may perform, so it has no open tail. Implements [EFFECTS-FIELD-ROWS].
+    closed_effect_set: ($) =>
+      choice(seq('!', $.effect_ref), seq('!', '[', optional($.effect_list), ']')),
     effect_list: ($) => sep1(',', $.effect_ref),
     effect_ref: ($) => seq(field('name', choice($.qualified_path, $.identifier)), optional($.type_arguments)),
 
@@ -459,8 +464,17 @@ module.exports = grammar({
     // handler serves many regions. Implements [EFFECTS-HANDLER-VALUE].
     handler_value_expression: ($) =>
       prec.right(seq('handler', optional(field('stage', $.static_stage)), field('effect', choice($.qualified_path, $.identifier)), optional(field('instantiation', $.type_arguments)), '{', $._handler_clauses, '}')),
-    _handler_clauses: ($) => choice(repeat1($.handler_arm), seq(repeat($.handler_arm), $.handler_return, repeat($.handler_arm))),
+    // Arms plus at most one `return` clause and at most one `finally` clause,
+    // in any order. Implements [EFFECTS-HANDLER-ARMS], [EFFECTS-FINALIZATION].
+    _handler_clauses: ($) =>
+      choice(
+        repeat1($.handler_arm),
+        seq(repeat($.handler_arm), $.handler_return, repeat($.handler_arm), optional(seq($.handler_finally, repeat($.handler_arm)))),
+        seq(repeat($.handler_arm), $.handler_finally, repeat($.handler_arm), optional(seq($.handler_return, repeat($.handler_arm)))),
+      ),
     handler_return: ($) => seq('return', field('parameter', $.identifier), '=>', field('body', $.expression)),
+    // `finally => cleanup` runs once when the activation ends.
+    handler_finally: ($) => seq('finally', '=>', field('body', $.expression)),
     handler_arm: ($) =>
       seq(field('operation', $.identifier), optional($.handler_params), '=>', field('body', $.expression)),
     handler_params: ($) => repeat1($.identifier),
@@ -580,6 +594,8 @@ module.exports = grammar({
         $.send_call,
         $.recv_call,
         $.perform_expression,
+        $.mask_expression,
+        $.instance_expression,
         $.resume_expression,
         $.type_constructor,
         $.update_expression,
@@ -600,6 +616,13 @@ module.exports = grammar({
     await_call: ($) => seq('await', '(', $.expression, ')'),
     send_call: ($) => seq('send', '(', $.expression, ',', $.expression, ')'),
     recv_call: ($) => seq('recv', '(', $.expression, ')'),
+    // `mask E { body }` skips one enclosing activation of E (or of a named
+    // capability) while `body` runs. Implements [EFFECTS-MASK].
+    mask_expression: ($) =>
+      seq('mask', field('effect', choice($.qualified_path, $.identifier)), optional(field('instantiation', $.type_arguments)), field('body', $.block)),
+    // `instance E` creates a fresh capability identity. Implements [EFFECTS-INSTANCE].
+    instance_expression: ($) =>
+      prec.right(seq('instance', field('effect', choice($.qualified_path, $.identifier)), optional(field('instantiation', $.type_arguments)))),
     perform_expression: ($) =>
       seq('perform', field('effect', choice($.qualified_path, $.identifier)), optional(field('instantiation', $.type_arguments)), '.', field('operation', $.identifier), '(', optional($.argument_list), ')'),
     // `resume(v)` resumes the performer's delimited continuation with `v`;

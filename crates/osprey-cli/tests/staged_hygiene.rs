@@ -380,13 +380,15 @@ fn count() = satAdd(perform Signal<int>.read(), 1)
 fn title() = perform Signal<string>.read()
 fn choose(flag) = match flag { true => toString(count()) false => title() }
 fn describe(callback) = signalDependencies(callback)
+fn picked(flag) = match flag { true => count false => count }
 let first = signalDependencies(count)
 let second = signalDependencies(|| => title())
 let selected = signalDependencies(|| => choose(true))
-let unknown = describe(count)
-print("${join(first, ",")}|${join(second, ",")}|${join(selected, ",")}|${join(unknown, ",")}")
+let forwarded = describe(count)
+let unknown = describe(picked(true))
+print("${join(first, ",")}|${join(second, ",")}|${join(selected, ",")}|${join(forwarded, ",")}|${join(unknown, ",")}")
 "#,
-        "Signal<int>.read|Signal<string>.read|Signal<int>.read,Signal<string>.read|<unknown>\n",
+        "Signal<int>.read|Signal<string>.read|Signal<int>.read,Signal<string>.read|Signal<int>.read|<unknown>\n",
     );
 }
 
@@ -417,7 +419,7 @@ print("${first.value}:${first.revision}|${changed.value}:${changed.revision}|${u
 
 #[test]
 fn aggregate_identity_is_never_compared_as_c_string_contents() {
-    assert_output("handle_identity", "let first = [\"count\"]\nlet second = [\"cursor\"]\nprint(\"${first == first}:${first == second}:${first != second}\")\n", "true:false:true\n");
+    assert_output("handle_identity", "let first = [\"count\"]\nlet second = [\"cursor\"]\nprint(\"${structuralEquals(first, first)}:${structuralEquals(first, second)}:${!structuralEquals(first, second)}\")\n", "true:false:true\n");
 }
 
 #[test]

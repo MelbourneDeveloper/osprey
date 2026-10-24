@@ -234,6 +234,45 @@ match randomBelow 0
     Error message => 0 - 1       // Error
 ```
 
+## Structural Comparison — [BUILTIN-STRUCTURAL-EQUALS]
+
+### `structuralEquals(a: T, b: T) -> bool`
+
+`structuralEquals` compares two values by their contents. It walks both values
+completely, so its cost grows with their size. It is meant to be rare and
+explicit. `==` deliberately does not do this
+([BOOL-EQUALITY](../language/0009-BooleanOperations.md#what--and--compare-bool-equality)).
+Before reaching for it, compare a key, an id or a revision field instead,
+which answers most "did this change?" questions in constant time.
+
+Two values are equal when:
+
+| Type | Equal when |
+| --- | --- |
+| `int`, `string`, `bool` | `==` says so |
+| `float` | `==` says so, so NaN is unequal to itself and a value holding NaN is unequal to itself |
+| a record or tuple | every field is equal |
+| a union | both are the same variant and every payload field is equal |
+| `List<T>` | both have the same length and equal elements in the same order |
+| `Map<string, V>` | both have the same keys and equal values for each key |
+
+`T` must be a type whose every part has a decided equality. A type that
+contains a function, a runtime handle (a fiber, a channel, an HTTP or file
+handle, a GPU buffer), `any` or `Result` is a compile error. A function's
+equality is not decided, and a handle names an external resource, so neither
+has contents to compare. As with `==`, a generic caller carries the
+requirement to each call site, which is checked at its own type.
+
+```osprey
+type Route = { tab: string, depth: int }
+let same = structuralEquals(Route { tab: "home", depth: 1 }, Route { tab: "home", depth: 1 })   // true
+let differ = structuralEquals([1, 2], [1, 2, 3])                                                 // false
+```
+
+The Default/ML twins `tests/regressions/basics/operators/structural_equals.test.*`
+pin every row; `examples/failscompilation/structural_equals_*.ospo` pin the
+rejected types.
+
 ## String Functions
 
 Strings are immutable, NUL-terminated UTF-8 byte sequences. String operations
@@ -661,6 +700,77 @@ malformed input — `Error`, no handle, and nothing retained — because a
 partially built document is not a document. A parse that fails, for either
 reason, frees everything it allocated.
 
+`jsonDecode` reads numbers as values. A number with neither fraction nor
+exponent is an integer and must fit in 64 bits; any other number must be a
+finite double. A number outside those ranges is an `Error` naming its byte,
+never a rounded or clamped value. The handle API keeps such a number as text.
+
+### Typed values — [BUILTIN-JSON-TYPED]
+
+```osprey
+type Json = JsonNull | JsonBool(bool) | JsonInt(int) | JsonFloat(float)
+          | JsonString(string) | JsonArray(List<Json>) | JsonObject(List<JsonMember>)
+type JsonMember = JsonMember(string, Json)
+
+jsonEncode(json: Json) -> Result<string, Error>
+jsonDecode(text: string) -> Result<Json, Error>
+jsonQuote(text: string) -> Result<string, Error>
+jsonField(value: Json, name: string) -> Result<Json, Error>
+jsonIndex(value: Json, index: int) -> Result<Json, Error>
+jsonText(value: Json) -> Result<string, Error>
+jsonInt(value: Json) -> Result<int, Error>
+jsonFloat(value: Json) -> Result<float, Error>
+jsonBool(value: Json) -> Result<bool, Error>
+```
+
+`Json` is an ordinary union with positional payloads, so a program builds a
+document as data and reads one with `match`. Object members keep their order.
+Integers and floats stay distinct in both directions: `jsonDecode` gives `1` as
+`JsonInt` and `1.0` or `1e0` as `JsonFloat`, and `jsonEncode` writes every float
+with a decimal point or exponent, so the text decodes back to a float.
+
+`jsonDecode` accepts exactly the texts `jsonParse` accepts, under
+[BUILTIN-JSON-STRING], [BUILTIN-JSON-NUMBER] and [BUILTIN-JSON-LIMITS], and
+holds no handle once it returns.
+
+`jsonEncode` writes compact RFC 8259 text into one buffer and returns it as one
+string. It escapes `"`, `\` and U+0001–U+001F with the shortest escape (`\n`,
+`\t`, … or `\u00XX`) and writes all other characters as UTF-8. A float that is
+NaN or infinite, or a string that is not valid UTF-8, has no JSON spelling and
+is an `Error`. `jsonQuote(text)` is `jsonEncode(JsonString(text))`.
+
+`jsonField` returns the first member with the given name. `jsonIndex` returns
+an array element. `jsonText`, `jsonInt`, `jsonFloat` and `jsonBool` return a
+scalar's value; `jsonFloat` also accepts `JsonInt` and widens it. Each accessor
+returns `Error` with a message naming the accessor and the reason, such as
+`jsonField: no member email` or `jsonIndex: not an array`.
+
+These declarations are one unit of Osprey source that the compiler attaches
+to a program that names any of them; the prelude is a list of such
+independent units, each attached on its own demand. A program that names
+none of a unit compiles exactly as written. A program that declares a type,
+constructor or effect with one of a unit's names keeps its own declarations
+and gets none of that unit. A program that declares a function with one of
+these names keeps its own function in place of that one only. A unit written
+against another unit's declarations — the signals unit is written against
+these — attaches only beside it, so naming a signals declaration attaches
+this unit too ([STAGE-SIGNALS-STD]).
+
+### Limits and failure reasons — [BUILTIN-JSON-LIMITS]
+
+Containers nest at most 128 levels. A deeper document is rejected before the
+parser recurses, so hostile input cannot exhaust the stack. An object that
+repeats a member name is rejected whole: lookups would otherwise depend on
+which duplicate a reader keeps. Names compare after unescaping, so `"ab"` and
+`"a\u0062"` are the same name. Neither parser imposes a byte limit on the
+text.
+
+A rejection's `Error` message names the operation, the byte offset where the
+text stopped being JSON, and the reason:
+`jsonDecode: byte 3: expected ',' or ']' in array`. A repeated name is
+reported at its object's opening brace. A text that is absent entirely reports
+`document: no text`.
+
 ## Terminal Functions — [BUILTIN-TERM]
 
 ```osprey
@@ -721,11 +831,38 @@ Concatenates two lists. `left + right` is equivalent.
 Returns the elements in reverse order.
 
 #### `listContains(list: List<T>, value: T) -> bool` — [BUILTIN-LIST-CONTAINS]
-Strings compare by content. Scalar values compare by value; managed handles
-such as nested lists and records compare by identity.
+Compares `value` with each element by `==`
+([BOOL-EQUALITY](../language/0009-BooleanOperations.md#what--and--compare-bool-equality)):
+ints, strings and bools by value, floats under [FLOAT-COMPARE] (so NaN is
+never found), and payload-free union values by variant. An element type with
+no decided equality, such as a record, a list, a union that may carry a
+payload, or a function, is a compile error. Use
+`structuralEquals` in a search of your own when a deep comparison is really
+needed.
 
 #### `forEachList(list: List<T>, function: fn(T) -> Unit) -> Unit` — [BUILTIN-LIST-FOREACH]
 Calls `function` once per element in index order.
+
+#### `mapList(list: List<T>, function: fn(T) -> U) -> List<U>` — [BUILTIN-LIST-MAP]
+Returns a new list with `function` applied to every element, in index order.
+
+#### `filterList(list: List<T>, predicate: fn(T) -> bool) -> List<T>` — [BUILTIN-LIST-FILTER]
+Returns a new list keeping the elements that satisfy `predicate`, in index order.
+
+#### `foldList(list: List<T>, initial: U, function: fn(U, T) -> U) -> U` — [BUILTIN-LIST-FOLD]
+Reduces a list to a single value by repeatedly applying `function`, starting from `initial`.
+
+#### `listSort(list: List<T>) -> List<T>` — [BUILTIN-LIST-SORT]
+Returns a new list sorted in ascending order by the elements' natural order: integers compare by value and strings by byte content. The sort is stable. `T` must be `int` or `string`; any other element type is a compile-time type error, never a runtime crash.
+
+#### `listSortBy(list: List<T>, compare: fn(T, T) -> int) -> List<T>` — [BUILTIN-LIST-SORT-BY]
+Returns a new list sorted by `compare`, for any element type. `compare(a, b)` returns a negative number when `a` comes first, a positive number when `b` comes first, and zero to keep the two in their original order: the sort is stable. It performs O(n log n) comparisons. `compare` may be a lambda that captures its scope, a named function or a function value, and its effects are those of the call.
+
+```osprey
+type Evidence = { title: string, at: int }
+fn order(a, b) = if a < b { -1 } else { if a > b { 1 } else { 0 } }
+listSortBy(evidence, fn(x, y) => order(x.title, y.title))
+```
 
 ### `Map<string, V>` — [BUILTIN-MAP]
 

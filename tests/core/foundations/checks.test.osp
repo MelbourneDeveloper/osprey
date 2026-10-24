@@ -72,3 +72,39 @@ test("arithmetic checks share derived values", fn() => exactArithmetic(arithmeti
 test("classification checks include computed inputs", fn() => exactArithmetic(classifyCase))
 // Register the standard-library composition interaction.
 test("strings and lists mix with matching", fn() => exactArithmetic(stringsAndListsCase))
+
+/// Assertions are valid outside any case; a passing one prints nothing.
+checkTrue("assertions run outside a test case", startsWith("osprey", "osp"))
+
+/// Assertion operands compare by canonical rendering: values of different
+/// types that render alike are equal, a Success renders as its bare payload
+/// and an Error as `Error(<message>)`. [TESTING-EQUALITY]
+/// [TESTING-BUILTIN-EXPECT] [TESTING-BUILTIN-CHECK]
+fn equalityCase() = {
+    expect(5, "5")
+    expect("5", 5)
+    expect(true, "true")
+    expect(false, "false")
+    expect(1.5, "1.5")
+    expect(satSub(0, 7), "-7")
+    expect(checkedAdd(2, 3), 5)
+    expect(checkedAdd(2, 3), "5")
+    check("Success renders its bare payload", 42, checkedMul(6, 7))
+    check("Error renders its message", "Error(integer overflow)", checkedMul(4294967296, 4294967296))
+    check("subtraction overflow is an Error too", "Error(integer overflow)", checkedSub(-9223372036854775808, 1))
+    check("an interpolated Success keeps its constructor", "Success(5)", "${checkedAdd(2, 3)}")
+    check("strings compare by content", "osprey", toLowerCase("OSPREY"))
+    check("a float renders like its literal", "0.25", toString(0.25))
+    expectTrue(contains("talon", "al"))
+    expectFalse(contains("talon", "z"))
+    checkTrue("a computed true", startsWith("osprey", "osp"))
+    checkFalse("a computed false", endsWith("osprey", "osp"))
+    expectAll([listLength([1, 2]) == 2, isEmpty(""), !isEmpty("a")])
+}
+
+/// A test call runs wherever it is evaluated, so a helper may declare cases.
+fn declareFrom(label) = test("${label} case declared from a helper", fn() => checkAll("${label} helper case", [label != "", length(label) > 0]))
+
+test("assertions compare canonical renderings", equalityCase)
+declareFrom("first")
+declareFrom("second")

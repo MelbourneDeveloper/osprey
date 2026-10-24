@@ -167,7 +167,10 @@ fn gen_result_ctor(cg: &mut Codegen, name: &str, fields: &[FieldAssignment]) -> 
     let fa = fields
         .first()
         .ok_or_else(|| CodegenError::invalid(format!("`{name}` needs one field")))?;
+    // The payload escapes into the Result's heap block like any constructor
+    // field, so a list literal takes the runtime layout before it is stored.
     let v = gen_expr(cg, &fa.value)?;
+    let v = crate::listlit::escaping(cg, v);
     let inner = v.ty;
     let is_error = name == "Error";
     let disc = if is_error { "1" } else { "0" };
@@ -187,9 +190,10 @@ fn gen_result_ctor(cg: &mut Codegen, name: &str, fields: &[FieldAssignment]) -> 
 
 /// The heap block an update rebuilds: struct spelling, ordered slots, the
 /// discriminant and the allocation meta word.
-struct RecordBlock {
-    struct_ty: String,
-    fields: Vec<(String, LType)>,
+#[derive(PartialEq)]
+pub(crate) struct RecordBlock {
+    pub(crate) struct_ty: String,
+    pub(crate) fields: Vec<(String, LType)>,
     tag: Option<i64>,
     meta: i64,
 }
@@ -202,7 +206,7 @@ struct RecordBlock {
 /// instantiation nothing in this module has built yet is derived from the
 /// value's inferred record type and registered, exactly as construction would.
 /// Implements [TYPE-RECORD-UPDATE].
-fn record_block(
+pub(crate) fn record_block(
     cg: &mut Codegen,
     owner: &str,
     inferred: Option<&osprey_types::Type>,
@@ -231,6 +235,18 @@ fn record_block(
         tag: Some(0),
         meta,
     })
+}
+
+/// Whether two owners name one physical block — the proof a join needs before
+/// one owner may stand for both. A row's derived layout registers on first
+/// sight, exactly as field access would. Implements [TYPE-RECORD].
+pub(crate) fn same_block(
+    cg: &mut Codegen,
+    left: (&str, Option<&osprey_types::Type>),
+    right: (&str, Option<&osprey_types::Type>),
+) -> bool {
+    let left = record_block(cg, left.0, left.1);
+    left.is_some() && left == record_block(cg, right.0, right.1)
 }
 
 /// The slots of a generic-record instantiation from its inferred record type,

@@ -45,3 +45,59 @@ let valid = age >= 18 && isAuthorized
 let fallback = isAdmin || hasInvite
 let blocked = !isActive
 ```
+
+## What `==` and `!=` compare [BOOL-EQUALITY]
+
+`==` and `!=` are defined for exactly these operands. Each answer is a
+constant-time check on the value itself:
+
+| Operand type | `==` is true when |
+| --- | --- |
+| `int` | the numbers are equal |
+| `float` | the numbers are equal, under [FLOAT-COMPARE](0004-TypeSystem.md#floating-point-comparison--float-compare): NaN is unequal to everything |
+| `string` | the bytes are equal |
+| `bool` | both are `true` or both are `false` |
+| a union whose variants all carry no payload (`type Area = Apps \| Files`) | both are the same variant |
+| any union, when one operand is written as a payload-free constructor (`shape == Dot`) | the other operand is that variant |
+
+The last row is a variant test. It reads only the variant, never a payload,
+so it is defined even when other variants of the union carry payloads.
+
+**Everything else is a compile error, because its meaning is not decided.**
+This covers records, tuples, lists, maps, union values that may carry a
+payload (`Circle { r: 2 } == Circle { r: 2 }`), functions, runtime handles
+such as fibers and channels, and `Unit`. Until this rule, these operands
+compared references, so two values with equal contents compared unequal,
+silently. The error names the operand type and points at the alternatives:
+
+```
+cannot compare `Route` with `==`: equality is decided only for int, float, string, bool and payload-free union variants; compare a key, id or revision field, or call `structuralEquals(a, b)` for a deliberate deep comparison
+```
+
+Whether `==` should ever compare the contents of an aggregate is **not
+decided**. Rejecting those comparisons keeps every possible decision open,
+because no program can come to depend on an answer the language has not
+given. Comparing contents walks both values completely, so it is deliberately
+not something an operator does implicitly. When a program really needs it, it
+calls [`structuralEquals`](../runtime/0012-Built-InFunctions.md#structural-comparison--builtin-structural-equals),
+and the cost is visible at the call. Most programs need neither: comparing a
+key, an id or a revision field answers the same question in constant time.
+
+A generic function may compare values of a type parameter. The requirement
+travels with the function's type, and each call site is checked at its own
+type: `fn same(a, b) = a == b` accepts `same(1, 2)` and rejects
+`same(route, route)`.
+
+## What `<`, `<=`, `>` and `>=` compare [BOOL-ORDERING]
+
+The ordering operators are defined for `int`, `float` (under
+[FLOAT-COMPARE](0004-TypeSystem.md#floating-point-comparison--float-compare)),
+`string` (byte order) and `bool` (`false < true`). Every other operand type is
+a compile error, for the same reason as [BOOL-EQUALITY]: no order for it is
+decided. That includes payload-free unions, whose declaration order is not an
+ordering.
+
+The Default/ML twins `tests/regressions/basics/operators/equality_domain.test.*`
+pin every accepted row in both flavors. Each rejected kind has a program under
+`examples/failscompilation/` (`equality_*.ospo`), which the must-reject ratchet
+keeps rejected.

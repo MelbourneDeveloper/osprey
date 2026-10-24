@@ -1,0 +1,14 @@
+// [EFFECTS-INSTANCE] [STAGE-HANDLE-STATIC]: a capability is a runtime identity,
+// so a compile-time handler cannot answer it.
+effect Log {
+    /// Record one line.
+    write: fn(string) -> Unit
+}
+
+fn main() = {
+    let audit = instance Log
+    handle static audit {
+        write m => print(m)
+    }
+    perform audit.write("hi")
+}

@@ -1,7 +1,7 @@
 //! Deterministic project assembly orchestration.
 
 use crate::contribution;
-use crate::{collect, imports, resolve, span};
+use crate::{collect, imports, resolve};
 use crate::{AssembledProject, ProjectConfig, ProjectError, SourceFile, SourceMetadata};
 use osprey_ast::{Position, Stmt};
 use std::path::Path;
@@ -109,7 +109,7 @@ fn rebase(sources: &[SourceFile]) -> (Vec<SourceFile>, Vec<SourceMetadata>, Vec<
             errors.push(range_error(&source.path));
             continue;
         };
-        span::offset_program(&mut source.program, offset);
+        osprey_ast::span::offset_program(&mut source.program, offset);
         metadata.push(SourceMetadata {
             index,
             path: source.path.clone(),

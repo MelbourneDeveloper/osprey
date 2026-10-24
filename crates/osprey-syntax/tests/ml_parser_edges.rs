@@ -405,3 +405,37 @@ fn anonymous_records_reject_malformed_fields_and_delimiters() {
     );
     rejects("broken = { x = 1 y = 2 }", &["expected '}'"]);
 }
+
+/// [FLAVOR-ML-MATCH] A constructor declared in another namespace or module is
+/// matched by its qualified path: `lib::Done result` is the constructor
+/// `lib::Done` binding `result`, not a binding named `lib::Done` (issue #282).
+#[test]
+fn qualified_constructor_patterns_bind_their_payload() {
+    let Expr::Match { arms, .. } = value(
+        "r = match outcome\n    lib::Done result => result\n    lib::Failed reason => reason\n",
+    ) else {
+        panic!("expected a match");
+    };
+    let names: Vec<_> = arms
+        .iter()
+        .map(|arm| match &arm.pattern {
+            osprey_ast::Pattern::Constructor {
+                name,
+                fields,
+                sub_patterns,
+            } => {
+                assert!(fields.is_empty(), "ML binders are positional: {fields:?}");
+                (name.as_str(), sub_patterns.clone())
+            }
+            other => panic!("expected a constructor pattern, got {other:?}"),
+        })
+        .collect();
+    let binding = |name: &str| osprey_ast::Pattern::Binding(name.to_owned());
+    assert_eq!(
+        names,
+        [
+            ("lib::Done", vec![binding("result")]),
+            ("lib::Failed", vec![binding("reason")]),
+        ]
+    );
+}

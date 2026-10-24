@@ -172,6 +172,7 @@ fn select_branches_and_lambdas_and_nested_handlers() {
         }],
         body: b(r()),
         return_clause: None,
+        finally: None,
         position: None,
     };
     assert_eq!(resumes_on_one_path(&nested), 1);

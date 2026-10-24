@@ -9,35 +9,87 @@ use crate::info::ProgramTypes;
 use crate::ty::{Type, VarId};
 use osprey_ast::{walk_program, AstVisitor};
 use osprey_ast::{Expr, Position, Program};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 type Bindings = HashMap<VarId, Type>;
 
-/// Compose origins through let aliases and generic wrapper parameters.
-/// A source variable with competing replacements remains unspecialized.
-pub(crate) fn expanded(bindings: &Bindings, origins: &HashMap<usize, Bindings>) -> Bindings {
-    let mut result = bindings.clone();
-    loop {
-        let mut candidates: HashMap<VarId, Option<Type>> = HashMap::new();
-        for origin in origins.values() {
-            for (var, ty) in origin {
-                if result.contains_key(var) {
-                    continue;
-                }
-                let replacement = crate::env::subst_vars(ty, &result);
-                if replacement == *ty {
-                    continue;
-                }
-                let _ = candidates
-                    .entry(*var)
-                    .and_modify(|candidate| {
-                        if candidate.as_ref() != Some(&replacement) {
-                            *candidate = None;
-                        }
-                    })
-                    .or_insert(Some(replacement));
+/// The instantiations every recorded use of a generalized binding AGREES on,
+/// for the variables a published site type still leaves open.
+///
+/// A `let` quantifies its unconstrained variables, so a site type inside its
+/// initializer — a lambda's ABI above all — keeps the quantified variable
+/// while every later use instantiates it fresh. One agreeing, concrete
+/// instantiation across all uses is the ABI the one evaluated value actually
+/// has, so it resolves the variable in the published tables; uses that
+/// disagree leave it open and the backend still rejects the closure loudly.
+/// Implements [TYPE-GENERICS-APPLY] (docs/specs/language/0004-TypeSystem.md).
+pub(crate) fn alias_resolutions(
+    sites: &HashMap<usize, Bindings>,
+    candidates: &HashSet<VarId>,
+    ctx: &mut InferCtx,
+) -> Bindings {
+    let mut agreed: HashMap<VarId, Option<Type>> = HashMap::new();
+    for bindings in sites.values() {
+        record_agreements(bindings, candidates, ctx, &mut agreed);
+    }
+    agreed
+        .into_iter()
+        .filter_map(|(var, ty)| ty.map(|ty| (var, ty)))
+        .collect()
+}
+
+/// Fold one origin's bindings into `agreed`, marking a variable `None` when
+/// a use instantiates it at a different type, or at a type that is itself
+/// still generic: a use inside a generic function is a different type at
+/// each of ITS instantiations, so it can never agree with a concrete one.
+fn record_agreements(
+    bindings: &Bindings,
+    candidates: &HashSet<VarId>,
+    ctx: &mut InferCtx,
+    agreed: &mut HashMap<VarId, Option<Type>>,
+) {
+    for (var, ty) in bindings {
+        if candidates.contains(var) {
+            let ty = Some(ctx.apply(ty)).filter(|ty| !crate::has_type_var(ty));
+            let candidate = agreed.entry(*var).or_insert_with(|| ty.clone());
+            if *candidate != ty {
+                *candidate = None;
             }
         }
+    }
+}
+
+/// Every origin binding, filed under each variable its type mentions. Growing
+/// a site's bindings can only rewrite the origin bindings that mention one of
+/// them, so composing through this index visits those alone instead of every
+/// binding of every site.
+pub(crate) struct Mentions<'a>(HashMap<VarId, Vec<(usize, VarId, &'a Type)>>);
+
+impl<'a> Mentions<'a> {
+    pub(crate) fn of(origins: &'a HashMap<usize, Bindings>) -> Self {
+        let mut index: HashMap<VarId, Vec<(usize, VarId, &'a Type)>> = HashMap::new();
+        for (site, origin) in origins {
+            for (var, ty) in origin {
+                let mut mentioned = HashSet::new();
+                let _ = crate::ty::map_type_vars(ty, &mut |v| {
+                    let _ = mentioned.insert(v);
+                    Type::Var(v)
+                });
+                for v in mentioned {
+                    index.entry(v).or_default().push((*site, *var, ty));
+                }
+            }
+        }
+        Mentions(index)
+    }
+}
+
+/// Compose origins through let aliases and generic wrapper parameters.
+/// A source variable with competing replacements remains unspecialized.
+pub(crate) fn expanded(bindings: &Bindings, mentions: &Mentions<'_>) -> Bindings {
+    let mut result = bindings.clone();
+    loop {
+        let candidates = replacements(&result, mentions);
         let before = result.len();
         result.extend(
             candidates
@@ -48,6 +100,34 @@ pub(crate) fn expanded(bindings: &Bindings, origins: &HashMap<usize, Bindings>) 
             return result;
         }
     }
+}
+
+/// What `result` rewrites each still-unbound origin variable to, or `None`
+/// when two origins disagree. An origin binding mentioning none of `result`'s
+/// variables is unchanged by it, so only the indexed ones are tried.
+fn replacements(result: &Bindings, mentions: &Mentions<'_>) -> HashMap<VarId, Option<Type>> {
+    let mut tried = HashSet::new();
+    let mut candidates: HashMap<VarId, Option<Type>> = HashMap::new();
+    for key in result.keys() {
+        for &(site, var, ty) in mentions.0.get(key).into_iter().flatten() {
+            if result.contains_key(&var) || !tried.insert((site, var)) {
+                continue;
+            }
+            let replacement = crate::env::subst_vars(ty, result);
+            if replacement == *ty {
+                continue;
+            }
+            let _ = candidates
+                .entry(var)
+                .and_modify(|candidate| {
+                    if candidate.as_ref() != Some(&replacement) {
+                        *candidate = None;
+                    }
+                })
+                .or_insert(Some(replacement));
+        }
+    }
+    candidates
 }
 
 pub(crate) fn collect(
@@ -110,10 +190,11 @@ pub(crate) fn collect(
             )
         })
         .collect();
+    let mentions = Mentions::of(&origins);
     collector
         .calls
         .into_iter()
-        .map(|(site, bindings)| (site, expanded(&bindings, &origins)))
+        .map(|(site, bindings)| (site, expanded(&bindings, &mentions)))
         .collect()
 }
 

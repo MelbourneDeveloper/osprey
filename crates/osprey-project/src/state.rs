@@ -290,6 +290,7 @@ impl<'a> Inspector<'a> {
                     self.expr(value, in_owner_arm, position);
                 }
             }
+            Expr::Mask { body, .. } => self.expr(body, in_owner_arm, position),
             Expr::Send { channel, value } => {
                 self.expr(channel, in_owner_arm, position);
                 self.expr(value, in_owner_arm, position);
@@ -314,10 +315,11 @@ impl<'a> Inspector<'a> {
                 arms,
                 body,
                 return_clause,
+                finally,
                 position: handler_position,
             } => {
                 self.handler(effect, arms, body, *handler_position);
-                if let Some(clause) = return_clause {
+                for clause in return_clause.iter().chain(finally) {
                     self.expr(clause, false, *handler_position);
                 }
             }
@@ -325,7 +327,8 @@ impl<'a> Inspector<'a> {
             | Expr::Float(_)
             | Expr::Str(_)
             | Expr::Bool(_)
-            | Expr::Identifier(_) => {}
+            | Expr::Identifier(_)
+            | Expr::Instance { .. } => {}
         }
     }
 

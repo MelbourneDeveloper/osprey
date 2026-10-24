@@ -1,4 +1,4 @@
-Mika completed: Algebraic effects
+Mika completed: Effects and handlers
 ok 1 - completion returns the expected message
 ok 2 - another learner uses the same application functions
 1..2

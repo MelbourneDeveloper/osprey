@@ -48,9 +48,9 @@ mod patterns;
 mod types;
 
 use super::cst::{
-    MlArm, MlBinder, MlEffectOp, MlEffectRef, MlExpr, MlExternParam, MlField, MlHandleArm, MlItem,
-    MlModuleKind, MlParam, MlPattern, MlSymbolPath, MlType, MlTypeField, MlTypeParam, MlVariance,
-    MlVariant,
+    MlArm, MlBinder, MlClauses, MlEffectOp, MlEffectRef, MlExpr, MlExternParam, MlField,
+    MlHandleArm, MlItem, MlModuleKind, MlParam, MlPattern, MlSymbolPath, MlType, MlTypeField,
+    MlTypeParam, MlVariance, MlVariant,
 };
 use super::lexer::lex;
 use super::token::{keyword_spelling, TokKind, Token};
@@ -274,8 +274,13 @@ fn record_head(head: &MlExpr) -> Option<String> {
     }
 }
 
+/// A capitalised name is a constructor; a qualified path (`lib::Done`) is one
+/// when its last segment is, so another namespace's constructors can be
+/// matched by their path [FLAVOR-ML-MATCH].
 pub(super) fn is_constructor(name: &str) -> bool {
-    osprey_ast::is_constructor_name(name)
+    name.rsplit("::")
+        .next()
+        .is_some_and(osprey_ast::is_constructor_name)
 }
 
 /// A parsed `handle Effect` and its arms, waiting for the region it handles.
@@ -284,7 +289,7 @@ struct HandleHead {
     stage: Stage,
     effect: String,
     arms: Vec<MlHandleArm>,
-    return_clause: Option<Box<MlExpr>>,
+    clauses: MlClauses,
     pos: Position,
 }
 
@@ -294,7 +299,7 @@ impl HandleHead {
             stage: self.stage,
             effect: self.effect,
             arms: self.arms,
-            return_clause: self.return_clause,
+            clauses: self.clauses,
             body: Box::new(body),
             pos: self.pos,
         }

@@ -127,10 +127,10 @@ pub(crate) fn source(
     program: &Program,
     path: &str,
     target: Target,
-    entry_only: bool,
+    scope: &ios_abi::ExportScope,
 ) -> Result<(String, String), String> {
     // Apple ARM64 zero-extends a C bool in both slices.
-    ios_abi::source(program, path, target.name(), true, entry_only)
+    ios_abi::source(program, path, target.name(), true, scope)
 }
 
 /// Compile an ARM64 static archive, bundling the matching C runtime, plus its
@@ -141,13 +141,14 @@ pub(crate) fn build(
     program: &Program,
     out: &Path,
     target: Target,
-    entry_only: bool,
+    scope: &ios_abi::ExportScope,
 ) -> Result<(), ExitCode> {
     validate_output(out, target).map_err(|e| fail(&e))?;
-    let (ir, header) = source(program, path, target, entry_only).map_err(|e| fail(&e))?;
+    let (ir, header) = source(program, path, target, scope).map_err(|e| fail(&e))?;
     let sdk = sdk_path(target)?;
     let runtime =
         find_runtime_lib(target.runtime()).ok_or_else(|| fail(&target.missing_runtime()))?;
+    let runtime = crate::linking::fresh_runtime(&runtime).map_err(|e| fail(&e))?;
     let scratch = Scratch::new(path, target.sdk())?;
     write(&scratch.path.join("app.ll"), &ir)?;
     let obj = scratch.path.join("app.o");

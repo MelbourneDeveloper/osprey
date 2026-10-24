@@ -1,9 +1,11 @@
 // Osprey sampling CPU profiler — shared declarations. Implements
 // [PROF-COLLECT-SAMPLER] / [PROF-COLLECT-REGISTRY] (docs/specs/tooling/0028-Profiler.md).
 //
-// The profiler is compiled into every runtime archive and stays inert unless
-// OSPREY_PROFILE=<path> is set at process start [PROF-ACTIVATE-ENV]. Public
-// hooks are safe to call unconditionally from the rest of the runtime.
+// The profiler is compiled into every runtime archive. It samples only while a
+// session runs: one started by OSPREY_PROFILE=<path> at process start
+// [PROF-ACTIVATE-ENV], or one a client starts through the live-attach endpoint
+// [PROF-ATTACH-ENDPOINT]. Public hooks are safe to call unconditionally from
+// the rest of the runtime.
 #ifndef OSPREY_PROFILER_RUNTIME_H
 #define OSPREY_PROFILER_RUNTIME_H
 
@@ -12,10 +14,11 @@
 
 // ---- public hooks (no-ops while inactive) ----------------------------------
 
-// Activate the profiler when OSPREY_PROFILE is set [PROF-ACTIVATE-ENV].
-// Codegen emits a call at the top of every program's main: static archives
-// only extract referenced objects, so without this anchor a program that never
-// touches fibers would silently link no profiler at all. Idempotent.
+// Start the OSPREY_PROFILE session [PROF-ACTIVATE-ENV] and open the live-attach
+// endpoint [PROF-ATTACH-ENDPOINT]. Codegen emits a call at the top of every
+// program's main: static archives only extract referenced objects, so without
+// this anchor a program that never touches fibers would silently link no
+// profiler at all. Idempotent.
 void osp_prof_boot(void);
 // Register the calling thread for sampling, tagged with the Osprey fiber id it
 // carries (0 = main thread, -1 = effect continuation) and a short label.
@@ -26,6 +29,8 @@ void osp_prof_thread_unregister(void);
 #if !defined(_WIN32) && !defined(__wasm__)
 
 #include <pthread.h>
+#include <stddef.h>
+#include <stdio.h>
 
 // ---- internal API shared between profiler translation units ----------------
 
@@ -68,6 +73,19 @@ typedef struct OspProfSlot {
 // Sentinel returned by osp_prof_record_sample when the sample was dropped
 // (never a valid interned stack index).
 #define OSP_PROF_STACK_NONE UINT32_MAX
+// A registered slot's `index` while no session runs: rows exist only inside a
+// session, so a thread that registered between sessions has none yet.
+#define OSP_PROF_ROW_NONE UINT32_MAX
+
+// One retained sample [PROF-RAW-FORMAT]: `t_ns` is relative to session start,
+// and `tick` numbers the sampler tick that recorded it [PROF-ATTACH-PROTOCOL].
+typedef struct OspProfSample {
+  uint64_t t_ns;
+  uint32_t thread;
+  uint32_t stack;
+  uint32_t tick;
+  uint8_t state;
+} OspProfSample;
 
 // A snapshot entry: the slot plus the generation it had when snapshotted, so
 // the sampler can detect a slot that was unregistered (and possibly recycled)
@@ -130,8 +148,77 @@ int osp_prof_walk(uint64_t pc, uint64_t fp, uint64_t lr, uintptr_t lo,
 // Platform sampler backend (profiler_sampler.c).
 bool osp_prof_sampler_start(void);
 void osp_prof_sampler_stop(void);
+// Forget what the sampler kept from a slot's previous session: its last stack
+// indexes a store that was reset, and a Linux ring may still hold entries
+// stamped with that session's row. Under the registry lock, sampler stopped.
+void osp_prof_sampler_reset_slot(OspProfSlot *slot);
 // CPU time consumed by the calling thread, in nanoseconds (0 on failure).
 uint64_t osp_prof_self_cpu_ns(void);
+
+// ---- sessions & thread rows (profiler_runtime.c) ---------------------------
+// Session start and stop are called from one thread at a time: the boot path,
+// or the endpoint under its session mutex.
+
+// Start sampling every registered thread with empty tables, or return false
+// when a session already runs (an OSPREY_PROFILE session included).
+bool osp_prof_session_start(uint32_t rate_hz);
+// Stop sampling and join the sampler; the caller then owns the store.
+void osp_prof_session_stop(void);
+// Let threads register from now on, with or without a session.
+void osp_prof_registry_enable(void);
+uint64_t osp_prof_session_start_unix_ns(void);
+uint64_t osp_prof_unix_ns(void);
+// Thread rows [PROF-RAW-FORMAT]: the identities a session's samples reference,
+// never recycled within it. Read them under the registry lock.
+uint32_t osp_prof_row_count(void);
+int64_t osp_prof_row_fiber(uint32_t row);
+const char *osp_prof_row_label(uint32_t row);
+
+// ---- sample store (profiler_store.c) ---------------------------------------
+// Single writer: the sampler thread, or a thread that has joined it.
+
+// Empty every table; sample times are then measured from `epoch_ns`.
+void osp_prof_store_reset(uint64_t epoch_ns);
+// The sampler starts a tick: samples recorded from now on carry its number.
+void osp_prof_store_begin_tick(void);
+size_t osp_prof_stack_count(void);
+// The leaf-first pcs of interned stack `index`, `*len` of them.
+const uint64_t *osp_prof_stack_pcs(size_t index, uint32_t *len);
+size_t osp_prof_sample_count(void);
+OspProfSample osp_prof_sample_at(size_t index);
+// Forget the retained samples but keep the interned stacks, so a stream that
+// already sent the stacks keeps indexing them.
+void osp_prof_samples_clear(void);
+uint64_t osp_prof_dropped(void);
+
+// ---- JSON writers (profiler_dump.c) [PROF-RAW-FORMAT] ----------------------
+
+// A quoted JSON string; control characters are escaped, so a value can never
+// break the one-object-per-line framing of the endpoint [PROF-ATTACH-PROTOCOL].
+void osp_prof_json_string(FILE *f, const char *s);
+void osp_prof_write_exe(FILE *f);
+void osp_prof_write_images(FILE *f);
+// How many images osp_prof_write_images would write now.
+uint32_t osp_prof_image_count(void);
+// Rows [from, count) under the registry lock; returns count.
+uint32_t osp_prof_write_threads(FILE *f, uint32_t from);
+// Stacks [from, count); returns count.
+size_t osp_prof_write_stacks(FILE *f, size_t from);
+// Every retained sample as a [PROF-RAW-FORMAT] row, with its tick as a fifth
+// column when `with_tick` (the stream's rows) [PROF-ATTACH-PROTOCOL].
+void osp_prof_write_samples(FILE *f, bool with_tick);
+const char *osp_prof_platform(void);
+// The whole raw profile of the session that just stopped.
+void osp_prof_write_raw(FILE *f);
+
+// ---- live-attach endpoint (profiler_stream.c) [PROF-ATTACH-ENDPOINT] -------
+
+// Open the endpoint unless OSPREY_DIAGNOSTICS=0 or the platform has none.
+bool osp_diag_start(void);
+// Close the endpoint, ending any session and removing the socket.
+void osp_diag_stop(void);
+// Sampler hook, called after every tick: streams the session's new data.
+void osp_diag_pump(void);
 
 #endif // !_WIN32 && !__wasm__
 

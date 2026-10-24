@@ -35,10 +35,16 @@ pub(crate) fn ctor_pattern(name: String, binders: Vec<String>) -> Pattern {
             sub_patterns: Vec::new(),
         };
     }
+    // A `_` payload binds nothing, exactly as the Default flavor's
+    // `Ctor(_)` lowers ([FLAVOR-IR-EQUIV]).
+    let sub_pattern = |binder: String| match binder.as_str() {
+        "_" => Pattern::Wildcard,
+        _ => Pattern::Binding(binder),
+    };
     Pattern::Constructor {
         name,
         fields: Vec::new(),
-        sub_patterns: binders.into_iter().map(Pattern::Binding).collect(),
+        sub_patterns: binders.into_iter().map(sub_pattern).collect(),
     }
 }
 

@@ -1,0 +1,7 @@
+ok 1 - a renamed Verdict passes through the declared Pass
+ok 2 - a renamed skip field still reports its reason # SKIP blocked on #123
+ok 3 - a skip reached through a function reports its reason # SKIP waiting on the device lab
+ok 4 - declared Verdict values match on their own binders
+ok 5 - a name with # SKIP inside it still ran
+1..5
+# tests=5 passed=3 failed=0 skipped=2

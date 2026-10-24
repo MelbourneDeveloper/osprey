@@ -86,6 +86,8 @@ pub(crate) struct MlTypeField {
     pub name: String,
     /// The field's declared type.
     pub ty: MlType,
+    /// The closed effect row written after a function type, when one was.
+    pub effects: Option<Vec<MlEffectRef>>,
 }
 
 /// An ML type expression. Arrows are right-associative; application binds

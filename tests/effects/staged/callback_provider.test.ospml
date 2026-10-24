@@ -1,0 +1,54 @@
+(** A `handle static` region owned by a higher-order provider discharges the
+    operations of the callback it receives as a parameter, at the provider's
+    own instantiation (#274). Implements [STAGE-POLY], [STAGE-POLY-ERASURE],
+    [STAGE-SIGNALS-CACHE]. *)
+static effect Signal T
+    read : Unit => T
+type Query =
+    text : string
+listView () = "list:${(perform Signal<Query>.read ()).text}"
+snap () = signalSnapshot listView
+provide (store, work) =
+    handle static Signal<Query>
+        read => store
+    work ()
+signalProviderCase () =
+    result = provide (Query(text = "x"), snap)
+    print result.value
+    checkAll "a provider discharges a snapshot callback" [
+        result.value == "list:x", result.revision == 1,
+        join result.dependencies ";" == join (signalDependencies listView) ";"
+    ]
+
+(** The same shape without generics or signals: the static stage alone decides
+    whether the callback's requirements are discharged. *)
+static effect Store
+    read : Unit => string
+shelf () = "shelf:${perform Store.read ()}"
+stocked (store, work) =
+    handle static Store
+        read => store
+    work ()
+staticMonoCase () =
+    label = stocked ("jam", shelf)
+    print label
+    checkAll "a non-generic provider works the same way" [label == "shelf:jam"]
+
+(** A lambda written at the instantiation is as resolvable as a named function. *)
+lambdaCallbackCase () =
+    label = stocked ("pear", \() => "crated:${perform Store.read ()}")
+    print label
+    checkAll "an inline lambda callback is discharged too" [label == "crated:pear"]
+
+(** A wrapper that only forwards the callback still reaches the provider's
+    region, so the framework may add layers without repeating the handler. *)
+restock work = stocked ("tin", work)
+forwardedCallbackCase () =
+    label = restock shelf
+    print label
+    checkAll "a forwarded callback reaches the provider's region" [label == "shelf:tin"]
+
+test "a provider discharges a snapshot callback" signalProviderCase
+test "a non-generic provider works the same way" staticMonoCase
+test "an inline lambda callback is discharged too" lambdaCallbackCase
+test "a forwarded callback reaches the provider's region" forwardedCallbackCase

@@ -22,8 +22,8 @@ The complete Default source remains canonical for the book. One pure file gains 
 
 ## Current rules to preserve
 
-- `.osp` selects Default and `.ospml` selects ML unless an explicit override applies. A leading flavor marker may also select a flavor; without an explicit override, a marker contradicting the extension is an error. The single-file CLI supports `--flavor default|ml`.
-- A project can mix the two extensions. Setting `[project].flavor` in `osprey.toml` overrides the flavor for every source in that project, so omit it when extensions should select independently.
+- `.osp` selects Default and `.ospml` selects ML unless an explicit override applies. A leading flavor marker may also select a flavor; without an explicit override, a marker contradicting the extension is an error. For these two flavors, the single-file CLI accepts `--flavor default` or `--flavor ml`.
+- A project can mix `.osp` and `.ospml` files. Setting `[project].flavor` in `osprey.toml` overrides the flavor for every source in that project, so omit it when extensions should select independently.
 - Default `fn f(x, y) = ...` corresponds to ML `f (x, y) = ...`: both are flat functions. ML `f x y = ...` instead defines a curried function, corresponding to a Default function returning another function. Translating only braces and parentheses can change the callable contract.
 - Imported functions keep that contract across flavor boundaries. An ML caller uses `f (a, b)` for a Default flat function; a Default caller applies a curried result as `f(a)(b)`.
 - Both flavors use the current effect model: callable `handler` values, rest-of-block `handle`, declared value/control operations, and explicit `perform`. Removed `handle ... in` and `handle ... do` forms are not translation alternatives. A handler receives the function whose execution it must surround.
@@ -55,4 +55,4 @@ Create an ML twin of one pure module, run both checks, and compare stdout or tes
 
 ## Edition note
 
-Never describe Osprey as a fixed number of flavors. Every flavor lowers its concrete syntax tree into one canonical AST; name Default, ML and Python as the surfaces that ship today and keep future additions structurally possible.
+Default and ML are the teaching surfaces here. The Python flavor has a partially implemented frontend; its current supported subset is documented in `docs/specs/language/0041-PythonFlavorSyntax.md`. It is Osprey source, not a Python runtime. Do not assume that an arbitrary Python program can be compiled as Osprey.

@@ -1,0 +1,11 @@
+// osprey: flavor=ml
+// [EFFECTS-INSTANCE] [STAGE-HANDLE-STATIC]: the ML twin of
+// `static_handler_answers_capability.ospo`.
+effect Log
+    write : string => Unit
+
+audit = instance Log
+answer =
+    handle static audit
+        write m => print m
+    perform audit.write "hi"

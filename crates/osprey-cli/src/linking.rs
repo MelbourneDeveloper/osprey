@@ -117,6 +117,64 @@ pub(crate) fn find_runtime_lib(lib: &str) -> Option<String> {
         .find(|candidate| Path::new(candidate).exists())
 }
 
+/// `archive`, unless it was built in a checkout whose runtime sources have
+/// changed since: such an archive lacks the objects those sources added, and
+/// the host linker would report their symbols undefined. A shipped archive has
+/// no sources beside it and is taken as built.
+pub(crate) fn fresh_runtime(archive: &str) -> Result<String, String> {
+    let path = Path::new(archive);
+    let built = modified(path);
+    let newer = checkout_runtime(path)
+        .and_then(|sources| newest_source(&sources))
+        .filter(|(_, changed)| built.is_some_and(|built| *changed > built));
+    match newer {
+        Some((source, _)) => Err(format!(
+            "{archive} is older than {}; rebuild it with `make {}`",
+            source.display(),
+            rebuild_goal(path)
+        )),
+        None => Ok(archive.to_owned()),
+    }
+}
+
+/// `compiler/runtime` beside an archive in `compiler/bin` or `compiler/lib`.
+fn checkout_runtime(archive: &Path) -> Option<std::path::PathBuf> {
+    let directory = archive.parent()?;
+    let compiler = directory.parent()?;
+    let in_checkout = matches!(directory.file_name()?.to_str()?, "bin" | "lib")
+        && compiler.file_name()?.to_str()? == "compiler";
+    in_checkout.then(|| compiler.join("runtime"))
+}
+
+fn newest_source(directory: &Path) -> Option<(std::path::PathBuf, std::time::SystemTime)> {
+    std::fs::read_dir(directory)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| matches!(path.extension().and_then(|e| e.to_str()), Some("c" | "h")))
+        .filter_map(|path| modified(&path).map(|changed| (path, changed)))
+        .max_by_key(|(_, changed)| *changed)
+}
+
+fn modified(path: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+}
+
+/// The make goal that builds an archive: `libosprey_runtime_macos.a` is
+/// built by `_runtime_macos`.
+fn rebuild_goal(archive: &Path) -> String {
+    let name = archive
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+    format!(
+        "_{}",
+        name.trim_start_matches("libosprey_").trim_end_matches(".a")
+    )
+}
+
 pub(super) fn runtime_lib_candidates(lib: &str, executable_dir: Option<&Path>) -> Vec<String> {
     let mut roots: Vec<_> = ["compiler/bin", "compiler/lib", "bin", "../bin", "../../bin"]
         .map(|directory| format!("{directory}/{lib}"))
@@ -165,7 +223,43 @@ pub(super) fn openssl_flags() -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::needs_libm;
+    use super::{fresh_runtime, needs_libm};
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn an_archive_older_than_its_runtime_sources_is_refused_with_the_rebuild() {
+        // A stale archive lacks the objects newer sources added, and the host
+        // linker would report their symbols undefined instead.
+        let root = std::env::temp_dir().join(format!("osprey-stale-rt-{}", std::process::id()));
+        let (bin, runtime) = (root.join("compiler/bin"), root.join("compiler/runtime"));
+        std::fs::create_dir_all(&bin).expect("bin");
+        std::fs::create_dir_all(&runtime).expect("runtime");
+        let archive = bin.join("libosprey_runtime_macos.a");
+        let source = runtime.join("json_codec.c");
+        std::fs::write(&archive, b"!<arch>\n").expect("archive");
+        std::fs::write(&source, b"int json;\n").expect("source");
+        let stamp = |path: &std::path::Path, age: u64| {
+            let file = std::fs::File::options()
+                .write(true)
+                .open(path)
+                .expect("open");
+            file.set_modified(SystemTime::now() - Duration::from_secs(age))
+                .expect("mtime");
+        };
+        stamp(&archive, 600);
+        stamp(&source, 60);
+        let stale = fresh_runtime(&archive.display().to_string());
+        stamp(&source, 1200);
+        let fresh = fresh_runtime(&archive.display().to_string());
+        let shipped = fresh_runtime("/usr/local/lib/libosprey_runtime_macos.a");
+        std::fs::remove_dir_all(&root).expect("cleanup");
+        let message = stale.expect_err("stale archive");
+        assert!(
+            message.contains("json_codec.c") && message.contains("make _runtime_macos"),
+            "{message}"
+        );
+        assert!(fresh.is_ok() && shipped.is_ok());
+    }
 
     #[test]
     fn libm_is_linked_for_each_spelling_that_reaches_it_and_nothing_else() {

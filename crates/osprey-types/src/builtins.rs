@@ -231,6 +231,7 @@ fn functional(e: &mut TypeEnv) {
 
 fn lists(e: &mut TypeEnv) {
     let t = || Type::Var(0);
+    let v = || Type::Var(1);
     // Persistent List<T> API used by the list examples.
     poly(e, "List", vec![0], vec![], Type::list(t()));
     // `(List<t>, t) -> List<t>`: append/prepend share one signature.
@@ -260,6 +261,10 @@ fn lists(e: &mut TypeEnv) {
     poly(e, "listLength", vec![0], vec![Type::list(t())], i());
     poly(e, "listGet", vec![0], vec![Type::list(t()), i()], res(t()));
     poly(e, "listContains", vec![0], vec![Type::list(t()), t()], b());
+    // Deep content comparison [BUILTIN-STRUCTURAL-EQUALS]: both operands are
+    // the one type variable, and the operand type is validated as an
+    // obligation (`structural_equals.rs`), the way a comparison's is.
+    poly(e, "structuralEquals", vec![0], vec![t(), t()], b());
     // Eager list traversal [BUILTIN-LIST-FOREACH].
     poly(
         e,
@@ -267,6 +272,48 @@ fn lists(e: &mut TypeEnv) {
         vec![0],
         vec![Type::list(t()), Type::fun(vec![t()], u())],
         u(),
+    );
+    // Eager list combinators [BUILTIN-LIST-MAP], [BUILTIN-LIST-FILTER],
+    // [BUILTIN-LIST-FOLD].
+    poly(
+        e,
+        "mapList",
+        vec![0, 1],
+        vec![Type::list(t()), Type::fun(vec![t()], v())],
+        Type::list(v()),
+    );
+    poly(
+        e,
+        "filterList",
+        vec![0],
+        vec![Type::list(t()), Type::fun(vec![t()], b())],
+        Type::list(t()),
+    );
+    poly(
+        e,
+        "foldList",
+        vec![0, 1],
+        vec![Type::list(t()), v(), Type::fun(vec![v(), t()], v())],
+        v(),
+    );
+    // Stable sort by a comparator: negative orders the first argument first,
+    // zero keeps the two in their original order [BUILTIN-LIST-SORT-BY].
+    poly(
+        e,
+        "listSortBy",
+        vec![0],
+        vec![Type::list(t()), Type::fun(vec![t(), t()], Type::int())],
+        Type::list(t()),
+    );
+    // Natural-order sort over the two element types the runtime can compare
+    // without a callback [BUILTIN-LIST-SORT]. `builtin_constraints` rejects
+    // every other element type before codegen.
+    poly(
+        e,
+        "listSort",
+        vec![0],
+        vec![Type::list(t())],
+        Type::list(t()),
     );
     maps(e);
 }
@@ -341,6 +388,23 @@ fn json(e: &mut TypeEnv) {
     mono(e, "jsonGet", vec![i(), s()], res(s()));
     mono(e, "jsonLength", vec![i(), s()], i());
     mono(e, "jsonFree", vec![i()], res(i()));
+    // The primitives the built-in Json prelude decodes and encodes through
+    // ([BUILTIN-JSON-TYPED]); `__` keeps them out of everyday names.
+    mono(e, "__jsonDecodeOpen", vec![s()], res(i()));
+    mono(e, "__jsonDecodeClose", vec![i()], res(i()));
+    mono(e, "__jsonNodeKind", vec![i(), i()], i());
+    mono(e, "__jsonNodeFirst", vec![i(), i()], i());
+    mono(e, "__jsonNodeEnd", vec![i(), i()], i());
+    mono(e, "__jsonNodeKey", vec![i(), i()], s());
+    mono(e, "__jsonNodeText", vec![i(), i()], s());
+    mono(e, "__jsonNodeInt", vec![i(), i()], i());
+    mono(e, "__jsonNodeFloat", vec![i(), i()], Type::float());
+    mono(e, "__jsonWriterOpen", vec![], res(i()));
+    mono(e, "__jsonWriteRaw", vec![i(), s()], u());
+    mono(e, "__jsonWriteString", vec![i(), s()], u());
+    mono(e, "__jsonWriteInt", vec![i(), i()], u());
+    mono(e, "__jsonWriteFloat", vec![i(), Type::float()], u());
+    mono(e, "__jsonWriterClose", vec![i()], res(s()));
 }
 
 fn concurrency(e: &mut TypeEnv) {

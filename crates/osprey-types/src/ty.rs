@@ -40,6 +40,9 @@ pub mod names {
     pub const LIST: &str = "List";
     /// The `Map<key, value>` collection type.
     pub const MAP: &str = "Map";
+    /// The written name of a signal snapshot's structural record
+    /// ([STAGE-SIGNALS-CACHE]).
+    pub const SIGNAL_SNAPSHOT: &str = "SignalSnapshot";
     /// A fused range pipeline, materialized only while lowering iterator calls.
     pub const ITERATOR: &str = "Iterator";
     /// The lightweight concurrent execution context type.
@@ -51,6 +54,9 @@ pub mod names {
     /// The dense scalar buffer for GPU computation [GPU-BUFFER]
     /// (docs/specs/runtime/0034-GPUComputation.md).
     pub const GPU_BUFFER: &str = "GpuBuffer";
+    /// A capability identity created by `instance E`: `Capability<E, #site>`
+    /// ([EFFECTS-INSTANCE]).
+    pub const CAPABILITY: &str = "Capability";
 }
 
 /// A type in the Osprey type system.
@@ -156,6 +162,22 @@ impl Type {
         Type::Fun {
             params,
             ret: Box::new(ret),
+        }
+    }
+
+    /// The record `signalSnapshot` and `signalRefresh` build:
+    /// `{ dependencies: List<string>, revision: int, value }`. It is
+    /// structural, so a record literal with these fields is one, and it is
+    /// spelled `SignalSnapshot<T>` in a signature.
+    #[must_use]
+    pub fn signal_snapshot(value: Type) -> Type {
+        Type::Record {
+            name: String::new(),
+            fields: BTreeMap::from([
+                ("dependencies".to_owned(), Type::list(Type::string())),
+                ("value".to_owned(), value),
+                ("revision".to_owned(), Type::int()),
+            ]),
         }
     }
 

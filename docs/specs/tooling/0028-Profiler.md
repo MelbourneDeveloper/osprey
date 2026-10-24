@@ -7,7 +7,9 @@ It activates only when the environment variable `OSPREY_PROFILE=<path>` is set
 at process start; the raw profile is written to `<path>` at normal exit.
 `OSPREY_PROFILE_HZ=<n>` overrides the sampling rate (clamped to 10..10000,
 default 997). Native POSIX binaries can be profiled without recompilation.
-Windows and Wasm builds carry inactive profiler stubs.
+Windows and Wasm builds carry inactive profiler stubs. A running program can
+also be profiled without either variable, through the live-attach endpoint
+[PROF-ATTACH-ENDPOINT]; at most one session, of either kind, runs at a time.
 
 ## [PROF-COLLECT-SAMPLER] Collection
 
@@ -40,9 +42,13 @@ against the first chained return address, and PAC bits are stripped.
 ## [PROF-COLLECT-REGISTRY] Thread registry
 
 `osp_prof_thread_register(fiber_id, label)` / `osp_prof_thread_unregister()`
-are no-ops when the profiler is inactive. Call sites: the main thread (label
+are no-ops until a session or the live-attach endpoint enables registration;
+from then on every thread registers for the rest of the process, so a later
+session never samples a thread that already exited. Call sites: the main thread (label
 `main`, fiber 0), `fiber_thread_func` (label `fiber`), and effect continuation
-threads (label `effect`, fiber −1). Registry slots carry a generation counter.
+threads (label `effect`, fiber −1). A session numbers the registered threads
+when it starts, and each thread that registers during it, as its `threads`
+rows; between sessions no rows are kept. Registry slots carry a generation counter.
 The sampler revalidates `active && generation` under the registry mutex before
 sampling; unregister uses the same mutex before signaling completion. Lock
 order is registry then allocator, and sampling allocates only after a suspended
@@ -89,6 +95,36 @@ read its header, so only the producer can record this.
 The loader itself is an image. `_dyld_image_count()` reports what dyld loaded,
 not dyld, so `/usr/lib/dyld` is recorded separately; without it every frame of
 process startup belongs to no image and can only be printed as a raw address.
+
+## [PROF-ATTACH-ENDPOINT] Live-attach endpoint
+
+Every native Osprey program on macOS and Linux opens a diagnostics endpoint when `main` starts, unless `OSPREY_DIAGNOSTICS=0`; iOS, Android, Windows and Wasm builds have none. The endpoint is a Unix-domain socket at `$TMPDIR/osprey-diagnostics-<uid>/<pid>.sock` (`/tmp` when `TMPDIR` is unset), so a language server can find every attachable Osprey process by listing one directory, the way a .NET tool finds `dotnet-diagnostic-<pid>` endpoints. The directory is created with mode `0700`, and an existing directory that is not a real directory owned by the user with no group or other permission bits disables the endpoint rather than being repaired. A process removes its socket at normal exit and, when no other socket remains, the directory with it, so a program leaves a scratch `TMPDIR` as it found it; a process whose freshly created directory was removed by a neighbour exiting just then recreates it once before binding. Each start sweeps sockets in the directory whose process no longer exists, so a crash or a `SIGKILL` leaves nothing behind for long. A forked child has no endpoint.
+
+One listener thread, created with every signal blocked, serves up to eight connections; a ninth gets a `busy` error and is closed. The endpoint never allocates through the Osprey allocator and never touches the managed heap, so it changes no memory backend's behaviour. With the endpoint open, threads register with the profiler as [PROF-COLLECT-REGISTRY] describes, but no sampler runs and no samples or rows are kept until a client starts a session.
+
+### [PROF-ATTACH-PROTOCOL] Wire protocol
+
+A request is one text line (a trailing `\r` is ignored, and a line is at most 255 bytes). Every reply is one JSON object per line with a `kind` field; strings escape every control character, so a value can never break the framing.
+
+| Request | Reply |
+|---|---|
+| `hello` | `{"kind":"hello","protocol":1,"pid":…,"platform":"macos-arm64","cpu_session":false,"runtime_version":"…","exe":"…"}` |
+| `cpu_start <hz>` | `{"kind":"cpu_started","rate_hz":…,"start_unix_ns":…,"images":[…]}`, then `cpu_batch` lines |
+| `cpu_stop` | the last `cpu_batch`, then `{"kind":"cpu_stopped","reason":"requested","dropped":…,"end_unix_ns":…}` |
+
+`<hz>` is clamped to 10..10000 like `OSPREY_PROFILE_HZ`. A `cpu_batch` is `{"kind":"cpu_batch","threads":[…],"stacks":[…],"samples":[…]}` with the records of [PROF-RAW-FORMAT]: `threads` and `stacks` are appended to the session's tables in order, so the indices of one batch continue from the last, and `samples` rows reference those tables. A stream row carries a fifth column, `[t_rel_ns, thread_index, stack_index, state, tick]`: the number of the sampler tick that recorded it, never decreasing. The rows of one tick are one sampling instant across every thread, which is the unit a profiler's per-tick shares are counted in. On Linux a running thread's stack is captured by the signal the previous tick sent, so its rows land one tick late. A batch carries an `images` array as well whenever the program's image list changed since `cpu_started`. Batches are sent at most every 100 ms by the sampler thread itself, which owns the sample store; each batch's samples then leave the store, so a long session does not grow without bound.
+
+One CPU session runs per process. `cpu_start` while one runs, including an `OSPREY_PROFILE` session, is refused with `already_profiling`. Closing the connection that started a session ends it. Program exit during a session sends the final batch and `cpu_stopped` with reason `exit`. A connection that cannot take a line within one second is closed, which ends any session it owned instead of stalling the sampler. Errors are `{"kind":"error","code":…,"message":…}` with code `unknown_command`, `bad_argument`, `already_profiling`, `not_profiling`, `attach_failed`, `line_too_long` (the connection is then closed) or `busy`.
+
+## [PROF-LSP-RUNTIME] Language-server runtime
+
+`crates/lsp-profiler-osprey` is the Osprey runtime for lspkit's shared profiler, `lsp-profiler`, which comes from the `lspkit` submodule because it is not published; its build script generates the wire model with the typeDiagram CLI, so a build needs Node.js and `typediagram` on `PATH`. The runtime supplies only what is Osprey's: recognising a process, sampling it, and naming its frames. Sessions, hotspots, exports, the JSON-RPC surface and the editor UI are lspkit's, the same for every language.
+
+A process is an Osprey program when its endpoint answers `hello` [PROF-ATTACH-ENDPOINT], and the reply's runtime version is what the process listing shows. A socket nobody serves, which is a stale file a crash left for a pid the OS has since reused, is not an Osprey program, while an endpoint that never answers marks the program unattachable. A CPU session is one live-attach session [PROF-ATTACH-PROTOCOL]. Each stack is symbolized once, as it arrives ([PROF-SYMBOLIZE-OFFLINE]); a changed image list restarts that cache. The rows of one sampler tick become one sampling tick. Without native frames a stack keeps only its Osprey source frames, so time in the C runtime or the system belongs to the Osprey function that called it; a stack with no source frame at all, from a program built without debug info, keeps every frame instead of vanishing. Osprey source lives only in the program's own image, so without native frames another image's addresses are symbolized only for such a sourceless stack; every other stack would drop them, and naming system libraries through `atos` on every batch let a live session fall seconds behind on a busy machine and lose its tail at stop. Source lines need a debug-info build: `--profile` together with `--compile` builds one without running it. Thread trampolines and the loader's entry point are scaffolding. A pid that names no process is `PROCESS_NOT_FOUND`, even while a socket a `SIGKILL` left behind still names it, and a live process without an endpoint is `UNSUPPORTED_RUNTIME`. Windows has no endpoint, so there the runtime recognises nothing and has no CPU backend.
+
+### [PROF-LSP-HOST] Language-server host
+
+`osprey lsp` mounts the profiler service with the Osprey runtime. `initialize` advertises it twice: `experimental.lspProfiler` names every mounted runtime with its capabilities, and `executeCommandProvider.commands` lists every profiler operation as a `workspace/executeCommand` named `osprey.lspProfiler.<area>.<action>`, the convention lspkit's editor UI drives. A command's `arguments` must be exactly one params object (or absent); anything else is refused with `INVALID_PARAMS` (-32602). Each profiler command is answered from a task of its own, so a session that takes seconds to stop never holds up editing, and a `$/cancelRequest` for one still in flight answers it with `RequestCancelled` (-32800). The service's notifications, such as CPU progress, go to the client as they happen; every session is stopped when the server exits. Exports land under `$TMPDIR/osprey-profiler`.
 
 ## [PROF-SYMBOLIZE-OFFLINE] Symbolization
 
@@ -154,30 +190,30 @@ self/total hot-function table. It also adds after-line heat decorations
 (`NN.N% · M samples`) with overview-ruler marks [PROF-VSCODE-HEAT], driven by
 `<stem>.profile.json`.
 
-Frame colors are a function of the profile alone, never of the engine. Frames
-are ranked by their file path, then their name, then their original index, and
-each rank picks one colour from a fixed ramp; a frame's colour therefore depends
-only on the document, and the same profile looks the same on every run and every
-machine. The index term carries the whole weight of that promise for frames that
-share a file AND a name — the same function inlined at two sites, or two runtime
-frames with no file at all. An ordering that answered "equal" for those would
-make their ranks a property of the ARRAY, not of the frames: a host sort is
-required to be stable, so the ranks would come out in whatever order the
-document happened to list them, and a profile that named the same two frames in
-the other order would colour them the other way round. The ordering is therefore
-a TOTAL one — it reports two distinct frames as equal only when they are the
-same frame — and that is a property of the comparator, which no observation of
-a sort's output can confirm, so it is asserted on the comparator directly.
+### [PROF-VSCODE-SHARED] Shared profiler UI
 
-Ranking by file THEN name is ranking on the pair, not on a string that happens
-to contain both: any separator used to splice them must be one no path and no
-frame name can contain, or `("/w/a b.osp", "z")` and `("/w/a", "b.osp z")`
-collapse onto one key and two distinct frames become indistinguishable.
+The extension adapts native captures to `@nimblesite/lsp-profiler-ui`, shared with SharpLsp. Osprey keeps its compiler invocation, optimized builds, native sampler, offline symbolization, cancellation, test-explorer profile action, summary parsing and inline sample annotations. The shared package owns the canvas model, interactions, result tables, trace actions, palette and debugger selection bridge. No native export format changes.
+
+`osprey.profiler.palette` overrides the olive/brown-green defaults. Source/runtime frame classification stays in Osprey; frame identities determine deterministic color ranks. The shared view retains per-fiber running/waiting counts and dropped samples. A variable clicked in the Osprey Debug tree, or selected through Watch/Variables' profiler action, can be inspected and added back to Watch. A resumed or terminated session invalidates that selection.
+
+The extension also mounts the library's live profiler, served by `osprey lsp` [PROF-LSP-HOST]. A Processes view in the Osprey Debug container lists every running Osprey program; Profile CPU attaches a live session to one, and Run & Profile CPU (Current File) builds the current file, runs it under the Osprey debugger and profiles it from the PID lldb-dap reports. Live results land in the shared heat map and results panel. Osprey has no memory backend, so the extension contributes no memory command, menu, launch link or setting, and no row offers or suggests memory tracking [PROF-LSP-RUNTIME]. `vscode-extension/scripts/sync-profiler-contributions.mjs` writes the library's generated contributions into the manifest, and compiling fails when they drift. npm installs the library as a packed copy of the submodule's build (`install-links`), so the VSIX ships it and the extension shares the library's one copy of its signals.
+
+Native heap-retention capture would need an Osprey memory backend, which does not exist. The common VSIX capture and webview contracts run against the real Osprey extension and compiler, the capture contract both on an offline `--profile` capture and on a live session, alongside SharpLsp's live profiler suites ported to real Osprey programs [PROF-TEST].
 
 ## [PROF-TEST] Testing
 
 - The C runtime suite verifies thread registration, sample capture, stack
-  bounds, and raw JSON output.
+  bounds, and raw JSON output. Its endpoint suite drives the real socket inside
+  a private `TMPDIR`: the opt-out, the directory checks and stale-socket sweep,
+  every request and error, batch indices against the tables earlier batches
+  built, one session per process, a reader that stopped reading, and an exit
+  mid-session.
+- `crates/osprey-cli/tests/live_profiler.rs` compiles a CPU-bound fixture with
+  debug info, runs it as its own process, and drives lspkit's profiler service
+  with the Osprey runtime exactly as the language server does: the listing,
+  the hot function and its lines, native frames only on request, the error
+  codes, a busy program, a duration, a mid-session snapshot, and a program
+  killed mid-session [PROF-LSP-RUNTIME].
 - `osprey-profiler` tests verify parsing, aggregation, symbolization,
   exporters, and terminal formatting.
 - The end-to-end profiler script runs an example under `--profile` and parses

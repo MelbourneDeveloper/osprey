@@ -1,0 +1,12 @@
+// [BUILTIN-STRUCTURAL-EQUALS] `any` is erased and a `Result` carries an error
+// channel, so neither has a decided equality: either one in a
+// `structuralEquals` operand is a compile error. The `any` sits at the top
+// level and inside a list; the `Result` at the top level.
+fn erased() -> any = 1
+
+fn viaAny() = structuralEquals(erased(), erased())
+fn viaAnyElement() = structuralEquals([erased()], [erased()])
+fn viaResult() = structuralEquals(Success { value: 1 }, Success { value: 2 })
+fn viaResultField() = structuralEquals({ load: Success { value: 1 } }, { load: Success { value: 2 } })
+
+print("${viaAny()} ${viaAnyElement()} ${viaResult()} ${viaResultField()}")

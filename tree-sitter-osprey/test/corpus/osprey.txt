@@ -777,3 +777,34 @@ fn main() = a < b
           right: (expression
             (primary_expression
               (identifier))))))))
+
+================================================================================
+A function-typed field writes a closed effect row [EFFECTS-FIELD-ROWS]
+================================================================================
+
+type Control = { label: string, press: fn(string) -> int ![Log] }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (statement
+    (type_declaration
+      name: (identifier)
+      definition: (record_type
+        (field_declarations
+          (field_declaration
+            name: (identifier)
+            type: (type_identifier
+              (identifier)))
+          (field_declaration
+            name: (identifier)
+            type: (function_type
+              (type_list
+                (type_identifier
+                  (identifier)))
+              (type_identifier
+                (identifier)))
+            effects: (closed_effect_set
+              (effect_list
+                (effect_ref
+                  name: (identifier))))))))))

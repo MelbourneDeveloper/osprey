@@ -374,7 +374,7 @@ impl Checker {
         // bind the built-in variant's fields, even when a user union shadows
         // those constructor names.
         if is_result_variant(name) && is_result(&self.ctx.expose(disc)) {
-            self.bind_result_fields(fields, disc, local);
+            self.bind_result_fields(name, fields, disc, local);
             return;
         }
         let Some((args, declared, owner, is_record)) = self.ctor_instance(name) else {
@@ -394,7 +394,7 @@ impl Checker {
         // constructions be matched without a real Result.
         if owner == names::RESULT {
             self.reject_plain_result_default(fields, disc);
-            self.bind_result_fields(fields, disc, local);
+            self.bind_result_fields(name, fields, disc, local);
             return;
         }
         let declared_map: BTreeMap<String, Type> = declared.iter().cloned().collect();
@@ -464,7 +464,13 @@ impl Checker {
         )));
     }
 
-    fn bind_result_fields(&mut self, fields: &[String], disc: &Type, local: &mut TypeEnv) {
+    fn bind_result_fields(
+        &mut self,
+        variant: &str,
+        fields: &[String],
+        disc: &Type,
+        local: &mut TypeEnv,
+    ) {
         // An UNRESOLVED discriminant is not a candidate for the auto-wrap rule
         // below — auto-wrap answers "what does `Success { value }` mean over a
         // value that is known not to be a Result", and nothing is known here
@@ -484,16 +490,27 @@ impl Checker {
             }
             _ => dp.clone(),
         };
-        for fname in fields {
+        for (index, fname) in fields.iter().enumerate() {
             // The desugarer's unspellable `?:` binder names the SAME success
             // payload `value` does. Leaving it to the fresh-variable fallback
             // detached the payload from the fallback expression, so
             // `listGet([1, 2, 3], 0) ?: 9.5` type-checked and only failed in the
             // backend ("match arms disagree on type"), and an empty literal's
             // element type was never resolved at all [PATTERN-RESULT-DEFAULT].
+            //
+            // `Success`/`Error` bind by ROLE, not by spelling
+            // ([FLAVOR-ML-MATCH]): `Success section` binds the success payload
+            // under `section` exactly as `Success value` binds it under `value`,
+            // and `Error message` binds the error string. Binding a renamed
+            // positional binder to a fresh variable detached it from the
+            // payload, so a generic callee reached through it (`find` in a
+            // nested match) kept an unconstrained element type and codegen
+            // refused the closure as still generic.
             let ft = match fname.as_str() {
                 "value" | osprey_ast::RESULT_DEFAULT_PAYLOAD => ok.clone(),
                 "message" => Type::string(),
+                _ if index == 0 && variant == names::SUCCESS => ok.clone(),
+                _ if index == 0 => Type::string(),
                 _ => self.ctx.fresh(),
             };
             local.insert(fname.clone(), Scheme::mono(ft));
@@ -1081,12 +1098,51 @@ mod tests {
 
     #[test]
     fn result_pattern_with_an_unknown_field_binds_a_fresh_var() {
-        // `Success { surplus }` over a Result binds the standard `value`/`message`
-        // and a fresh var for any other field name (the `_ => fresh()` arm).
+        // `Success { value, surplus }` binds the canonical `value` to the
+        // success payload and a fresh var for a LATER, non-role field — the
+        // first binder is the payload by role, whatever it is spelled
+        // [FLAVOR-ML-MATCH].
         ok("fn f(r: Result<int, Error>) -> int = match r {\n\
               Success { value, surplus } => value\n\
               Error { message } => 0\n\
             }\n");
+    }
+
+    #[test]
+    fn renamed_result_binders_bind_the_payload_by_role() {
+        // `Success { renamed }` binds the success payload under `renamed`,
+        // exactly as `Success { value }` binds it under `value`, so a generic
+        // callee reached through the renamed binder keeps its element type
+        // (#283). A fresh-variable binding instead left the callee's `T`
+        // unconstrained and codegen refused the closure as still generic.
+        let parsed = osprey_syntax::parse_program_with_flavor(
+            "type Evidence = { evidenceId: string }\n\
+             type Section = { records: List<Evidence> }\n\
+             type Focus = { picked: string }\n\
+             fn find<T>(xs: List<T>, p: fn(T) -> bool) -> Result<T, Error> = match xs {\n\
+                 [] => Error { message: \"missing\" }\n\
+                 [head, ...tail] => match p(head) {\n\
+                     true => Success { value: head }\n\
+                     false => find(tail, p)\n\
+                 }\n\
+             }\n\
+             fn detail(focus: Focus) -> Result<Evidence, Error> =\n\
+                 match Success { value: Section { records: [Evidence { evidenceId: \"a\" }] } } {\n\
+                     Error { message } => Error { message: \"no section\" }\n\
+                     Success { section } => match find(section.records, fn(record) => record.evidenceId == focus.picked) {\n\
+                         Success { record } => Success { value: record }\n\
+                         Error { message } => Error { message: \"not found\" }\n\
+                     }\n\
+                 }\n",
+            osprey_syntax::Flavor::Default,
+        );
+        let types = crate::infer_program(&parsed.program);
+        let lambdas: Vec<String> = types.lambdas.values().map(ToString::to_string).collect();
+        assert!(!lambdas.is_empty(), "the closure survives inference");
+        assert!(
+            types.lambdas.values().all(|ty| !crate::has_type_var(ty)),
+            "every residual lambda is concrete: {lambdas:?}"
+        );
     }
 
     #[test]

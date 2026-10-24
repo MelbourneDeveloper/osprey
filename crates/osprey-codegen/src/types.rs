@@ -19,8 +19,25 @@ use osprey_types::{names, ProgramTypes, Type};
 /// the bare owner, which is what made `listGet(rows, i)` on a `List<List<int>>`
 /// answer an untyped machine word.
 pub(crate) fn elem_tag(prog: &ProgramTypes, elem: Option<&Type>) -> Option<String> {
-    let ty = elem.filter(|ty| !osprey_types::has_type_var(ty))?;
-    owner_name(prog, ty).or_else(|| crate::llty::scalar_spelling(ltype_of(ty)).map(str::to_string))
+    let ty = elem?;
+    let owner = owner_name(prog, ty);
+    // A nominal handle element keeps its pointer identity even while its type
+    // parameters are still open: `Tree<T>` is always a pointer to a `Tree`
+    // block, so `List<Tree<T>>` can record `Tree` as the element owner instead
+    // of degrading to an untagged `List` whose `listGet` answers a bare `i64`
+    // storage word (and a `?:` default beside it then disagrees on type).
+    // Shaped generic-record tags (`Envelope#i64`) are excluded: with an open
+    // parameter their slots are machine-word guesses, not the real layout.
+    let recordable = owner.as_ref().is_some_and(|owner| {
+        !osprey_types::has_type_var(ty) || (ltype_of(ty) == LType::Ptr && !owner.contains('#'))
+    });
+    if recordable {
+        return owner;
+    }
+    if osprey_types::has_type_var(ty) {
+        return None;
+    }
+    crate::llty::scalar_spelling(ltype_of(ty)).map(str::to_string)
 }
 
 /// Map an inferred type to the LLVM type a runtime value of it travels as.
@@ -40,7 +57,8 @@ fn ltype_of_con(name: &str, args: &[Type]) -> LType {
         // Int and unit travel as a machine word — as do fiber and channel
         // handles, which are runtime ids drawn from one shared counter, not
         // pointers.
-        names::INT | names::UNIT | names::FIBER | names::CHANNEL => LType::I64,
+        // A capability is a runtime identity word as well ([EFFECTS-INSTANCE]).
+        names::INT | names::UNIT | names::FIBER | names::CHANNEL | names::CAPABILITY => LType::I64,
         // An erased `any` is a pointer to its shape-carrying box
         // ([`crate::anybox`], [TYPE-ANY]) — never a bare machine word.
         names::ANY => LType::Any,

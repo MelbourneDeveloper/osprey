@@ -22,6 +22,7 @@ pub(crate) mod keywords;
 pub(crate) mod mlrender;
 pub mod model;
 mod module_actions;
+mod profiler;
 mod project_cache;
 mod project_sources;
 pub(crate) mod reference_docs;
@@ -33,6 +34,7 @@ pub mod testing;
 #[path = "../../testkit.rs"]
 mod testkit;
 pub mod text;
+mod undocumented;
 pub(crate) mod warning_actions;
 pub(crate) mod wire;
 pub mod workspace;

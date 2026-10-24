@@ -1,0 +1,15 @@
+// osprey: flavor=ml
+// [EFFECTS-MASK] [STAGE-LOWER-ORDER]: the ML twin of
+// `mask_crosses_static_handler.ospo`. A `mask` cannot skip into a
+// compile-time handler, which discharge removes before the program runs.
+effect Tile
+    size : int => int
+
+answer =
+    handle static Tile
+        size n => wrapAdd n 1
+    handle Tile
+        size n => wrapAdd n 2
+    mask Tile
+        perform Tile.size 2
+print "${answer}"

@@ -68,6 +68,10 @@ pub(crate) enum TokKind {
     KwHandler,
     /// `resume` — resumes a suspended continuation from a handler arm ([FLAVOR-ML-EFFECT]).
     KwResume,
+    /// `mask` — skips one enclosing activation of an effect ([EFFECTS-MASK]).
+    KwMask,
+    /// `instance` — creates a fresh capability identity ([EFFECTS-INSTANCE]).
+    KwInstance,
     /// `in` — kernel body separator and contravariant type-parameter marker.
     KwIn,
     /// `await` — block on a spawned fiber's result ([FLAVOR-ML-CONCURRENCY]).
@@ -165,6 +169,8 @@ const KEYWORDS: &[(&str, TokKind)] = &[
     ("handle", TokKind::KwHandle),
     ("handler", TokKind::KwHandler),
     ("resume", TokKind::KwResume),
+    ("mask", TokKind::KwMask),
+    ("instance", TokKind::KwInstance),
     ("in", TokKind::KwIn),
     ("await", TokKind::KwAwait),
     ("yield", TokKind::KwYield),

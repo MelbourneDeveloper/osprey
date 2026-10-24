@@ -106,9 +106,9 @@ static void t_paths_and_lengths(void) {
   int64_t deep = parse_ok("[[[[[[42]]]]]]");
   expect_get(deep, "[0][0][0][0][0][0]", "42");
   CHECK(json_free(deep) == 0);
-  int64_t dup = parse_ok("{\"k\":1,\"k\":2}");
-  expect_get(dup, "k", "1"); // FIRST duplicate wins, deterministically
-  CHECK(json_free(dup) == 0);
+  // A repeated member name is a rejection, not a first-wins lookup
+  // [BUILTIN-JSON-LIMITS]; json_codec_tests.c pins the cases.
+  CHECK(json_parse("{\"k\":1,\"k\":2}") == ERR_MALFORMED);
 }
 
 // Every malformed input maps to its EXACT error code, and no error perturbs
@@ -282,6 +282,7 @@ int main(void) {
   t_big_array();
   t_string_grammar_rejects_everything_outside_it();
   t_number_grammar();
+  t_codec();
   t_parse_survives_every_allocation_failure();
   t_accessors_survive_every_allocation_failure();
   printf("[ok] json_runtime: %ld assertions\n", g_checks);

@@ -9,15 +9,15 @@ date: "git Last Modified"
 <div class="home">
 <section class="hero home-hero" aria-labelledby="hero-title">
   <figure class="flight-film" aria-label="Luminous threads form an osprey in flight">
-    <video id="flight-video" muted loop playsinline preload="none" poster="/assets/motion/osprey-flight.png" data-src="/assets/motion/osprey-flight.webm" aria-hidden="true"></video>
+    <video id="flight-video" autoplay muted loop playsinline preload="none" poster="/assets/motion/osprey-flight.png" data-src="/assets/motion/osprey-flight.mp4" aria-hidden="true"></video>
   </figure>
   <button id="motion-toggle" type="button" hidden>Play motion</button>
   <div class="container hero-grid">
     <div class="hero-content">
-      <a class="home-eyebrow alpha-link" href="/status/"><span class="status-dot"></span> An open-source language, taking flight <span>↗</span></a>
+      <a class="home-eyebrow alpha-link" href="/status/"><span class="status-dot"></span> Open source. In alpha. <span>↗</span></a>
       <h1 class="hero-title" id="hero-title">Osprey.<br>Logic, <em>in flight.</em></h1>
-      <p class="hero-subtitle">Keep the logic clear.<br>Choose how it meets the world.</p>
-      <p class="hero-description">A functional language built around <strong>algebraic effects</strong>. Your code declares what it needs. You choose the handler that makes it happen.</p>
+      <p class="hero-subtitle">Your logic. Your handlers.</p>
+      <p class="hero-description">Declare what your code needs with <strong>algebraic effects</strong>. Choose the handler that makes it happen.</p>
       <div class="hero-actions">
         <a href="/playground/" class="btn btn-primary btn-lg">Try Osprey Online <span aria-hidden="true">↗</span></a>
         <a href="/docs/effects/" class="btn btn-secondary btn-lg">Explore effects <span aria-hidden="true">→</span></a>
@@ -26,12 +26,13 @@ date: "git Last Modified"
     </div>
     <div class="hero-code">
       <div class="flight-code">
-        <div class="code-toolbar"><span>save-draft<span id="source-extension">.osp</span></span><div class="flavor-controls" aria-label="Example syntax"><button type="button" data-flavor="default" aria-pressed="true">Default</button><button type="button" data-flavor="ml" aria-pressed="false">ML</button></div></div>
-        <pre id="example-default" data-source-flavor="default" class="language-osprey"><code class="language-osprey">{{ draftExample.default | escape }}</code></pre>
+        <div class="code-toolbar"><span>save-draft<span id="source-extension">.py</span></span><div class="flavor-controls" aria-label="Example flavor"><button type="button" data-flavor="default" aria-pressed="false">Default</button><button type="button" data-flavor="ml" aria-pressed="false">ML</button><button type="button" data-flavor="python" aria-pressed="true">Python</button></div></div>
+        <pre id="example-default" data-source-flavor="default" class="language-osprey" hidden><code class="language-osprey">{{ draftExample.default | escape }}</code></pre>
         <pre id="example-ml" data-source-flavor="ml" class="language-osprey-ml" hidden><code class="language-osprey-ml">{{ draftExample.ml | escape }}</code></pre>
+        <pre id="example-python" data-source-flavor="python" class="language-python"><code class="language-python">{{ draftExample.python | escape }}</code></pre>
         <div class="code-result"><span aria-hidden="true">↳</span><samp>{{ draftExample.output }}</samp><span class="result-label">OUTPUT</span></div>
       </div>
-      <p class="hero-code-caption">Save a draft to disk. Simulate being offline. Keep the same save logic.</p>
+      <p class="hero-code-caption">Three uncompromising flavors. No lock-in.</p>
     </div>
     <div class="hero-footnote"><span>INFERRED TYPES</span><span>EXPLICIT EFFECTS</span><span>COMPILED WITH LLVM</span><a href="https://github.com/Nimblesite/osprey">Open source. MIT licensed. ↗</a></div>
   </div>
@@ -41,12 +42,14 @@ date: "git Last Modified"
   <div class="container">
     <div class="section-heading"><p class="home-eyebrow">01 / A different way to connect</p><h2 id="effects-title">Your logic stays.<br><span class="muted-heading">The implementation changes.</span></h2></div>
     <div class="effect-layout">
-      <div class="effect-intro"><p>Your editor needs to save a draft. The save function requests storage and decides what to show when it succeeds or fails.</p><p>The disk handler writes the file. The offline handler simulates failure without touching storage. Swap the handler around the work; no storage parameter needs to pass through every helper.</p><a class="text-link" href="/docs/effects/">Understand algebraic effects <span>↗</span></a></div>
-      <ol class="effect-steps">
-        <li><span class="step-number">01</span><div><h3>Declare the need.</h3><p><code>effect</code> defines an operation and its types. <code>perform</code> asks for it.</p></div></li>
-        <li><span class="step-number">02</span><div><h3>Choose the behavior.</h3><p>A reusable <code>handler</code> supplies the implementation while your function runs.</p></div></li>
-        <li><span class="step-number">03</span><div><h3>Let the compiler check the boundary.</h3><p>Missing handlers and incompatible operation types are compile errors.</p></div></li>
-      </ol>
+      <div class="effect-intro"><p>Save a draft. Handle success or failure. Keep storage outside the function.</p><p>One handler writes to disk. Another simulates being offline. Swap the handler; keep the logic.</p><a class="text-link" href="/docs/effects/">Understand algebraic effects <span>↗</span></a></div>
+      <figure class="overview-film">
+        <video id="overview-video" controls playsinline preload="none" poster="/assets/videos/osprey-logic-in-flight-overview-poster.jpg" width="1920" height="1080" aria-label="Osprey: effects, three flavors, and Python flavor on the GPU">
+          <source src="/assets/videos/osprey-logic-in-flight-overview.mp4" type="video/mp4">
+          <track kind="captions" srclang="en" label="English" src="/assets/videos/osprey-logic-in-flight-overview.en.vtt" default>
+        </video>
+        <figcaption>See the handler change. Hear the story. <a href="/docs/effects/">Explore the code →</a></figcaption>
+      </figure>
     </div>
     <p class="support-note">Osprey is alpha software. Native control effects support single-shot resumption; full scoped effect rows and reusable continuations remain in development. <a href="/status/#algebraic-effects">Current support →</a></p>
   </div>
@@ -57,7 +60,7 @@ date: "git Last Modified"
     <div class="section-heading"><p class="home-eyebrow">02 / Less ceremony. More intent.</p><h2 id="language-title">A language that leaves<br>room for your thinking.</h2></div>
     <div class="language-grid">
       <article><span class="feature-mark" aria-hidden="true">:τ</span><h3>Types that follow your thinking</h3><p>Inferred static types, immutable data, and exhaustive pattern matching. Expected failures remain visible as <code>Result</code> values.</p><a href="/spec/0004-typesystem/">Explore the type system ↗</a></article>
-      <article><span class="feature-mark" aria-hidden="true">{ λ }</span><h3>Any syntax. One language.</h3><p>Every flavor's concrete syntax tree lowers into one canonical AST, so types and effects are shared. Write braces in <code>.osp</code>, ML layout in <code>.ospml</code> or the Python flavor in <code>.py</code>, and mix them in one project.</p><a href="/blog/2026-06-30-osprey-flavors/">Find your syntax ↗</a></article>
+      <article><span class="feature-mark" aria-hidden="true">{ λ }</span><h3>Three flavors. No lock-in.</h3><p>Default, ML, Python. Each uncompromising. All share Osprey’s types, effects, and compiler. Choose per file; mix all three in one project.</p><a href="/blog/2026-06-30-osprey-flavors/">Find your syntax ↗</a></article>
       <article><span class="feature-mark" aria-hidden="true">⇄</span><h3>Concurrency that reads directly</h3><p>Native fibers and channels keep concurrent work in ordinary functions. Choose the default allocator, tracing GC, or reference counting for your native build.</p><a href="/spec/0011-lightweightfibersandconcurrency/">Follow the fibers ↗</a></article>
       <article><span class="feature-mark" aria-hidden="true">+ !</span><h3>Arithmetic with a stated policy</h3><p>Integer overflow asks an <code>Arith</code> handler for the region's chosen behavior. Wrapping and saturating helpers make that choice explicit.</p><a href="/spec/0037-arithmeticeffects/">See arithmetic effects ↗</a></article>
     </div>
@@ -78,26 +81,17 @@ date: "git Last Modified"
 
 <section class="section effect-story model-section" id="gpt2" aria-labelledby="model-title">
   <div class="container">
-    <div class="section-heading"><p class="home-eyebrow">04 / A model on the surface</p><h2 id="model-title">The trained GPT-2.<br><span class="muted-heading">Written once. Run on the GPU.</span></h2></div>
+    <div class="section-heading"><p class="home-eyebrow">04 / Bring your Python thinking</p><h2 id="model-title">Port your Python.<br><span class="muted-heading">Put the computation on the GPU.</span></h2></div>
     <div class="effect-layout">
-      <div class="effect-intro"><p><code>gpuLoadTensor</code> reads the published weights. The model performs a static <code>Tensor</code> effect. One handler answers it with plain lists. The other answers every operation with a GPU-surface kernel or a <code>gpuMatMul</code> product, and Metal or OpenCL executes them.</p><p>On the CPU every number matches an independent pure-Python reference exactly, token ids and gradients alike. On an Apple M4 Max a training step runs about three times faster on the GPU than on the CPU. The text is the same, and the numbers agree to twelve digits.</p><a class="text-link" href="/blog/2026-10-12-gpt2-on-the-gpu-surface/">Read how it was ported <span>↗</span></a></div>
+      <div class="effect-intro"><p>Keep <code>def</code>, <code>lambda</code>, and f-strings. Port computation into Osprey’s Python flavor with inferred types and checked effects. Keep Python libraries through <a href="/spec/0042-pythoninterop/">explicit interop</a>.</p><p>GPT-2 is the worked port: one <code>Tensor</code> effect, a CPU handler, and a GPU handler using Metal or OpenCL. The handler decides where the arithmetic runs.</p><a class="text-link" href="/docs/python-flavor/">Port with Python flavor <span>↗</span></a></div>
       <div class="flight-code">
-        <div class="code-toolbar"><span>examples/gpt2/model/model.osp</span><span>LayerNorm</span></div>
-        <pre class="language-osprey"><code class="language-osprey">fn normalised(x, means, variances, g, b, i) = {
-    let r = intDiv(i, width)
-    let c = i % width
-    (at(x, i) - at(means, r)) / sqrt(at(variances, r) + epsilon) * at(g, c) + at(b, c)
-}
-
-export fn layerNorm(x, t, g, b) = {
-    let means = rowMeans(x, t)
-    let variances = rowVariances(x, t, means)
-    perform Backends::Tensor.build(t * width, fn(i) => normalised(x, means, variances, g, b, i))
-}</code></pre>
-        <div class="code-result"><span aria-hidden="true">↳</span><samp>make gpt2 GPU=metal PROMPT="The capital of France is" TOKENS=2 → the capital</samp><span class="result-label">METAL</span></div>
+        <div class="code-toolbar"><span>examples/gpt2/python/model.py</span><span>Python flavor</span></div>
+        <pre class="language-python"><code class="language-python"># osprey: flavor=python
+{{ gpuExample | escape }}</code></pre>
+        <div class="code-result"><span aria-hidden="true">↳</span><samp>make gpt2 FLAVOR=python BACKEND=gpu</samp><span class="result-label">TRY IT</span></div>
       </div>
     </div>
-    <p class="support-note">Device arithmetic is software binary64 and kernels are not fused yet, so generation is no faster on the GPU than on the CPU. <a href="https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/README.md">Measurements and source →</a></p>
+    <p class="support-note">Python flavor is Osprey source; porting requires adapting Python’s dynamic behavior. Shared tensor storage across Python interop is planned. GPU kernels are not fused; GPT-2 generation is not faster than CPU. <a href="https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/README.md">Measurements and source →</a></p>
   </div>
 </section>
 

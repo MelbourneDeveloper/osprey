@@ -1,5 +1,12 @@
 # Package Domain Model
 
+> **ALL OSPREY, and A WORKING API THAT SERVES WORKING PACKAGES COMES FIRST.**
+> Every executable part of the package system is Osprey, with no exceptions
+> (`[PACKAGE-IMPLEMENTATION-LANGUAGE]`). The first deliverable is the
+> database-free folder registry of `[PACKAGE-FOLDER-REGISTRY]` in
+> [spec 0029](0029-PackageManagement.md); everything in this document layers
+> onto that running service.
+
 **Status:** normative target. This is the typed data contract for
 [Package Management](0029-PackageManagement.md) and
 [Registry Trust and Discovery](0030-PackageRegistryTrustAndDiscovery.md), with
@@ -379,6 +386,14 @@ type ReleaseAssessment { release: ReleaseId verdict: ScanVerdict maintenance: Ma
   and limits in `[PACKAGE-PUBLISH]`; byte lengths are non-negative and match the
   digest input. Unknown asset roles/kinds are schema errors. Discovery metadata
   satisfies the byte, grammar, count, and uniqueness limits in spec 0032.
+- JSON encoding of the model is fixed: a `type` is an object whose members are
+  its fields; an alias is its underlying scalar; an `Option<T>` field is omitted
+  when absent and is never `null`; a `union` value is an object with exactly one
+  member, named by the variant, whose value is the variant's payload object
+  (`{}` for a payload-free variant such as `{"Eligible":{}}`); `Bool` is a JSON
+  boolean, `Int` a canonical decimal integer, and `DateTime`, `Digest`, `Uuid`
+  and every string alias a JSON string. An object with zero or several variant
+  members, an unknown variant, a `null`, or a non-integer number is rejected.
 - For canonical value `x`, `H(d,x) = "sha256:" || lowercaseHex(SHA256(ASCII(d) || 0x00 || u64be(length(RFC8785(x))) || RFC8785(x)))`.
   Manifest,
   build-plan, and release digests are respectively `H("osprey.manifest.v1", manifest)`,
@@ -477,6 +492,9 @@ type ReleaseAssessment { release: ReleaseId verdict: ScanVerdict maintenance: Ma
   `role`, `kind`, `byte_length`, `digest`, and only for runtime data
   `required_capability`. Role strings are `documentation`/`runtime-data`; kind
   strings are `text`/`json`/`png`, with a text format derived from its extension.
+  `[project].python_sources` is accepted for an application root, is not part of
+  the canonical manifest, and rejects any manifest that declares `[package]`:
+  published packages contain Osprey source only ([PACKAGE-PUBLISH]).
 - `RelativePath` is root-confined, normalized, and rejects absolute paths,
   traversal and symlinks. `LocalPath` is development-only: `use` resolves it
   once against the selected workspace root to a canonical physical path,

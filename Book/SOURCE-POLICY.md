@@ -9,7 +9,7 @@ The book uses the narrowest current authority available:
 3. executable compiler, runtime, and corpus tests;
 4. implementation code when a behavior needs confirmation;
 5. maintained installation and status documentation;
-6. `../docs/messaging.md` for product philosophy, except where this edition's explicit flavor policy supersedes its fixed-count framing;
+6. `../docs/messaging.md` for product philosophy, with Default-first teaching as this edition's explicit flavor policy;
 7. `../docs/designs/` and live website tokens for visual decisions.
 
 The repository README is an orientation document, not the final authority when it disagrees with current specifications, tests, or edition direction.
@@ -18,7 +18,7 @@ The repository README is an orientation document, not the final authority when i
 
 The book teaches Default first. ML is one currently available optional alternative, and more flavors may arrive later. Statements such as “Osprey has exactly two flavors” are forbidden in forward-looking editorial copy.
 
-When a current command or table needs a count, write “the currently available Default and ML flavors.” Explain that a flavor owns source spelling while shared checking and code generation operate on the lowered program. Do not expose compiler-internal vocabulary in the first chapters.
+Name the relevant flavors without implying a fixed count. Default and ML are the book's teaching surfaces; the Python flavor is partially implemented. Explain that a flavor owns source spelling while shared checking and code generation operate on the lowered program. Do not expose compiler-internal vocabulary in the first chapters.
 
 ## Example evidence
 
@@ -43,7 +43,7 @@ Qualify runtime claims where they are taught:
 - Native dynamic control handlers currently provide single-shot resumption. WebAssembly and mobile C ABI targets support value handlers and static discharge, and reject unsupported dynamic control operations.
 - The default allocator retains general allocations. Native `gc` and `arc` are separate choices with platform limits; neither is the default, and neither is currently available for WebAssembly or mobile libraries.
 - Normal native fibers use one operating-system thread each and can co-own immutable allocations. Structured scopes, fiber cancellation, `join`, and deadlines remain design work.
-- Strict static-memory checking and GPU device execution remain unimplemented. Current GPU kernels run through host loops.
+- Strict static-memory checking remains unimplemented. GPU device support is kernel- and target-dependent; consult plan 0023 and the runtime implementation rather than assuming all work runs on the host or on a device.
 
 Check these boundaries against the relevant specifications, implementation tests, and delivery plans before describing a feature as available. The [messaging guide](../docs/messaging.md) links the maintained status sources; it does not replace executable evidence.
 

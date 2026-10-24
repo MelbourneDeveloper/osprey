@@ -1,0 +1,56 @@
+type Node A =
+    Label
+        content : string
+    Stack
+        children : List<Node<A>>
+    Button
+        label : string
+        action : A
+    Field
+        value : string
+        edit : (string) -> A
+
+type Binding A =
+    Tap
+        action : A
+    Edit
+        apply : (string) -> A
+
+type Action =
+    Refresh
+    SetQuery
+        text : string
+
+collect (found, node) = match node
+    Label _ => found
+    Stack children => range (0, length children) |> fold found (\(acc, index) => collectAt (acc, children, index))
+    Button _ action => listAppend found (Tap(action = action))
+    Field _ edit => listAppend found (Edit(apply = edit))
+
+collectAt (found, children, index) = match listGet children index
+    Success child => collect (found, child)
+    Error _ => found
+
+resolve (binding, value) = match binding
+    Tap action => action
+    Edit apply => apply value
+
+describe action = match action
+    Refresh => "refresh"
+    SetQuery text => "query:${text}"
+
+screen query = Stack(children = [Label(content = "Vigil"), Button(label = "Refresh", action = Refresh), Field(value = query, edit = \text => SetQuery(text = text))])
+
+dispatch (index, value) = match listGet (collect ([], screen "")) index
+    Success binding => describe (resolve (binding, value))
+    Error _ => "rejected"
+
+type Control =
+    label : string
+    press : (string) -> string ![]
+
+controls () = range 0 2 |> map (\n => Control(label = "c${toString n}", press = \text => text + "!")) |> toList
+
+pressed () = join (mapList (controls ()) (\control => control.press control.label)) ","
+
+print "${dispatch (1, "codesign")} ${pressed ()}"

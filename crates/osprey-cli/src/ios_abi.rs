@@ -136,6 +136,28 @@ pub(crate) struct HostAbi {
     pub(crate) imports: Vec<Import>,
 }
 
+/// Which functions a library publishes as C exports. [IOS-HOST-ABI]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ExportScope {
+    /// The host calls only `osprey_main` (`--entry-only`).
+    EntryOnly,
+    /// Every scalar function the entry source declares: those within its
+    /// flattened lines, or every function of a single-file program. Helpers
+    /// in other files are internal, however their signatures look.
+    EntrySource(Option<std::ops::RangeInclusive<u32>>),
+}
+
+impl ExportScope {
+    /// Whether a function declared at `position` crosses the boundary.
+    pub(crate) fn publishes(&self, position: Option<osprey_ast::Position>) -> bool {
+        match self {
+            Self::EntryOnly => false,
+            Self::EntrySource(None) => true,
+            Self::EntrySource(Some(lines)) => position.is_some_and(|at| lines.contains(&at.line)),
+        }
+    }
+}
+
 #[path = "ios_abi_selection.rs"]
 mod selection;
 #[cfg(test)]
@@ -422,9 +444,9 @@ pub(crate) fn source(
     path: &str,
     target: &str,
     extend_bool: bool,
-    entry_only: bool,
+    scope: &ExportScope,
 ) -> Result<(String, String), String> {
-    let (ir, abi) = source_with_abi(program, path, target, extend_bool, entry_only)?;
+    let (ir, abi) = source_with_abi(program, path, target, extend_bool, scope)?;
     Ok((ir, header_for_target(&abi, path, target)))
 }
 
@@ -434,11 +456,11 @@ pub(crate) fn source_with_abi(
     path: &str,
     target: &str,
     extend_bool: bool,
-    entry_only: bool,
+    scope: &ExportScope,
 ) -> Result<(String, HostAbi), String> {
     crate::target_capabilities::validate(program, target)?;
     let ir = osprey_codegen::compile_library(program).map_err(|e| format!("{path}: {e}"))?;
-    let abi = checked_abi(program, path, target, &ir, entry_only)?;
+    let abi = checked_abi(program, path, target, &ir, scope)?;
     let adapted = if extend_bool {
         with_host_abi(&ir, &abi)?
     } else {
@@ -452,18 +474,17 @@ fn checked_abi(
     path: &str,
     target: &str,
     ir: &str,
-    entry_only: bool,
+    scope: &ExportScope,
 ) -> Result<HostAbi, String> {
-    let abi = host_abi_selected(
-        program,
-        &osprey_types::infer_program(program),
-        ir,
-        !entry_only,
-    )
-    .map_err(|error| format!("{path}: target `{target}` C ABI: {error}"))?;
+    let abi = host_abi_selected(program, &osprey_types::infer_program(program), ir, scope)
+        .map_err(|error| format!("{path}: target `{target}` C ABI: {error}"))?;
     Ok(abi)
 }
 
 #[cfg(test)]
 #[path = "ios_abi_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ios_abi_export_tests.rs"]
+mod export_tests;

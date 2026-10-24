@@ -112,7 +112,24 @@ pub fn redundant_annotation_sites_where(
     program: &Program,
     include: impl Fn(Option<Position>) -> bool,
 ) -> Vec<RedundantAnnotation> {
-    let written = sites(program);
+    redundant_annotation_sites_for(program, include, &|_| false)
+}
+
+/// [`redundant_annotation_sites_where`], holding the signatures of the
+/// functions `contract` names fixed. An exported module member's signature is
+/// its API: whether another project still needs it is not a question one
+/// program can answer, so it is never reported and never erased while the
+/// rest is judged. Annotations inside its body are judged as usual.
+#[must_use]
+pub fn redundant_annotation_sites_for(
+    program: &Program,
+    include: impl Fn(Option<Position>) -> bool,
+    contract: &dyn Fn(&str) -> bool,
+) -> Vec<RedundantAnnotation> {
+    let written: Vec<Site> = sites(program)
+        .into_iter()
+        .filter(|site| !site.slot.signs(contract))
+        .collect();
     if !written.iter().any(|site| include(site.position)) {
         return Vec::new();
     }
@@ -123,7 +140,7 @@ pub fn redundant_annotation_sites_where(
     let removable = if preserves(program, &baseline, &written, &all) {
         all
     } else {
-        accumulate(program, &baseline, &written)
+        accumulate(program, &baseline, &written, judges())
     };
     removable
         .iter()
@@ -152,23 +169,124 @@ fn annotation(site: &Site) -> RedundantAnnotation {
     }
 }
 
-/// Grow the reported set one annotation at a time, in source order, keeping
-/// only those that stay removable alongside everything already kept.
+/// Grow the reported set in source order, keeping only the annotations that
+/// stay removable alongside everything already kept.
 ///
 /// A reader acts on the whole list, so the whole list has to be safe. Judging
 /// each annotation against the untouched program answers a question nobody
 /// asked: mutually-pinning annotations each look removable while the others
 /// hold the type down, and a reader who deletes all of them gets a different
 /// program. Every set this returns has been solved for as a set.
-fn accumulate(program: &Program, baseline: &Snapshot, written: &[Site]) -> Vec<usize> {
+///
+/// Each candidate costs a whole-program solve, so `window` undecided
+/// candidates are judged at once on separate threads, each against the set
+/// kept so far. Erasing more annotations only removes constraints: it never
+/// restores a type another erasure changed, nor repairs an error. So a
+/// candidate rejected against the kept set stays rejected as the set grows,
+/// and when the window's accepted candidates also preserve the program
+/// together, the one-at-a-time search would have kept each of them in turn.
+/// That combined set is solved once; when it fails, only its first member is
+/// kept and the rest are judged again against the larger set.
+pub(crate) fn accumulate(
+    program: &Program,
+    baseline: &Snapshot,
+    written: &[Site],
+    window: usize,
+) -> Vec<usize> {
     let mut kept: Vec<usize> = Vec::new();
-    for index in 0..written.len() {
-        kept.push(index);
-        if !preserves(program, baseline, written, &kept) {
-            let _ = kept.pop();
-        }
+    let mut pending: std::collections::VecDeque<usize> = (0..written.len()).collect();
+    while !pending.is_empty() {
+        let width = pending.len().min(window.max(1));
+        let candidates: Vec<usize> = pending.drain(..width).collect();
+        let verdicts = judged(program, baseline, written, &kept, &candidates);
+        let accepted: Vec<usize> = candidates
+            .iter()
+            .zip(verdicts)
+            .filter_map(|(index, keep)| keep.then_some(*index))
+            .collect();
+        settle(
+            program,
+            baseline,
+            written,
+            &mut kept,
+            accepted,
+            &mut pending,
+        );
     }
     kept
+}
+
+/// Keep `accepted` at once when the set survives with all of them; otherwise
+/// keep the first, which was judged against exactly `kept`, and requeue the
+/// rest ahead of everything later.
+fn settle(
+    program: &Program,
+    baseline: &Snapshot,
+    written: &[Site],
+    kept: &mut Vec<usize>,
+    accepted: Vec<usize>,
+    pending: &mut std::collections::VecDeque<usize>,
+) {
+    let Some((&first, rest)) = accepted.split_first() else {
+        return;
+    };
+    let together: Vec<usize> = kept.iter().chain(&accepted).copied().collect();
+    if rest.is_empty() || preserves(program, baseline, written, &together) {
+        kept.extend(accepted);
+        return;
+    }
+    kept.push(first);
+    for index in rest.iter().rev() {
+        pending.push_front(*index);
+    }
+}
+
+/// Inference recurses on the syntax tree; a spawned thread gets the main
+/// thread's headroom, not the 2 MiB default.
+const JUDGE_STACK: usize = 64 * 1024 * 1024;
+
+/// Whether each candidate stays removable alongside `kept`, in order.
+fn judged(
+    program: &Program,
+    baseline: &Snapshot,
+    written: &[Site],
+    kept: &[usize],
+    candidates: &[usize],
+) -> Vec<bool> {
+    let trial = |index: usize| {
+        let mut chosen = kept.to_vec();
+        chosen.push(index);
+        preserves(program, baseline, written, &chosen)
+    };
+    if let [index] = candidates {
+        return vec![trial(*index)];
+    }
+    std::thread::scope(|scope| {
+        let judges: Vec<_> = candidates
+            .iter()
+            .map(|&index| {
+                let judge = std::thread::Builder::new()
+                    .stack_size(JUDGE_STACK)
+                    .spawn_scoped(scope, move || trial(index));
+                (index, judge)
+            })
+            .collect();
+        judges
+            .into_iter()
+            .map(|(index, judge)| verdict(judge).unwrap_or_else(|| trial(index)))
+            .collect()
+    })
+}
+
+/// A judge's answer, or `None` when the host could not start it and the
+/// candidate must be judged here instead. A judge that panicked re-raises
+/// here, as the solve would have on this thread.
+fn verdict(judge: std::io::Result<std::thread::ScopedJoinHandle<'_, bool>>) -> Option<bool> {
+    judge.ok().map(|handle| {
+        handle
+            .join()
+            .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+    })
 }
 
 /// Whether erasing every annotation in `chosen` — all of them at once — leaves
@@ -186,6 +304,11 @@ fn preserves(program: &Program, baseline: &Snapshot, written: &[Site], chosen: &
     published(&candidate).is_some_and(|candidate| {
         baseline.methods == candidate.methods && same_types(&baseline.types, &candidate.types)
     })
+}
+
+/// One judge per core the host offers.
+fn judges() -> usize {
+    std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get)
 }
 
 /// Everything the inferrer resolved, labelled so two runs compare entry by

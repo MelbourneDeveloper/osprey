@@ -40,7 +40,7 @@ A concurrent computation created with `spawn`; `await` receives its result. In t
 
 ## Flavor
 
-A source-level way to write Osprey. Default and ML are the currently available flavors. A flavor changes how code is written and read; shared checking and code generation operate after that source has been translated into the language's common program form. More flavors may be added in the future.
+A source-level way to write Osprey. The book teaches Default and optionally ML; a partially implemented Python flavor is also available. A flavor changes how code is written and read; shared checking and code generation operate after that source has been translated into the language's common program form. More flavors may be added in the future.
 
 ## Function
 

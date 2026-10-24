@@ -157,3 +157,6 @@ benchmarks/cases/**/*.o
 /core
 /core.*
 examples/gpt2/weights/
+
+# Package-system development state and scratch output ([PACKAGE-SOURCE-CANONICAL])
+.osprey/

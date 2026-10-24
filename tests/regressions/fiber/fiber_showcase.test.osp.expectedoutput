@@ -19,5 +19,6 @@ captured spawn = 705 done=1
 record spawn direct=27 spawned=28
 === Fiber Showcase Complete ===
 ok 1 - fiber primitives compose into deterministic values
-1..1
-# tests=1 passed=1 failed=0 skipped=0
+ok 2 - a completed fiber answers every await with the same value
+1..2
+# tests=2 passed=2 failed=0 skipped=0

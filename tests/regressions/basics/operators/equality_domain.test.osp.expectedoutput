@@ -1,0 +1,10 @@
+int true false float true true
+ok 1 - scalars compare by value
+ok 2 - scalars order
+area true false true
+ok 3 - payload-free union values compare by variant
+shape true false true
+ok 4 - a payload-free constructor tests the variant
+ok 5 - listContains searches by ==
+1..5
+# tests=5 passed=5 failed=0 skipped=0

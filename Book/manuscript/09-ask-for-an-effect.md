@@ -1,6 +1,6 @@
 # Chapter 9 — Ask for an effect
 
-The Flight Log needs to know who is learning. Later it will need to save a lesson and report progress. Each of those jobs raises two questions: what does the application need, and who will provide it when the application runs?
+An effect lets a function request an operation without choosing its implementation. A handler supplies that implementation while the function runs. We will use effects and handlers to give the Flight Log a learner's name and report a completed lesson.
 
 Start with the smallest useful request: ask for the learner's name. Run `examples/chapter-09/greeting.osp` from the book:
 
@@ -24,13 +24,11 @@ Ready to learn, Rowan?
 
 There is one `greeting` function. Each call uses a different answer to its request. Neither call changes the function's source.
 
-That separation is the starting point for **algebraic effects**. This chapter builds it into a small application, explains the function passed to each handler, and shows how the compiler checks that requests have answers. You can work through it without knowing anything about continuations or functional-programming theory.
-
 All commands in this chapter assume you are in `Book`. For the first example, use `../target/release/osprey examples/chapter-09/greeting.osp --check`, then repeat the command with `--run`. An installed compiler can be invoked as `osprey` instead.
 
 ## 1. Read a request and its answer
 
-Read the first line as an interface. `effect Learner` names a group of operations. This group has one operation, `name`. Its signature, `fn() -> string`, says that callers supply no arguments and receive a string. The declaration does not choose a name or read anything yet.
+`effect Learner` declares a group of operations. Here there is just one: `name`. The type `fn() -> string` means it takes no arguments and returns a string. Declaring it does not request a name yet.
 
 `perform Learner.name()` makes the request. Its result becomes the value of that expression, so `greeting` can join it with the two surrounding strings. The function knows what answer it needs: text. It does not decide where that text comes from.
 
@@ -48,21 +46,21 @@ There are three distinct jobs:
 | `perform` | Ask for an operation now | `greeting` requests the name |
 | `handler` | Supply implementations while work runs | `mika` answers with `"Mika"` |
 
-The written operation signature matters. It defines a contract before an implementation exists. Ordinary function parameters and return types can still be inferred; `greeting` needs no repeated `string` annotation. Leaving off an effects annotation also does not disable checking. The compiler follows the operations the program may request.
+The operation's declared type tells the compiler what every implementation must accept and return. It infers the type of `greeting` and checks its requests without extra annotations.
 
 ### Try it: change an answer
 
 Change only `"Rowan"` to your own name. Predict both output lines before running. The first line should remain unchanged; the second should use your name. Now change the question mark in `greeting` to an exclamation mark. Both lines should change. One edit changes an implementation; the other changes the shared application behavior.
 
-### Why “algebraic”?
+### Why “algebraic effects”?
 
-The word refers to describing a computation through named operations and supplying an interpretation for them. Here the operation is `name`, and each handler supplies an interpretation of that request. You do not need equations to use this idea.
+**Algebraic effects** is the broader name for describing work through named operations and giving those operations meaning with handlers. Here, `name` is the operation and each handler supplies an answer. We will use “effects and handlers” throughout the examples.
 
-Effects are often used for work such as logging, configuration, or storage. A handler can also answer entirely from a constant, as these two do. An effect request does not inherently require a file, network connection, or mutation. That is precisely why it can be useful in a deterministic test.
+An effect can request logging or storage, but it can also return a constant. That makes it useful for tests: a handler can supply a predictable answer.
 
 ## 2. Pass the work so the handler can run it
 
-The most easily missed character in the example is the absence of parentheses after `greeting` in `mika(greeting)`.
+Pass `greeting`, not `greeting()`, to the handler.
 
 A function is a value you can pass to another function. Calling it produces its result. These are different events:
 
@@ -71,25 +69,19 @@ A function is a value you can pass to another function. Calling it produces its 
 | `mika(greeting)` | The function, ready to be called |
 | `mika(greeting())` | The result of calling `greeting` first |
 
-The handler must be installed before the request happens. When given `greeting`, `mika` can establish its scope, call the function, then return its answer. With `greeting()`, argument evaluation tries to do the work before the handler call has established that scope. The resulting string is also the wrong kind of argument: the callable handler expects work it can call.
+`mika(greeting)` activates the handler before calling `greeting`. Writing `mika(greeting())` would call `greeting` too early and pass its string result where a function is required; the compiler rejects it.
 
-That passed function is a **callback**. In this example the term means only “a function that another piece of code calls.” It does not imply a background thread, an event loop, or delayed work on another day. This callback runs as part of the handler call.
+The passed function is a **callback**: a function another piece of code calls. Here it runs during the handler call.
 
 ![Constructing mika leaves it inactive; applying it installs the handler, calls greeting, and returns after the scope ends.](assets/diagrams/09-handler-lifetime.png)
 
 *Figure 9.2 — Passing a function gives the handler control over when the work starts. Constructing the handler alone installs nothing.*
 
-Sometimes the work needs arguments. A callable handler accepts a function with zero parameters, so wrap the particular call you want to make. For example, `terminal(|| => finishLesson("Algebraic effects"))` passes a small function that already knows the lesson title. `|| =>` is the compact spelling of Chapter 8's `fn() =>`: an anonymous function with no parameters. Its body runs when the handler calls it.
+Sometimes the work needs arguments. A callable handler accepts a function with zero parameters, so wrap the particular call you want to make. For example, `terminal(|| => finishLesson("Effects and handlers"))` passes a small function that already knows the lesson title. `|| =>` is the compact spelling of Chapter 8's `fn() =>`: an anonymous function with no parameters. Its body runs when the handler calls it.
 
-That wrapper contributes something: it supplies the argument. If an existing zero-argument function already describes all the work, pass it directly. `mika(|| => greeting())` adds an unnecessary wrapper here; the analyzer can warn with `redundant-callback` and suggest `greeting`.
+If the work already has a zero-argument function, pass it directly: `mika(greeting)`.
 
-### Where does a relay fit?
-
-A helper such as `fn relay(callback) = callback()` receives a function and calls it. It is useful for explaining how a request travels through an intermediate call, but it adds no application behavior by itself. The first example can call `mika(greeting)` directly. You do not need to add a relay to use effects.
-
-A real wrapper might install several handlers or choose a policy before calling the supplied work. At that boundary, a callback has a clear purpose. Helpers farther inside the application can request their declared operations without receiving another parameter solely to carry a service through the call chain.
-
-An ordinary parameter is still a good choice for ordinary input. Keep a lesson title as an argument. For a one-line greeting alone, a `name` parameter would also be reasonable. An effect becomes more useful when several functions need a service whose implementation is selected around a whole operation, such as completing and saving a lesson.
+Ordinary inputs still belong in parameters. A lesson title is an input; a reporting service is a useful effect when several helpers need it and the application chooses its implementation around their work.
 
 ## 3. Give the request a visible scope
 
@@ -119,9 +111,7 @@ It prints the greetings for **Mika, Rowan, then Mika**. The inner handler takes 
 
 Notice where `greeting` was defined: outside both blocks. The operation uses the innermost active matching handler when the function runs. The function's definition does not permanently attach it to one learner. Requests reached through further helper calls follow the same rule.
 
-The final `report` is an ordinary string. Printing it later does not require a `Learner` handler because the request has already been answered. Conversely, returning a function that will make a request later does not make its future execution handled. The caller must arrange a suitable scope when that future work actually runs.
-
-Current Osprey writes `handle E { ... }` followed by the work in the same block. Older `handle ... in ...` and `handle ... do ...` examples use removed syntax. A handler with an empty remainder has no work to handle and is rejected.
+The final `report` is an ordinary string. Printing it later needs no `Learner` handler: the request has already been answered.
 
 ### Let the compiler find a missing answer
 
@@ -131,11 +121,11 @@ Check `examples/chapter-09/failscompilation/missing-handler.osp`. It declares `L
 examples/chapter-09/failscompilation/missing-handler.osp: unhandled effect operations at program entry: Learner.name; add a matching `handle`
 ```
 
-The message names the missing operation. Adding an effects annotation to `greeting` would describe a requirement, not provide an implementation. Repair the caller by using `mika(greeting)` with a declared handler, or put the call after a matching `handle` inside a block.
+The message names the missing operation. Define `mika` and call `mika(greeting)`, or put the call after a matching `handle` inside a block.
 
 There is a second rejection example, `wrong-answer.osp`. Its handler answers `name => 41`. The compiler reports `type mismatch: cannot unify string with int`. The operation promised text; a handler cannot change that contract. Repair the answer according to what the application needs.
 
-## 4. Build the Flight Log boundary
+## 4. Choose handlers for the Flight Log
 
 Now use two effects together. `Learner` supplies configuration. `Progress` reports what happened. Its operation takes a string and returns `Unit`, meaning that the caller receives no useful payload from that operation.
 
@@ -158,16 +148,14 @@ fn reading(person) = handler Learner { name => person }
 let mika = reading("Mika")
 let terminal = handler Progress { report message => print(message) }
 
-let live = mika(|| => terminal(|| => finishLesson("Algebraic effects")))
+let live = mika(|| => terminal(|| => finishLesson("Effects and handlers")))
 ```
 
-The terminal displays `Mika completed: Algebraic effects`, and `live` holds the same string. In `finishLesson`, the `Progress` operation returns `Unit`, then the final expression returns `message`. The operation's answer and the function's answer are separate values.
+The terminal displays `Mika completed: Effects and handlers`, and `live` holds the same string. In `finishLesson`, the `Progress` operation returns `Unit`, then the final expression returns `message`. The operation's answer and the function's answer are separate values.
 
-`reading` is a **handler factory**: an ordinary function that returns a handler. The arm remembers the `person` supplied to the factory. Creating `mika` still runs no lesson. That happens only when the handler is applied to the callback.
+`reading` returns a handler that remembers `person`. Creating `mika` does not run a lesson; calling it with a callback does.
 
 Read the last line from the outside in. First `mika` installs the learner implementation. Its callback applies `terminal`, installing the progress implementation. The innermost callback calls `finishLesson` with its title. `completion` requests the learner name; `finishLesson` requests the report. Both requests have an active implementation.
-
-Those wrappers are doing useful work. One establishes an additional scope; the other supplies a title. Intermediate helpers need neither a logger parameter nor a learner-service parameter. The title remains an explicit input to the application operation.
 
 ### Use a handler inside a test
 
@@ -175,14 +163,14 @@ Append this case from the same file. Chapter 8 introduced `test` and `expect(act
 
 ```osprey
 test("completion returns the expected message", || => {
-    expect(live, "Mika completed: Algebraic effects")
+    expect(live, "Mika completed: Effects and handlers")
     let checking = handler Progress {
         report message =>
-            expect(message, "Mika completed: Algebraic effects")
+            expect(message, "Mika completed: Effects and handlers")
     }
     let answer = mika(|| =>
-        checking(|| => finishLesson("Algebraic effects")))
-    expect(answer, "Mika completed: Algebraic effects")
+        checking(|| => finishLesson("Effects and handlers")))
+    expect(answer, "Mika completed: Effects and handlers")
 })
 ```
 
@@ -190,17 +178,9 @@ The application functions are unchanged. A test handler checks the message where
 
 The full source includes a second case using Rowan and a different lesson. Run `../target/release/osprey test examples/chapter-09 --quiet`; both cases pass. The same file's recorded output includes the live terminal message, followed by the two passing cases and the test summary.
 
-Each check proves something specific. The handler assertion checks a supplied message; by itself, it would not catch code that never reports anything. The complete-output comparison also requires the terminal message on the live Mika path. Together they check that visible report and the returned values; they do not independently establish that every test invocation reported. Keep this distinction when you design your own tests.
+The assertion inside `checking` checks the message only if `report` is called. It cannot detect a missing call. The recorded output separately checks that the live Mika run prints its report; it does not prove that every test run reports. The assertions after the calls check the returned strings.
 
-This example uses an assertion directly in the handler. It does not need a mutable recording buffer. For larger workflows, use explicit operation results and narrow test implementations, as Chapter 10 does for storage.
-
-### Choose the boundary deliberately
-
-The composition line is a small application boundary: the place that chooses implementations and starts work. It might live in `main`, an HTTP request handler, or a platform event dispatcher. Business functions describe the requests they need. The surrounding application supplies them.
-
-This does not make dependencies disappear. They are declared as operations, checked by the compiler, and implemented in handlers. A clear boundary gives readers one place to find the choices. Keep effect names specific enough to explain what capability the application is requesting.
-
-Talon Bank uses the same separation for storage and audit reporting. Its native mobile clients share application code with the web client; handlers describe commands, and each host executes its platform work. A network completion comes back as another event. This does not imply that a mobile handler can retain and resume an arbitrary suspended Osprey computation.
+Choose handlers where the application starts the work. Helpers such as `completion` can request what they need without receiving a learner or reporting service as an extra parameter.
 
 ## 5. Understand what continues after a request
 
@@ -227,9 +207,9 @@ print("${yes(submit)}\n${no(submit)}\n${cancel(submit)}")
 
 The three lines are `Lesson submitted`, `Lesson declined`, and `Submission cancelled`.
 
-At `perform Confirm.ask()`, the remaining work is the `match` that would inspect the boolean and return a string. That suspended remainder is called a **continuation**. `resume(true)` supplies the boolean and runs that remaining work; `resume(false)` runs it with the other answer.
+At `perform Confirm.ask()`, `submit` pauses before choosing a `match` branch. `resume(true)` gives it `true` and continues; `resume(false)` gives it `false` and continues. The paused work is called a **continuation**.
 
-The `cancel` arm supplies no boolean. It answers the entire handler call with a string, so the suspended `match` never runs. This explains why a control arm can return a string even though `ask` declares a boolean operation result: the boolean is what a resumed `perform` receives; the string is the answer to the surrounding handled computation.
+`cancel` skips that remaining work and returns `"Submission cancelled"` from the handler call. The two types serve different purposes: `ask` supplies a boolean when resumed, while the whole handler call returns a string.
 
 ![Resuming false runs submit's remaining match and declines the lesson; answering without resume skips the match and cancels submission.](assets/diagrams/09-control-choice.png)
 
@@ -237,9 +217,9 @@ The `cancel` arm supplies no boolean. It answers the entire handler call with a 
 
 The declaration chooses value or control behavior. Merely adding or removing `resume` text from an arm does not redefine an operation's mode. Use an ordinary value operation when all you need is an implementation that returns an answer.
 
-Current native dynamic control is **single-shot**: a captured remainder can be resumed at most once. Resumption restores the handled scope, so later requests made by the resumed work can use it again; this is called **deep** handling. Reusable or escaping continuations remain unfinished. Dynamic control is rejected on WebAssembly and mobile C ABI targets; the practical storage and platform examples in this book use value operations.
+On the native target, each paused continuation can be resumed at most once. Run this control example natively; dynamic control operations are not supported on WebAssembly or mobile C ABI targets.
 
-## 6. Recognise static selection without depending on it
+## 6. Select a handler during compilation
 
 The ordinary examples above select handlers without a `static` marker. Osprey also supports selecting a value handler during compilation. `examples/chapter-09/static.osp` keeps the same `Learner` declaration and `greeting` function, then uses:
 
@@ -251,11 +231,9 @@ let message = {
 print(message)
 ```
 
-It prints `Ready to learn, Mika?` again. Static selection removes the handled operation's runtime effect dispatch. It can still leave ordinary function calls, allocations, and computations on runtime values. Do not read `static` as a promise that the whole application runs during compilation or that arbitrary file and network work can be evaluated there.
+It prints `Ready to learn, Mika?` again. With `static`, the compiler selects the implementation so the program does not need to look up this handler at runtime. Ordinary calls and allocations may remain; this does not mean the whole program runs during compilation.
 
-The compiler applies additional restrictions to static arms. Begin with ordinary handlers until there is a reason to choose static interpretation. Handler scope, operation types, and the reason for passing a callback remain the same ideas.
-
-You may also encounter signatures such as `!Learner` or a lowercase `!e` after a return type. These describe permitted effects; the latter carries an unknown remainder in supported higher-order examples. This chapter leaves ordinary requirements inferred. General independently quantified effect rows in reusable function types are still delivery work, so the advanced notation is not needed for these application patterns.
+Static handlers have additional restrictions. Use ordinary handlers for this chapter's application and tests; the static example is just a constant answer.
 
 ## 7. Check your understanding
 
@@ -304,6 +282,6 @@ Chapter 10 adds unreliable outside work. The next question is how an effect oper
 
 ### Authoritative sources
 
-- [Algebraic Effects](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0017-AlgebraicEffects.md): callable handlers, rest-of-block scope, operation typing, value/control modes, and static interpretation. This specification also contains planned features; use [plan 0016](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0016-algebraic-effects-and-handlers.md) for delivery limits.
+- [Effects and handlers](https://github.com/Nimblesite/osprey/blob/main/docs/specs/language/0017-AlgebraicEffects.md): callable handlers, rest-of-block scope, operation typing, value/control modes, and static interpretation. This specification also contains planned features; use [plan 0016](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0016-algebraic-effects-and-handlers.md) for delivery limits.
 - [Runnable handler examples](https://github.com/Nimblesite/osprey/tree/main/examples/handlers): current execution examples and comparisons with other languages.
 - Executable source, exact output, tests, and rejection fixtures in `examples/chapter-09/`. The compiler identity and verification are recorded in `evidence.json`; the publication release remains unpinned.

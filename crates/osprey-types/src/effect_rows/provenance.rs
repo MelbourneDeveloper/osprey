@@ -267,7 +267,7 @@ pub(super) fn callable_summary(callable: &Callable) -> Summary {
                 index: *index,
                 projection: projection.clone(),
                 arguments: CallArguments::default(),
-                excluded: Requirements::new(),
+                scopes: Vec::new(),
             }]
             .into_iter()
             .collect(),
@@ -285,11 +285,32 @@ pub(super) fn merge_callable(slot: &mut Option<Callable>, incoming: Callable) {
         *slot = Some(existing);
         return;
     }
-    let mut summary = callable_summary(&existing);
-    summary.union(callable_summary(&incoming));
+    if let Some(merged) = merged_projection(&existing, &incoming) {
+        *slot = Some(merged);
+        return;
+    }
+    *slot = Some(synthetic_join(&existing, &incoming));
+}
+
+/// The synthetic callable of a join neither side of which can summarise the
+/// other: it carries both sides' summaries and returned values, so invoking
+/// it still accounts for every alternative. Implements [EFFECTS-PROVENANCE].
+fn synthetic_join(existing: &Callable, incoming: &Callable) -> Callable {
+    let mut summary = callable_summary(existing);
+    summary.union(callable_summary(incoming));
+    let (parameters, returned) = joined_shapes(existing, incoming);
+    Callable::Known(Box::new(KnownCallable {
+        parameters,
+        summary,
+        returned: returned.map(Box::new),
+    }))
+}
+
+/// The shared parameters and merged returned values of the joined callables.
+fn joined_shapes(existing: &Callable, incoming: &Callable) -> (Vec<String>, Option<Value>) {
     let mut parameters = Vec::new();
     let mut returned = None;
-    for callable in [&existing, &incoming] {
+    for callable in [existing, incoming] {
         if let Callable::Known(known) = callable {
             if parameters.is_empty() || parameters == known.parameters {
                 parameters.clone_from(&known.parameters);
@@ -299,9 +320,77 @@ pub(super) fn merge_callable(slot: &mut Option<Callable>, incoming: Callable) {
             }
         }
     }
-    *slot = Some(Callable::Known(Box::new(KnownCallable {
-        parameters,
-        summary,
-        returned: returned.map(Box::new),
-    })));
+    (parameters, returned)
+}
+
+/// Both sides project the same parameter of the same scope: alternatives over
+/// one aggregate, not independent callables.
+fn same_parameter<'a>(
+    existing: &'a Callable,
+    incoming: &'a Callable,
+) -> Option<(usize, usize, &'a [Projection], &'a [Projection])> {
+    match (existing, incoming) {
+        (
+            Callable::Parameter {
+                level,
+                index,
+                projection,
+            },
+            Callable::Parameter {
+                level: other_level,
+                index: other_index,
+                projection: other,
+            },
+        ) if level == other_level && index == other_index => {
+            Some((*level, *index, projection, other))
+        }
+        _ => None,
+    }
+}
+
+/// Two projections of the SAME parameter are control-flow alternatives over
+/// one aggregate (a union's arms, a recursion's levels). Summarise them as
+/// their common prefix plus one `Deep` step: every callable either alternative
+/// could reach is stored below that prefix, so the merge stays sound and
+/// finite where tracking both paths would grow one level per fixed-point
+/// iteration. Implements [EFFECTS-PROVENANCE].
+fn merged_projection(existing: &Callable, incoming: &Callable) -> Option<Callable> {
+    let (level, index, left, right) = same_parameter(existing, incoming)?;
+    let prefix = common_prefix(left, right);
+    (tails_deep_summarizable(left, prefix) && tails_deep_summarizable(right, prefix)).then(|| {
+        Callable::Parameter {
+            level,
+            index,
+            projection: common_deep_summary(left, prefix),
+        }
+    })
+}
+
+/// A tail a `Deep` step can summarise: structural steps traverse stored data,
+/// and `Deep` itself is already the summary. A call-shaped step (`Method`,
+/// `Returned`, `Handled`) produces a callable no storage path reaches, so
+/// summarising across one would drop its provenance.
+fn tails_deep_summarizable(path: &[Projection], prefix: usize) -> bool {
+    path.iter()
+        .skip(prefix)
+        .all(|part| part.is_structural() || matches!(part, Projection::Deep))
+}
+
+/// The length of the common prefix of two paths.
+fn common_prefix(left: &[Projection], right: &[Projection]) -> usize {
+    left.iter()
+        .zip(right.iter())
+        .take_while(|(left, right)| left == right)
+        .count()
+}
+
+/// The common structural prefix of two paths followed by one `Deep` step: the
+/// finite summary of every callable stored below it. Implements
+/// [EFFECTS-PROVENANCE].
+fn common_deep_summary(left: &[Projection], prefix: usize) -> Vec<Projection> {
+    left.iter()
+        .take(prefix)
+        .cloned()
+        .chain([Projection::Deep])
+        .collect()
 }

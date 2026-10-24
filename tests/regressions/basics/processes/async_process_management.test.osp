@@ -91,3 +91,20 @@ fn asyncProcessLifecycleCase() = {
     checkAll("process wait and cleanup state", [successExit, failureExit])
 }
 test("async processes report successful and failing exits", asyncProcessLifecycleCase)
+
+/// Handle numbers only increase, and a released handle answers -1 exactly as
+/// one that was never issued does. [BUILTIN-PROCESS-FAILURE]
+fn processHandleCase() = {
+    let first = spawnProcess("exit 0", processEventHandler) ?: -1
+    let firstExit = awaitProcess(first)
+    let second = spawnProcess("exit 0", processEventHandler) ?: -1
+    let secondExit = awaitProcess(second)
+    cleanupProcess(first)
+    cleanupProcess(second)
+    checkAll("process handles are fresh and released exactly once", [
+        first > 0, second > first, firstExit == 0, secondExit == 0,
+        awaitProcess(first) == -1, awaitProcess(second) == -1,
+        awaitProcess(999999) == -1, awaitProcess(-1) == -1, awaitProcess(0) == -1
+    ])
+}
+test("process handles only increase and released handles await to -1", processHandleCase)

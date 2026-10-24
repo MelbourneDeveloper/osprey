@@ -386,6 +386,11 @@ impl Resolver<'_> {
                     self.rewrite_expr(value, context, locals);
                 }
             }
+            Expr::Mask { effect, body, .. } => {
+                self.rewrite_effect_name(effect, context, locals);
+                self.rewrite_expr(body, context, locals);
+            }
+            Expr::Instance { effect, .. } => self.rewrite_effect_name(effect, context, locals),
             Expr::Send { channel, value } => {
                 self.rewrite_expr(channel, context, locals);
                 self.rewrite_expr(value, context, locals);
@@ -408,11 +413,12 @@ impl Resolver<'_> {
                 arms,
                 body,
                 return_clause,
+                finally,
                 ..
             } => {
                 self.rewrite_effect_name(effect, context, locals);
                 self.rewrite_expr(body, context, locals);
-                if let Some(clause) = return_clause {
+                for clause in return_clause.iter_mut().chain(finally.iter_mut()) {
                     self.rewrite_expr(clause, context, locals);
                 }
                 for arm in arms {

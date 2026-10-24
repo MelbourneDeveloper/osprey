@@ -1,0 +1,49 @@
+// A lambda passed to a generic function from a NESTED match arm keeps the
+// concrete element type `--check` derives. The inner `Success record` binds
+// the success payload by role even though the binder is renamed, so `find`'s
+// `T` unifies with `Evidence` and the closure is not left generic (#283).
+// The enclosing function reaches a static signal, so the staging pass
+// specializes it into a `__stage` copy — the renamed binder was the only thing
+// standing between that copy and a concrete closure ABI.
+// Implements [FLAVOR-ML-MATCH], [TYPE-GENERICS-FN].
+
+static effect Signal T
+    read : Unit => T
+
+type Evidence =
+    evidenceId : string
+
+type Section =
+    records : List<Evidence>
+
+type Focus =
+    picked : string
+
+find<T> : (List<T>, (T) -> bool) -> Result<T, Error>
+find (xs, p) = match xs
+    [] => Error(message = "missing")
+    [head, ...tail] => match p head
+        true => Success(value = head)
+        false => find (tail, p)
+
+detail : Unit -> Result<Evidence, Error>
+detail () =
+    focus = perform Signal<Focus>.read ()
+    match perform Signal<Result<Section, Error>>.read ()
+        Error _ => Error(message = "no section")
+        Success section => match find (section.records, \record => record.evidenceId == focus.picked)
+            Success record => Success(value = record)
+            Error _ => Error(message = "not found")
+
+runCase () =
+    handle static Signal<Focus>
+        read => Focus(picked = "b")
+    handle static Signal<Result<Section, Error>>
+        read => Success(value = Section(records = [Evidence(evidenceId = "a"), Evidence(evidenceId = "b")]))
+    match detail ()
+        Success value => value.evidenceId
+        Error message => message
+
+test "closure in a nested match arm keeps its concrete instantiation" (\() => checkAll "detail" [
+    runCase () == "b"
+])

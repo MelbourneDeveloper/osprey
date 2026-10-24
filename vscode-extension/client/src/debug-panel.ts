@@ -17,7 +17,7 @@ import {
   window,
   type DebugSession,
 } from "vscode";
-import { pathBasename } from "./profiler/flame-html";
+import { pathBasename } from "@nimblesite/lsp-profiler-ui/out/src/flame-html";
 
 /** A session that can issue DAP requests (the bit we need from DebugSession). */
 export interface DapRequester {
@@ -47,6 +47,7 @@ export interface VarInfo {
   name: string;
   value: string;
   type?: string;
+  evaluateName?: string;
 }
 
 /** Everything the panel renders at one moment. */
@@ -71,6 +72,7 @@ export interface DebugNode {
   description?: string;
   icon?: string;
   children?: DebugNode[];
+  variable?: VarInfo;
 }
 
 /** "Program" section: source, compiled binary, and live state. */
@@ -141,6 +143,7 @@ export function buildVariableNodes(variables: VarInfo[]): DebugNode[] {
   }
   return variables.map((variable) => ({
     kind: "variable",
+    variable,
     label: variable.name,
     description: variable.type
       ? `${variable.value} : ${variable.type}`
@@ -276,6 +279,8 @@ export class OspreyDebugTreeProvider implements TreeDataProvider<DebugNode> {
     const item = new TreeItem(node.label, collapsible);
     item.description = node.description;
     item.contextValue = node.kind;
+    if (node.variable) item.command = { command: "osprey.profiler.inspectVariable",
+      title: "Inspect in Profiler", arguments: [{ variable: node.variable }] };
     if (node.icon) {
       item.iconPath = new ThemeIcon(node.icon);
     }

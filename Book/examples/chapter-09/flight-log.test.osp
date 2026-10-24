@@ -14,17 +14,17 @@ fn reading(person) = handler Learner { name => person }
 let mika = reading("Mika")
 let terminal = handler Progress { report message => print(message) }
 
-let live = mika(|| => terminal(|| => finishLesson("Algebraic effects")))
+let live = mika(|| => terminal(|| => finishLesson("Effects and handlers")))
 
 test("completion returns the expected message", || => {
-    expect(live, "Mika completed: Algebraic effects")
+    expect(live, "Mika completed: Effects and handlers")
     let checking = handler Progress {
         report message =>
-            expect(message, "Mika completed: Algebraic effects")
+            expect(message, "Mika completed: Effects and handlers")
     }
     let answer = mika(|| =>
-        checking(|| => finishLesson("Algebraic effects")))
-    expect(answer, "Mika completed: Algebraic effects")
+        checking(|| => finishLesson("Effects and handlers")))
+    expect(answer, "Mika completed: Effects and handlers")
 })
 
 test("another learner uses the same application functions", || => {

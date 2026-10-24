@@ -1,8 +1,8 @@
 //! Effect row projections.
 use super::{
-    ordered_values, project_callable, project_element, project_fiber_value, project_field,
-    project_success_value, Analyzer, BTreeMap, BTreeSet, CallArguments, Callable, ParameterUse,
-    Projection, Requirement, Requirements, Summary, Value,
+    ordered_values, project_callable, project_deep, project_element, project_fiber_value,
+    project_field, project_success_value, Analyzer, BTreeMap, BTreeSet, CallArguments, Callable,
+    ParameterUse, Projection, Requirement, Requirements, Summary, Value,
 };
 
 impl Analyzer<'_> {
@@ -18,6 +18,7 @@ impl Analyzer<'_> {
                 Projection::Element => project_element(value),
                 Projection::SuccessValue => project_success_value(value),
                 Projection::FiberValue => project_fiber_value(value),
+                Projection::Deep => Some(project_deep(&value)),
             }?;
         }
         Some(value)
@@ -130,7 +131,7 @@ impl Analyzer<'_> {
                     index,
                     projection,
                     arguments,
-                    excluded: Requirements::new(),
+                    scopes: Vec::new(),
                 }]
                 .into_iter()
                 .collect(),

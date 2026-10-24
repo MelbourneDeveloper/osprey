@@ -1,0 +1,58 @@
+// A closure passed to a generic higher-order function keeps the concrete
+// instantiation its result's only use later pins: `rows(entries, Navigate)`
+// settles the let-generalized `entries` long after the lambda was inferred,
+// and the lambda's published site type must carry that resolution or codegen
+// rejects the closure as "still generic" even though `--check` accepted the
+// program. The `static` handler additionally stages `stagedSidebar` into a
+// `__stage` copy — the shape Vigil's Sidebar first failed in.
+// Implements [TYPE-GENERICS-APPLY], [TYPE-GENERICS-FN], [STAGE-POLY].
+
+type Action = Navigate
+type Node<A> = Text { content: string }
+type Row<A> = { rowKey: string, cell: Node<A> }
+
+fn step<T, U>(out, items, f, index) = match listGet(items, index) {
+    Success { item } => listAppend(out, f(item))
+    Error => out
+}
+
+fn mapOver<T, U>(items, f) = range(0, length(items)) |> fold([], fn(out, index) => step(out, items, f, index))
+
+fn label<A>(text) = Text { content: text }
+
+fn entry<A>(key, cell) = Row { rowKey: key, cell: cell }
+
+fn rows<A>(entries: List<Row<A>>, picked: A, extra: int) -> Node<A> = match picked {
+    Navigate => Text { content: "${length(entries)}:${extra}" }
+}
+
+static effect Signal<T> { read: fn() -> T }
+
+type Found = { warnings: int }
+
+fn plainSidebar() = {
+    let entries = mapOver(["startup", "files"], fn(key) => entry(key, label(key)))
+    rows(entries, Navigate, 7)
+}
+
+fn stagedSidebar() = {
+    let found = perform Signal<Found>.read()
+    let entries = mapOver(["startup", "files"], fn(key) => entry(key, label(key)))
+    rows(entries, Navigate, found.warnings)
+}
+
+fn plainCase() = match plainSidebar() {
+    Text { content } => content
+}
+
+fn stagedCase() = {
+    handle static Signal<Found> { read => Found { warnings: 2 } }
+    match stagedSidebar() {
+        Text { content } => content
+    }
+}
+
+test("a let-aliased closure keeps its pinned instantiation", fn() => checkAll("sidebars", [
+            plainCase() == "2:7",
+            stagedCase() == "2:2"
+        ]))

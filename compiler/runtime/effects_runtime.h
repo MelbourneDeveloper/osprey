@@ -29,7 +29,23 @@ int __osprey_handler_depth(void);
 int __osprey_handler_push_scoped(int operation_id, void *handler_func_ptr, void *env, int base);
 HandlerScope *__osprey_handler_suspend_scope(int operation_id);
 void __osprey_handler_restore_scope(HandlerScope *scope);
+
+// Capability identities and masking [EFFECTS-INSTANCE] [EFFECTS-MASK]. The
+// unsuffixed lookups above answer the default identity.
+int64_t __osprey_instance_new(void);
+int __osprey_handler_push_in(int operation_id, int64_t instance, void *handler_func_ptr,
+                             void *env, int base);
+int __osprey_handler_mask(int operation_id, int64_t instance);
+void *__osprey_handler_lookup_in(int operation_id, int64_t instance);
+void *__osprey_handler_lookup_env_in(int operation_id, int64_t instance);
+HandlerScope *__osprey_handler_suspend_scope_in(int operation_id, int64_t instance);
 void __osprey_handler_stack_cleanup(void);
+
+// `finally` clauses [EFFECTS-FINALIZATION]: a cleanup function consumes its env.
+typedef void (*OspFinalizer)(void *env);
+void __osprey_finalizer_push(OspFinalizer run, void *env);
+void __osprey_finalizer_finish(void);
+void __osprey_finalizer_unwind(void);
 
 // Operand kinds in an operation mailbox. A MANAGED slot holds a heap pointer
 // the mailbox OWNS — the performer hands over its +1 at suspend and retiring

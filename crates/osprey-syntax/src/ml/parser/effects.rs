@@ -1,6 +1,6 @@
 //! ML effects parsing.
 use super::{
-    HandleHead, MlBinder, MlExpr, MlHandleArm, MlParam, Parser, Stage, TokKind,
+    HandleHead, MlBinder, MlClauses, MlExpr, MlHandleArm, MlParam, Parser, Stage, TokKind,
     STATIC_STAGE_KEYWORD,
 };
 
@@ -47,6 +47,33 @@ impl Parser<'_> {
         }
     }
 
+    /// `mask Effect` + an indented body. Implements [EFFECTS-MASK].
+    pub(in crate::ml) fn mask_expr(&mut self) -> MlExpr {
+        let pos = self.pos();
+        self.advance(); // `mask`
+        let first = self.ident().unwrap_or_default();
+        let effect = self.instantiated_effect(first);
+        if !matches!(self.peek(), TokKind::Indent) {
+            self.error("expected an indented body after `mask Effect`");
+        }
+        MlExpr::Mask {
+            effect,
+            body: Box::new(self.body_after_eq()),
+            pos,
+        }
+    }
+
+    /// `instance Effect` — a fresh capability. Implements [EFFECTS-INSTANCE].
+    pub(in crate::ml) fn instance_expr(&mut self) -> MlExpr {
+        let pos = self.pos();
+        self.advance(); // `instance`
+        let first = self.ident().unwrap_or_default();
+        MlExpr::Instance {
+            effect: self.instantiated_effect(first),
+            pos,
+        }
+    }
+
     /// `handler Effect` + indented arms — the handler ITSELF, with no region
     /// attached: a value that can be bound, passed and called. Calling it with a
     /// zero-argument computation runs that computation under these arms.
@@ -57,7 +84,7 @@ impl Parser<'_> {
             stage: head.stage,
             effect: head.effect,
             arms: head.arms,
-            return_clause: head.return_clause,
+            clauses: head.clauses,
             pos: head.pos,
         }
     }
@@ -79,7 +106,7 @@ impl Parser<'_> {
         let first = self.ident().unwrap_or_default();
         let effect = self.instantiated_effect(first);
         let mut arms = Vec::new();
-        let mut return_clause = None;
+        let mut clauses = MlClauses::default();
         if self.eat(&TokKind::Indent) {
             while !self.at_block_end() {
                 self.skip_separators();
@@ -88,20 +115,7 @@ impl Parser<'_> {
                 }
                 let before = self.i;
                 let arm = self.handle_arm();
-                if arm.operation == "return" {
-                    if return_clause.is_some() || arm.params.len() != 1 {
-                        self.error_at(
-                            arm.pos,
-                            "a handler permits one return clause with one parameter",
-                        );
-                    }
-                    return_clause = Some(Box::new(MlExpr::Lambda {
-                        params: arm.params.into_iter().map(MlParam::Named).collect(),
-                        uncurried: true,
-                        body: Box::new(arm.body),
-                        pos: arm.pos,
-                    }));
-                } else {
+                if let Some(arm) = self.completion_clause(arm, &mut clauses) {
                     arms.push(arm);
                 }
                 if self.i == before {
@@ -114,8 +128,47 @@ impl Parser<'_> {
             stage,
             effect,
             arms,
-            return_clause,
+            clauses,
             pos,
+        }
+    }
+
+    /// File a `return x => …` or `finally => …` line into `clauses`; any other
+    /// arm comes back to the caller. Each clause appears at most once; `return`
+    /// takes one parameter and `finally` none. Implements
+    /// [EFFECTS-HANDLER-ARMS] and [EFFECTS-FINALIZATION].
+    fn completion_clause(
+        &mut self,
+        arm: MlHandleArm,
+        clauses: &mut MlClauses,
+    ) -> Option<MlHandleArm> {
+        match arm.operation.as_str() {
+            "return" => {
+                if clauses.return_clause.is_some() || arm.params.len() != 1 {
+                    self.error_at(
+                        arm.pos,
+                        "a handler permits one return clause with one parameter",
+                    );
+                }
+                clauses.return_clause = Some(Box::new(MlExpr::Lambda {
+                    params: arm.params.into_iter().map(MlParam::Named).collect(),
+                    uncurried: true,
+                    body: Box::new(arm.body),
+                    pos: arm.pos,
+                }));
+                None
+            }
+            "finally" => {
+                if clauses.finally.is_some() || !arm.params.is_empty() {
+                    self.error_at(
+                        arm.pos,
+                        "a handler permits one finally clause with no parameter",
+                    );
+                }
+                clauses.finally = Some(Box::new(arm.body));
+                None
+            }
+            _ => Some(arm),
         }
     }
 

@@ -34,6 +34,7 @@ impl Checker {
             perform_tys: Vec::new(),
             perform_actual_tys: Vec::new(),
             handler_tys: Vec::new(),
+            capability_sites: Vec::new(),
             fn_typarams: HashMap::new(),
             declared_effect_rows: HashMap::new(),
             current_fn_typarams: HashMap::new(),

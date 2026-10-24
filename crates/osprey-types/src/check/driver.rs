@@ -27,15 +27,17 @@ pub fn check_program_exports(program: &Program, exports: &[&str]) -> Vec<TypeErr
 /// backend always receives the best-effort resolved shape of every declaration.
 #[must_use]
 pub fn infer_program(program: &Program) -> crate::info::ProgramTypes {
-    publish_program(program, checked_program(program), true)
+    let program = crate::prelude::with_prelude(program);
+    publish_program(&program, checked_program(&program), true)
 }
 /// Diagnostics need one checked solve and no backend call elaboration.
 pub(crate) fn infer_checked(
     program: &Program,
 ) -> Result<crate::info::ProgramTypes, Vec<TypeError>> {
-    let checker = checked_program(program);
+    let program = crate::prelude::with_prelude(program);
+    let checker = checked_program(&program);
     if checker.errors.is_empty() {
-        Ok(publish_program(program, checker, false))
+        Ok(publish_program(&program, checker, false))
     } else {
         Err(checker.errors)
     }

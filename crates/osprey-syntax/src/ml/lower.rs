@@ -24,9 +24,9 @@
 //!   and layout blocks/interpolation to their canonical expression nodes.
 
 use super::cst::{
-    MlArm, MlEffectOp, MlEffectRef, MlExpr, MlExternParam, MlField, MlHandleArm, MlImport,
-    MlImportSelection, MlItem, MlModuleKind, MlNamespaceName, MlParam, MlPattern, MlSignatureItem,
-    MlSymbolPath, MlType, MlTypeField, MlTypeParam, MlVariance, MlVariant,
+    MlArm, MlClauses, MlEffectOp, MlEffectRef, MlExpr, MlExternParam, MlField, MlHandleArm,
+    MlImport, MlImportSelection, MlItem, MlModuleKind, MlNamespaceName, MlParam, MlPattern,
+    MlSignatureItem, MlSymbolPath, MlType, MlTypeField, MlTypeParam, MlVariance, MlVariant,
 };
 use crate::strings::{lower_interpolation, unquote};
 use osprey_ast::{

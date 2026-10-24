@@ -1,0 +1,14 @@
+/// A fold seeded with an empty `Map()` and stepped by an inline lambda learns
+/// the map's value type only from the lambda body. The lambda's accumulator
+/// parameter used to arrive untagged, so `mapGet(m, p) ?: []` read the stored
+/// list as an integer word and codegen rejected the `?:` ("match arms disagree
+/// on type"). Implements [BUILTIN-LIST-FOLD] and [PATTERN-RESULT-DEFAULT].
+
+fn grouped(paths) = foldList(paths, Map(), fn(m, p) => mapSet(m, p, listAppend(mapGet(m, p) ?: [], p)))
+
+let inline = foldList(["x", "y", "x"], Map(), fn(m, p) => mapSet(m, p, listAppend(mapGet(m, p) ?: ["seen"], p)))
+let joined = foldList(["a", "b", "a"], Map(), fn(m, p) => mapSet(m, p, "${mapGet(m, p) ?: ""}${p}"))
+
+print(join(mapGet(grouped(["a", "b", "a"]), "a") ?: [], ","))
+print(join(mapGet(inline, "x") ?: [], ","))
+print(mapGet(joined, "a") ?: "")

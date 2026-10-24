@@ -14,6 +14,8 @@ tests/core/collections/nested_generic_collections_fibers.test.osp fiber concurre
 tests/core/collections/nested_generic_collections_fibers.test.ospml fiber concurrency
 tests/effects/multiplicity/multiplicity.test.osp a continuation for `Charge.charge` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
 tests/effects/multiplicity/multiplicity.test.ospml a continuation for `Charge.charge` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
+tests/effects/resume/answer_transform.test.osp a continuation for `ControlAsk.value` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
+tests/effects/resume/answer_transform.test.ospml a continuation for `ControlAsk.value` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
 tests/effects/resume/resume_abort_early_exit.test.osp a continuation for `Stop.check` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
 tests/effects/resume/resume_abort_early_exit.test.ospml a continuation for `Stop.check` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
 tests/effects/resume/resume_error_policies.test.osp a continuation for `ResumeFallback.recover` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
@@ -26,6 +28,8 @@ tests/effects/resume/resume_unit_markers.test.osp a continuation for `Trace.mark
 tests/effects/resume/resume_unit_markers.test.ospml a continuation for `Trace.mark` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
 tests/effects/resume/resume_value_rewrite.test.osp a continuation for `Supply.next` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
 tests/effects/resume/resume_value_rewrite.test.ospml a continuation for `Supply.next` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
+tests/effects/scope/finalizers_masks_instances.test.osp a continuation for `Stop.halt` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
+tests/effects/scope/finalizers_masks_instances.test.ospml a continuation for `Stop.halt` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
 tests/modules/ml_layout_depth.test.osp a continuation for `depth::Trunk::Branch::Bud::Sap.draw` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
 tests/modules/ml_layout_depth.test.ospml a continuation for `depth::Trunk::Branch::Bud::Sap.draw` (wasm32 acquires one-shot continuations when the stack-switching proposal lands)
 tests/modules/module_composition.test.osp fiber concurrency

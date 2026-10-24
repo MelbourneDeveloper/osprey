@@ -21,18 +21,27 @@ pub(crate) fn try_inline(
     named: &[NamedArgument],
     rest: &[crate::curry::ArgGroup<'_>],
 ) -> Result<Option<Value>> {
-    let Some((params, body, _)) = inline_definition(cg, name)? else {
+    // Re-entering a generic already being inlined is the mutual-recursion
+    // cycle (`all` → `kid` → `all`): inlining cannot unwind it, but an emitted
+    // instantiation can — the callee is specialised at THIS call's argument
+    // representations, and the cycle closes on the symbol `monofn` registers
+    // before lowering the body (#278).
+    if cg.inlining.contains(name) {
+        if rest.is_empty() {
+            if let Some((params, body, _)) = cg.fn_defs.get(name).cloned() {
+                return specialize_at(cg, name, &params, &body, args, named);
+            }
+        }
+        return Err(recursive_without_signature(name));
+    }
+    let Some((params, body, _)) = cg.fn_defs.get(name).cloned() else {
         return Ok(None);
     };
     if crate::monofn::calls_itself(name, &body) {
         if !rest.is_empty() {
             return Ok(None);
         }
-        let exprs = pair_args(&params, args, named)
-            .into_iter()
-            .map(|(_, a)| a)
-            .collect::<Vec<_>>();
-        return crate::monofn::specialize(cg, name, &params, &body, &exprs).map(Some);
+        return specialize_at(cg, name, &params, &body, args, named);
     }
     cg.cov_hit_inline_fn(name);
     // Caller arguments precede both the lexical barrier and recursion guard.
@@ -40,14 +49,29 @@ pub(crate) fn try_inline(
     inline_body(cg, name, &params, &body, lowered, rest).map(Some)
 }
 
-fn inline_definition(cg: &Codegen, name: &str) -> Result<Option<crate::builder::LambdaDef>> {
-    if cg.inlining.contains(name) {
-        return Err(crate::error::CodegenError::unsupported(format!(
-            "`{name}` is recursive but its signature is not fully inferred; \
-             annotate its parameters and return type so it is emitted as a real function"
-        )));
-    }
-    Ok(cg.fn_defs.get(name).cloned())
+/// Emit (or reuse) the instantiation `name` selected by this call's value
+/// arguments, then call it. Shared by direct self-recursion and by the
+/// mutual-recursion re-entry above.
+fn specialize_at(
+    cg: &mut Codegen,
+    name: &str,
+    params: &[Parameter],
+    body: &Expr,
+    args: &[Expr],
+    named: &[NamedArgument],
+) -> Result<Option<Value>> {
+    let exprs = pair_args(params, args, named)
+        .into_iter()
+        .map(|(_, a)| a)
+        .collect::<Vec<_>>();
+    crate::monofn::specialize(cg, name, params, body, &exprs).map(Some)
+}
+
+fn recursive_without_signature(name: &str) -> crate::error::CodegenError {
+    crate::error::CodegenError::unsupported(format!(
+        "`{name}` is recursive but its signature is not fully inferred; \
+         annotate its parameters and return type so it is emitted as a real function"
+    ))
 }
 
 fn inline_body(
@@ -161,6 +185,15 @@ fn lower_inline_arg(
     } else {
         relaid_placeholder(cg, v, declared)?
     };
+    // The value an inlined body pattern-matches must know its own INSTANCE of
+    // a generic union: the literal alone carries only the erased layout, so a
+    // `Tree<string>` destructured inside `all@string` bound its payload as the
+    // raw storage word and the string read back as an int (#278). The declared
+    // parameter type — resolved per call site by the checker's application —
+    // is that instance; an emitted function's parameters get the same through
+    // [`crate::monofn`]'s `ParamSig`.
+    let mut v = v;
+    v.inferred_type = v.inferred_type.or_else(|| declared.cloned());
     let function_type = v
         .inferred_type
         .as_ref()
@@ -209,8 +242,10 @@ fn pair_args<'a>(
 }
 
 /// When an argument is a bare name that is a callee (a function/builtin) rather
-/// than a bound value or a nullary constructor, return that name so the
-/// parameter can redirect calls to it.
+/// than a bound value or a nullary constructor, return the callee it stands for
+/// so the parameter can redirect calls to it. A forwarded parameter of an
+/// enclosing inline is itself an alias: it resolves to that callee, not to its
+/// own name, which no symbol defines (#280).
 fn alias_target(cg: &Codegen, arg: &Expr) -> Option<String> {
     match arg {
         Expr::Identifier(n)
@@ -218,7 +253,7 @@ fn alias_target(cg: &Codegen, arg: &Expr) -> Option<String> {
                 && !cg.is_ctor(n)
                 && (cg.lambda_def(n).is_some() || !value_binding(cg, n)) =>
         {
-            Some(n.clone())
+            Some(cg.call_aliases.get(n).cloned().unwrap_or_else(|| n.clone()))
         }
         _ => None,
     }

@@ -102,12 +102,32 @@ impl Checker {
             Some(te) => self.annotation_type(te, &typarams, te.position),
             None => self.ctx.fresh(),
         };
-        let ordered = type_params
+        let ordered: Vec<Type> = type_params
             .iter()
             .filter_map(|p| typarams.get(&p.name).cloned())
             .collect();
         let _ = self.fn_typarams.insert(name.to_string(), typarams);
+        let fun_ty = Type::fun(params.clone(), ret.clone());
         self.publish_signature(name, parameters, params, ret, env);
+        // A declared binder closes the signature, so the scheme is quantified
+        // HERE — at collection — not only after the body is inferred. Bodies
+        // are inferred in file order, so a caller in an earlier file would
+        // otherwise share one instantiation with every later call site
+        // (#277), and a mutually recursive group would chain its binders
+        // through the still-monomorphic sibling (#278). Body inference keeps
+        // the very same variables via `fn_sigs`, and the end-of-body
+        // generalization republishes the constrained scheme as before.
+        // Implements [TYPE-GENERICS-FN].
+        if !ordered.is_empty() {
+            let vars = ordered
+                .iter()
+                .filter_map(|ty| match ty {
+                    Type::Var(v) => Some(*v),
+                    _ => None,
+                })
+                .collect();
+            env.insert(name, Scheme::poly(vars, fun_ty));
+        }
         env.declare_type_params(name, ordered);
     }
 }

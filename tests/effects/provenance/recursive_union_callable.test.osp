@@ -1,0 +1,56 @@
+/// A closure stored in a recursive union and recovered through `fold` and
+/// `listGet` keeps its effect provenance: the collected binding stays callable
+/// end to end (#275). A field that writes its effect row is trusted where the
+/// value's own provenance is not tracked, here once each `Control` has crossed
+/// `map`, `toList` and `mapList`. Implements [EFFECTS-PROVENANCE] and
+/// [EFFECTS-FIELD-ROWS].
+type Node<A> =
+    Label { content: string }
+    | Stack { children: List<Node<A>> }
+    | Button { label: string, action: A }
+    | Field { value: string, edit: (string) -> A }
+
+type Binding<A> =
+    Tap { action: A }
+    | Edit { apply: (string) -> A }
+
+type Action =
+    Refresh
+    | SetQuery { text: string }
+
+fn collect<A>(found, node) -> List<Binding<A>> = match node {
+    Label(_) => found
+    Stack { children } => range(0, length(children)) |> fold(found, fn(acc, index) => collectAt(acc, children, index))
+    Button(_, action) => listAppend(found, Tap { action: action })
+    Field(_, edit) => listAppend(found, Edit { apply: edit })
+}
+
+fn collectAt<A>(found, children, index) -> List<Binding<A>> = match listGet(children, index) {
+    Success { value } => collect(found, value)
+    Error(_) => found
+}
+
+fn resolve<A>(binding, value) -> A = match binding {
+    Tap { action } => action
+    Edit { apply } => apply(value)
+}
+
+fn describe(action) = match action {
+    Refresh => "refresh"
+    SetQuery { text } => "query:${text}"
+}
+
+fn screen(query) = Stack { children: [Label { content: "Vigil" }, Button { label: "Refresh", action: Refresh }, Field { value: query, edit: fn(text) => SetQuery { text: text } }] }
+
+fn dispatch(index, text) = match listGet(collect([], screen("")), index) {
+    Success { value } => describe(resolve(value, text))
+    Error(_) => "rejected"
+}
+
+type Control = { label: string, press: fn(string) -> string ![] }
+
+fn controls() = range(0, 2) |> map(fn(n) => Control { label: "c${toString(n)}", press: fn(text) => text + "!" }) |> toList
+
+fn pressed() = join(mapList(controls(), fn(control) => control.press(control.label)), ",")
+
+print("${dispatch(1, "codesign")} ${pressed()}")

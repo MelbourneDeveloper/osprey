@@ -368,3 +368,22 @@ fn list_patterns_lower_to_canonical_list_pattern() {
         }
     }
 }
+
+#[test]
+fn a_wildcard_payload_lowers_to_the_default_wildcard() {
+    // ML `Ctor _` binds nothing, like Default `Ctor(_)`: both lower to a
+    // wildcard sub-pattern, so the payload is never loaded ([FLAVOR-IR-EQUIV]).
+    let s = ml_one_stmt("r =\n    match json\n        JsonBool _ => 1\n        _ => 0\n");
+    if let Stmt::Let {
+        value: Expr::Match { arms, .. },
+        ..
+    } = s
+    {
+        assert!(matches!(
+            &arms[0].pattern,
+            Pattern::Constructor { sub_patterns, .. } if sub_patterns == &vec![Pattern::Wildcard]
+        ));
+    } else {
+        panic!("expected a match binding, got {s:?}");
+    }
+}

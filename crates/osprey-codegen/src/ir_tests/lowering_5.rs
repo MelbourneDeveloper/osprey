@@ -385,3 +385,77 @@ fn a_mixed_handler_dispatcher_continues_by_guaranteed_tail_call() {
         "the dispatcher must re-enter itself with a guaranteed tail call, saw: {reentries:?}"
     );
 }
+
+/// A `match` joining an object literal (`__obj_N`) with a row-typed parameter
+/// (`__row#…`) names one physical block twice. The join must keep an owner,
+/// or field access on the merged value guesses a record by field name: a
+/// hard error here, and another record's slots read silently once a second
+/// record declares the field (#272).
+#[test]
+fn match_join_keeps_one_owner_for_one_row_layout() {
+    let ir = module(
+        "type Region = { region: string, revision: int, json: string }\n\
+         fn describe(next) = \"${next.value} ${next.revision}\"\n\
+         fn pick(cached, flag) = describe(match flag { true => { revision: 1, value: \"a\" } false => cached })\n\
+         fn named(next) = Region { region: \"r\", revision: next.revision, json: next.value }\n\
+         fn relabel(cached, flag) = named(match flag { true => { revision: 2, value: \"b\" } false => cached })\n\
+         print(pick({ revision: 9, value: \"c\" }, false))\n\
+         print(relabel({ revision: 8, value: \"d\" }, true).json)\n",
+    );
+    // Each body writes slot N once building the literal arm and must read it
+    // back through the same row block after the join, never through Region's.
+    for header in [
+        "define internal i8* @pick(i8* %$p0, i1 %$p1)",
+        "define internal i8* @relabel(i8* %$p0, i1 %$p1)",
+    ] {
+        let body = function_body(&ir, header);
+        for slot in ["i32 0, i32 1", "i32 0, i32 2"] {
+            let row = body
+                .lines()
+                .filter(|line| {
+                    line.contains("getelementptr { i64, i64, i8* }") && line.ends_with(slot)
+                })
+                .count();
+            assert_eq!(row, 2, "{header} must write and read row {slot}:\n{body}");
+        }
+    }
+}
+
+/// A Result that a match takes apart on the spot is never built: matching a
+/// `listGet` branches on the bounds check, reads the element only in bounds,
+/// and binds the reason as a constant. A member scan is a loop of these, so a
+/// box per step made every JSON field lookup allocate once per member.
+#[test]
+fn matching_a_list_lookup_allocates_no_result() {
+    let ir = module(
+        "fn pick(items, index) = match listGet(items, index) {\n\
+             Success { value } => value\n\
+             Error { message } => length(message)\n\
+         }\n\
+         fn named(items, index) = match listGet(items, index) {\n\
+             Success { value } => value\n\
+             Error => \"none\"\n\
+         }\n\
+         print(toString(pick([1, 2, 3], 1)))\n\
+         print(named([\"a\"], 4))\n",
+    );
+    for header in [
+        "define internal i64 @pick(i8* %$p0, i64 %$p1)",
+        "define internal i8* @named(i8* %$p0, i64 %$p1)",
+    ] {
+        let body = function_body(&ir, header);
+        assert!(
+            !body.contains("@osp_alloc"),
+            "{header} boxed a Result:\n{body}"
+        );
+        let bounds = body.find("@osprey_list_in_bounds").unwrap_or(usize::MAX);
+        let read = body.find("@osprey_list_get").unwrap_or(0);
+        let branch = body[bounds.min(body.len())..]
+            .find("br i1")
+            .map(|at| at + bounds);
+        assert!(
+            branch.is_some_and(|at| at < read),
+            "{header} reads before the bounds branch:\n{body}"
+        );
+    }
+}

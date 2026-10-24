@@ -1380,4 +1380,99 @@ fn unknown_declared_effect_is_rejected() {
     );
 }
 
+/// The recursive-aggregate walk of #275: a closure stored in a union is
+/// collected through `fold` over the children list, projected back out with
+/// `listGet`, and invoked. [EFFECTS-PROVENANCE] requires the analysis of such
+/// an aggregate to reach a finite fixed point, so the stored closure's effect
+/// provenance survives the whole traversal instead of being widened away.
+const RECURSIVE_UNION_WALK: &str = "effect Log { write: fn(string) -> string }\n\
+    type Node = Stack { children: List<Node> } | Field { edit: fn(string) -> string }\n\
+    type Binding = Edit { apply: fn(string) -> string }\n\
+    fn collect(found, node) = match node {\n\
+        Stack { children } => range(0, length(children)) |> fold(found, fn(acc, index) => match listGet(children, index) {\n\
+            Success { value } => collect(acc, value)\n\
+            Error(_) => acc\n\
+        })\n\
+        Field { edit } => listAppend(found, Edit { apply: edit })\n\
+    }\n\
+    fn dispatch(text) = match listGet(collect([], screen(\"\")), 0) {\n\
+        Success { value } => match value { Edit { apply } => apply(text) }\n\
+        Error(_) => \"rejected\"\n\
+    }\n";
+
+fn recursive_union_program(screen: &str, main: &str) -> String {
+    format!("{RECURSIVE_UNION_WALK}{screen}\n{main}\n")
+}
+
+const PURE_SHALLOW_SCREEN: &str =
+    "fn screen(query) = Stack { children: [Field { edit: fn(text) => \"query:\" + text }] }";
+
+const EFFECTFUL_SHALLOW_SCREEN: &str =
+    "fn screen(query) = Stack { children: [Field { edit: fn(text) => perform Log.write(text) }] }";
+
+const PRINT_MAIN: &str = "fn main() = print(dispatch(\"codesign\"))";
+
+#[test]
+fn recursive_union_closure_keeps_its_provenance() {
+    assert_accepted(&recursive_union_program(PURE_SHALLOW_SCREEN, PRINT_MAIN));
+}
+
+#[test]
+fn effectful_closure_in_a_shallow_recursive_union_fails_closed() {
+    assert_rejected_with(
+        &recursive_union_program(EFFECTFUL_SHALLOW_SCREEN, PRINT_MAIN),
+        &["Log.write"],
+    );
+}
+
+#[test]
+fn a_handler_discharges_a_stored_recursive_union_closure() {
+    assert_accepted(&recursive_union_program(
+        EFFECTFUL_SHALLOW_SCREEN,
+        "fn main() = {\n\
+    handle Log { write message => \"logged\" }\n\
+    print(dispatch(\"codesign\"))\n\
+}",
+    ));
+}
+
+/// Forty `Stack` levels exceed the provenance depth budget, so the deep
+/// aggregate is summarized fail-closed: an effectful closure nested that deep
+/// and invoked at entry must never be treated as pure. Acceptance would only
+/// be correct if the analysis could prove purity at that depth.
+#[test]
+fn effectful_closure_deep_in_a_recursive_union_fails_closed() {
+    assert_rejected_with(
+        &recursive_union_program(
+            &format!(
+                "fn screen(query) = {}Field {{ edit: fn(text) => perform Log.write(text) }} {}",
+                "Stack { children: [".repeat(40),
+                "] }".repeat(40)
+            ),
+            PRINT_MAIN,
+        ),
+        &["provenance cannot be proven"],
+    );
+}
+
+/// Mutually recursive generics whose `fold` accumulator carries the callback's
+/// return feed a function's return provenance back into itself. One fixed-point
+/// pass is then a single unrolling of the recursion, not a complete answer;
+/// `fold_value` stabilises that contribution so the iteration terminates
+/// instead of oscillating between the unrolled levels (the #275 analysis
+/// hung here at 100% CPU). [EFFECTS-PROVENANCE]
+#[test]
+fn mutually_recursive_fold_accumulators_reach_a_fixed_point() {
+    assert_accepted(
+        "type Tree = Leaf { item: int } | Node { kids: List<Tree> }\n\
+         fn kid(out, kids, index) = listConcat(out, all(listGet(kids, index) ?: Node { kids: [] }))\n\
+         fn all(tree) = match tree {\n\
+             Leaf { item } => [item]\n\
+             Node { kids } => range(0, length(kids)) |> fold([], fn(out, index) => kid(out, kids, index)) }\n\
+         fn main() = print(toString(listLength(all(Node { kids: [Leaf { item: 1 }, Leaf { item: 2 }] }))))",
+    );
+}
+
 mod gpu;
+
+mod curried_callbacks;
