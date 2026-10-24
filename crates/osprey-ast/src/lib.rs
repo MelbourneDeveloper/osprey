@@ -7,6 +7,7 @@
 
 pub mod canonical;
 mod doc;
+mod documented;
 pub mod effect_name;
 pub mod freevars;
 mod generics;
@@ -26,6 +27,7 @@ mod stage_rows;
 pub mod symbol;
 mod visit;
 pub use doc::{DocComment, DocExample, DocScope};
+pub use documented::Documented;
 pub use generics::{EffectRef, TypeParam, Variance};
 pub use handler_value::{handler_function, handler_value, Clauses};
 pub use multiplicity::{

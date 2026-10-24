@@ -133,6 +133,22 @@ Docs do not attach separately to variants, fields, or parameters. A parameter
 is documented in its function's `# Parameters` section, and hovering the
 parameter shows that entry ([LSP-HOVER-PARAM-DOCS](../tooling/0020-LanguageServerAndEditors.md)).
 
+### Exported declarations `[DOC-EXPORT-REQUIRED]`
+
+An export is a library's public API, so it must be documented. `--check`,
+`--run` and the language server report the `undocumented-export` warning for:
+
+- an `export`ed function, value, type, effect, extern, signature or module
+  with no outer documentation comment (a module may use an inner `//!` comment
+  instead), and
+- a module that exports anything but has neither an outer nor an inner
+  comment.
+
+The warning names the declaration with its module path, for example
+`exported function `Api::double` has no documentation comment`. A documented
+type covers its variants and fields, which take no documentation of their
+own. Private declarations are not reported.
+
 ### Effect operations `[DOC-EFFECT-OP]`
 
 An effect operation is the one nested form that carries its own documentation.

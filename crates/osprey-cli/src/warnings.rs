@@ -21,7 +21,10 @@ type Listing = Vec<(String, String)>;
 
 /// Compiler warnings share one terminal listing and never affect exit status.
 pub(crate) fn collect(input: &CompilationInput) -> Vec<TypeWarning> {
-    of(input.program(), &|symbol| input.exported_member(symbol))
+    let mut warnings = of(input.program(), &|symbol| input.exported_member(symbol));
+    warnings.extend(input.undocumented_exports());
+    in_source_order(&mut warnings);
+    warnings
 }
 
 /// The warnings of `program`, holding the signatures `contract` names fixed.
@@ -37,12 +40,16 @@ fn of(program: &osprey_ast::Program, contract: &dyn Fn(&str) -> bool) -> Vec<Typ
             .into_iter()
             .map(|symbol| symbol.warning),
     );
+    in_source_order(&mut warnings);
+    warnings
+}
+
+fn in_source_order(warnings: &mut [TypeWarning]) {
     warnings.sort_by_key(|warning| {
         warning
             .position
             .map(|position| (position.line, position.column))
     });
-    warnings
 }
 
 /// Print `warnings` to stderr. A clean build prints nothing.
@@ -53,11 +60,7 @@ pub(crate) fn report(input: &CompilationInput, warnings: &[TypeWarning]) {
         message: warning.message.clone(),
         position: Some(warning.position),
     }));
-    warnings.sort_by_key(|warning| {
-        warning
-            .position
-            .map(|position| (position.line, position.column))
-    });
+    in_source_order(&mut warnings);
     if let Some(text) = render(input, &warnings) {
         eprintln!("{text}");
     }

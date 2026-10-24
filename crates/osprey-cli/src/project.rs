@@ -143,6 +143,33 @@ impl CompilationInput {
         }
     }
 
+    /// Every undocumented export, read from each source as written: project
+    /// assembly flattens modules away, so the flattened program cannot say
+    /// what was exported. Positions land in the flattened space, like every
+    /// other warning's ([DOC-EXPORT-REQUIRED]).
+    pub(crate) fn undocumented_exports(&self) -> Vec<osprey_types::TypeWarning> {
+        let CompilationUnit::Project(project) = &self.unit else {
+            return osprey_types::undocumented_exports(self.program());
+        };
+        project
+            .sources
+            .iter()
+            .flat_map(|source| {
+                let parsed =
+                    osprey_syntax::parse_program_with_flavor(&source.source, source.flavor);
+                osprey_types::undocumented_exports(&parsed.program)
+                    .into_iter()
+                    .map(|mut warning| {
+                        if let Some(position) = &mut warning.position {
+                            position.line = source.global_line(position.line);
+                        }
+                        warning
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
     /// All original source text used to discover project-wide link directives.
     pub(crate) fn source(&self) -> &str {
         &self.source

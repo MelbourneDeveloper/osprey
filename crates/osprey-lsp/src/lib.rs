@@ -34,6 +34,7 @@ pub mod testing;
 #[path = "../../testkit.rs"]
 mod testkit;
 pub mod text;
+mod undocumented;
 pub(crate) mod warning_actions;
 pub(crate) mod wire;
 pub mod workspace;

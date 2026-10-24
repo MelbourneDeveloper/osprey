@@ -301,7 +301,7 @@ fn an_exported_module_members_signature_is_never_reported_redundant() {
         "contract-warnings",
         &[
             ("osprey.toml", "[project]\nname = \"exp\"\nsource_roots = [\"src\", \"main.ospml\"]\ndefault_namespace = \"app\"\nentry = \"main.ospml\"\n"),
-            ("src/flow.ospml", "namespace lib\n\nmodule Flow\n    export shout : string -> string\n    shout text = loud text\n    loud : string -> string\n    loud text = text + \"!\"\n"),
+            ("src/flow.ospml", "namespace lib\n\n(** Loud text. *)\nmodule Flow\n    (** `text`, shouted. *)\n    export shout : string -> string\n    shout text = loud text\n    loud : string -> string\n    loud text = text + \"!\"\n"),
             ("main.ospml", "namespace app\n\nimport lib::Flow\n\nprint (Flow::shout \"hi\")\n"),
         ],
     );
@@ -313,4 +313,32 @@ fn an_exported_module_members_signature_is_never_reported_redundant() {
         messages,
         ["redundant type signature on `lib::Flow::loud`: inference derives `(string) -> string` without it"]
     );
+}
+
+#[test]
+fn an_undocumented_export_is_located_in_the_file_that_wrote_it() {
+    // [DOC-EXPORT-REQUIRED] Assembly flattens modules away, so the warning is
+    // read from each source as written and still resolves to its own file
+    // and line, here the second of two sources.
+    let root = temp_project(
+        "undocumented-exports",
+        &[
+            ("osprey.toml", "[project]\nname = \"doc\"\nsource_roots = [\"src\", \"main.ospml\"]\ndefault_namespace = \"app\"\nentry = \"main.ospml\"\n"),
+            ("src/flow.ospml", "namespace lib\n\n(** Loud text. *)\nmodule Flow\n    export shout text = text + \"!\"\n"),
+            ("main.ospml", "namespace app\n\nimport lib::Flow\n\nprint (Flow::shout \"hi\")\n"),
+        ],
+    );
+    let input = CompilationInput::load_project(root.to_string_lossy().as_ref()).expect("assembles");
+    let warnings = input.undocumented_exports();
+    std::fs::remove_dir_all(&root).expect("cleanup");
+    let [warning] = warnings.as_slice() else {
+        panic!("one warning expected: {warnings:?}");
+    };
+    assert_eq!(
+        warning.message,
+        "exported function `Flow::shout` has no documentation comment"
+    );
+    let (file, line, _) = input.location(warning.position.expect("positioned"));
+    assert!(file.ends_with("flow.ospml"), "{file}");
+    assert_eq!(line, 5);
 }

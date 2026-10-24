@@ -149,6 +149,15 @@ impl SourceMetadata {
                     .saturating_add(1)
             })
     }
+
+    /// Map this source's one-based local line into the flattened position
+    /// space: the inverse of [`Self::local_line`].
+    #[must_use]
+    pub fn global_line(&self, local: u32) -> u32 {
+        local
+            .saturating_add(self.global_line_start)
+            .saturating_sub(1)
+    }
 }
 
 /// One fully assembled project ready for the shared checker and backend.
