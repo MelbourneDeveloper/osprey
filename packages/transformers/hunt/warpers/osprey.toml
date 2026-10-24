@@ -1,0 +1,6 @@
+[project]
+name = "transformers-hunt-warpers"
+source_roots = ["../..", "."]
+python_sources = ["../../src/math.py", "../../src/lists.py", "../../src/logits_process.py", "warpers.py"]
+default_namespace = "transformers_hunt"
+entry = "warpers.py"

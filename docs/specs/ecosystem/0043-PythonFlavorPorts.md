@@ -69,7 +69,7 @@ Each port publishes as `@osprey/<name>`, epoch 1, release ordinal 1, from its pa
 | `@osprey/einops` | `rearrange`, `reduce`, `repeat` patterns | in progress |
 | `@osprey/scipy` | `scipy.special` functions | in progress |
 | `@osprey/sklearn` | metrics, preprocessing, clustering, linear models | in progress |
-| `@osprey/transformers` | generation: logits processors, warpers, sampling, stopping criteria; then LLaMA/GPT-2 blocks and RoPE | in progress |
+| `@osprey/transformers` | generation layer of transformers 5.20.2: 19 logits processors and warpers, `LogitsProcessorList` order, softmax/argmax/inverse-CDF sampling, stopping criteria, a model-independent `generate` driver (375 oracle assertions) | generation shipped; LLaMA/GPT-2 models in progress |
 | `@osprey/peft` | LoRA adapters | in progress |
 | `@osprey/bitsandbytes` | int8 absmax and 4-bit NF4 quantization | in progress |
 | `@osprey/flash_attn` | online-softmax tiled attention | in progress |
