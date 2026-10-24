@@ -97,6 +97,73 @@ fn every_ported_package_matches_its_cpython_oracle_under_every_memory_backend() 
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
+/// The string items of the one-line manifest array `key = [...]`.
+fn manifest_list(manifest: &str, key: &str) -> Vec<String> {
+    manifest
+        .lines()
+        .find_map(|line| line.strip_prefix(&format!("{key} = [")))
+        .and_then(|rest| rest.strip_suffix(']'))
+        .map(|items| {
+            items
+                .split(',')
+                .map(|item| item.trim().trim_matches('"').to_string())
+                .filter(|item| !item.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Every `.py` file beneath `directory`.
+fn python_files(directory: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut pending = vec![directory.to_path_buf()];
+    while let Some(next) = pending.pop() {
+        for path in std::fs::read_dir(next)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+        {
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "py") {
+                found.push(path);
+            }
+        }
+    }
+    found
+}
+
+/// [PACKAGE-MANIFEST]: with `[package]` present, every `python_sources` path
+/// lies inside one of the manifest's `source_roots`.
+fn assert_sources_rooted(package: &Path, manifest: &str) {
+    let roots = manifest_list(manifest, "source_roots");
+    for source in manifest_list(manifest, "python_sources") {
+        assert!(
+            roots
+                .iter()
+                .any(|root| source.starts_with(&format!("{root}/"))),
+            "{}: python source `{source}` is outside source_roots {roots:?}",
+            package.display()
+        );
+    }
+}
+
+/// [PACKAGE-SOURCE-CANONICAL]: the registry refuses a release holding any
+/// `.py` file whose first line is not the Python-flavor marker, so `CPython`
+/// code (an oracle, a tool) can never ship inside a port.
+fn assert_python_files_marked(package: &Path) {
+    for file in python_files(package) {
+        let text = std::fs::read_to_string(&file).unwrap_or_default();
+        assert_eq!(
+            text.lines().next(),
+            Some("# osprey: flavor=python"),
+            "{} must begin with `# osprey: flavor=python`",
+            file.display()
+        );
+    }
+}
+
 #[test]
 fn every_ported_package_is_a_publishable_python_flavor_package() {
     for suite in suites() {
@@ -112,5 +179,7 @@ fn every_ported_package_is_a_publishable_python_flavor_package() {
             "{} needs a README.md naming the ported package and its divergences",
             package.display()
         );
+        assert_sources_rooted(&package, &manifest);
+        assert_python_files_marked(&package);
     }
 }

@@ -1,6 +1,6 @@
 # Python-Flavor Package Ports
 
-**Status: in progress.** The [`packages/`](../../../packages) tree holds Osprey ports of popular CPython packages, written in the [Python flavor](../language/0041-PythonFlavorSyntax.md) and tested against the real CPython packages. `@osprey/testing` ships and is the harness every port reports through. The ports listed in [PORT-CATALOG] are being written. Publication waits on the registry accepting Python-flavor sources ([PORT-PUBLISH]).
+**Status: in progress.** The [`packages/`](../../../packages) tree holds Osprey ports of popular CPython packages, written in the [Python flavor](../language/0041-PythonFlavorSyntax.md) and tested against the real CPython packages. `@osprey/testing` ships and is the harness every port reports through. The ports listed in [PORT-CATALOG] are being written. The registry accepts Python-flavor packages ([PORT-PUBLISH]).
 
 ## What a port is — [PORT-SCOPE]
 
@@ -46,7 +46,7 @@ Integers, booleans, strings, shapes and token ids compare exactly. Floats compar
 - print exactly `expected_output.txt`: one `ok <case>` line per assertion and a final `N passed, 0 failed`;
 - under ARC, exit with zero live objects.
 
-A suite runs its assertions under `testing.Check.strictly`, so an integer overflow or zero division stops it and the transcript differs from the golden. The same test requires every package to declare an `@osprey/<name>` `[package]` and a README.
+A suite runs its assertions under `testing.Check.strictly`, so an integer overflow or zero division stops it and the transcript differs from the golden. The same test requires every package to declare an `@osprey/<name>` `[package]` and a README, every `python_sources` path to lie inside a `source_roots` entry, and every `.py` file in the package tree to begin with `# osprey: flavor=python`.
 
 ## Bug hunts — [PORT-HUNT]
 
@@ -54,7 +54,7 @@ Code that consumes input, such as tokenizers, pattern parsers and shape and inde
 
 ## Publication — [PORT-PUBLISH]
 
-Each port publishes as `@osprey/<name>`, epoch 1, release ordinal 1, from its package directory. Its `[dependencies]` name the `@osprey` ports it uses. A published manifest may declare `[project].python_sources` ([PACKAGE-MANIFEST]). The list is part of the canonical manifest and its digest, and every listed path must lie inside a `source_roots` entry. Every `.py` file in a release tree, listed or not, must begin with the line `# osprey: flavor=python`, or the release is refused ([PACKAGE-SOURCE-CANONICAL]). A release therefore never ships CPython code that could be mistaken for Osprey, and installing a port executes nothing. The registry change is landing with the package work; until it does, the ports are developed and tested in this tree but not served.
+Each port publishes as `@osprey/<name>`, epoch 1, release ordinal 1, from its package directory. Its `[dependencies]` name the `@osprey` ports it uses. A published manifest may declare `[project].python_sources`: root-confined relative paths ending in `.py`, part of the canonical manifest and its digest, each inside one of the manifest's `source_roots` (`manifest.python-source-unrooted` otherwise) ([PACKAGE-MANIFEST]). Every `.py` file in a release tree, listed or not, must begin with the line `# osprey: flavor=python`, or the registry server and client both refuse the release with `source.python-flavor-header` ([PACKAGE-SOURCE-CANONICAL]). A release therefore never ships CPython code that could be mistaken for Osprey, and installing a port executes nothing. [PORT-SUITE]'s publishability test checks both rules for every package in this tree, so a port that would be refused fails `cargo test` first.
 
 ## Catalog — [PORT-CATALOG]
 
