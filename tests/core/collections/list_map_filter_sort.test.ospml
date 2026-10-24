@@ -9,8 +9,8 @@ weave (acc, value) = satAdd (satMul acc 10) value
 
 upper word = toUpperCase word
 
-/// mapList/filterList/foldList over a list built with listAppend (a runtime
-/// handle) and over a flat literal (rebuilt at the call boundary).
+(** mapList/filterList/foldList over a list built with listAppend (a runtime
+    handle) and over a flat literal (rebuilt at the call boundary). *)
 eagerCombinatorsCase () =
     ints = listAppend (listAppend (listAppend (List ()) 3) 1) 2
     words = ["beta", "alpha", "gamma"]
@@ -38,8 +38,8 @@ eagerCombinatorsCase () =
         foldList [1, 2, 3] 0 weave == 123
     ]
 
-/// listSort is ascending and total for int and string lists; a float, bool or
-/// record element is rejected by the type checker ([BUILTIN-LIST-SORT]).
+(** listSort is ascending and total for int and string lists; a float, bool or
+    record element is rejected by the type checker ([BUILTIN-LIST-SORT]). *)
 sortCase () =
     ints = listSort [3, 1, 2]
     words = listSort ["beta", "alpha", "gamma"]
@@ -83,8 +83,8 @@ titles items = join (mapList items (\item => item.title)) ","
 
 scrambled i = "w${toString (satMul i 7919 % 1009)}"
 
-/// listSortBy orders by any comparator, a named function or a lambda that
-/// captures its scope; equal elements keep their order ([BUILTIN-LIST-SORT-BY]).
+(** listSortBy orders by any comparator, a named function or a lambda that
+    captures its scope; equal elements keep their order ([BUILTIN-LIST-SORT-BY]). *)
 sortByCase () =
     evidence = [Evidence(title = "crash", at = 3), Evidence(title = "alert", at = 1),
         Evidence(title = "boot", at = 1), Evidence(title = "disk", at = 2)]

@@ -245,6 +245,8 @@ pub(crate) fn check(program: &Program, instances: &Instances, exports: &[&str]) 
             ));
         }
     }
+    errors.extend(index.field_row_errors());
+    errors.extend(instances.field_row_violations.borrow().values().cloned());
     CheckedEffects {
         errors,
         signal_queries: instances.signal_queries.borrow().clone(),

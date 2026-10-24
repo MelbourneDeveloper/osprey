@@ -38,6 +38,7 @@ pub(super) fn bind_pattern(
                         project_field(value.clone(), field)
                     }
                 });
+                let projected = index.field_value(field, projected);
                 if let Some(projected) = projected {
                     let _ = env.values.insert(field.clone(), projected);
                 } else {
@@ -45,6 +46,10 @@ pub(super) fn bind_pattern(
                 }
             }
             for (position, sub_pattern) in sub_patterns.iter().enumerate() {
+                let field = index
+                    .constructors
+                    .get(name)
+                    .and_then(|fields| fields.get(position));
                 let projected = value.and_then(|value| {
                     // A positional ML binder is the same payload: `Success`
                     // is a builtin, so the constructor table has no field
@@ -52,21 +57,21 @@ pub(super) fn bind_pattern(
                     if name == "Success" {
                         project_success_value(value.clone())
                     } else {
-                        index
-                            .constructors
-                            .get(name)
-                            .and_then(|fields| fields.get(position))
-                            .and_then(|field| project_field(value.clone(), field))
+                        field.and_then(|field| project_field(value.clone(), field))
                     }
                 });
+                let projected = match field {
+                    Some(field) if name != "Success" => index.field_value(field, projected),
+                    _ => projected,
+                };
                 bind_pattern(sub_pattern, projected.as_ref(), index, env);
             }
         }
         Pattern::Structural { fields, .. } => {
             for (field, binder) in fields {
                 let _ = env.shadowed.insert(binder.clone());
-                if let Some(projected) = value.and_then(|value| project_field(value.clone(), field))
-                {
+                let projected = value.and_then(|value| project_field(value.clone(), field));
+                if let Some(projected) = index.field_value(field, projected) {
                     let _ = env.values.insert(binder.clone(), projected);
                 } else {
                     let _ = env.values.remove(binder);

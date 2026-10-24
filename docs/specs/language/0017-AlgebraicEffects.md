@@ -239,6 +239,27 @@ unresolved callable is rejected. Widening never removes a known operation
 requirement or turns an unknown field into proof that a same-named free function
 was selected.
 
+`[EFFECTS-FIELD-ROWS]` A function-typed record or variant field may write a
+closed row after its type: `press: fn(string) -> int ![]` in Default,
+`press : (string) -> int ![]` in ML. Every construction must store a function
+whose effects fit the row. An empty row also excludes runtime builtins such as
+`print`, and a stored function whose effects cannot be proven is rejected. A
+call through the field then performs exactly the written row, whether the field
+is projected, bound by a pattern or called as a method, and wherever the value
+travelled. This holds where its own provenance is not tracked, such as across
+`map`, `toList` and `mapList`. A field name declared in several types is trusted
+only when every declaration writes a row; the call performs their union. A field
+row has no open tail. Each entry names a declared effect, and a generic effect
+names its instance (`![Signal<Query>]`).
+
+```osprey
+effect Alarm { ring: fn() -> int }
+type Control = { label: string, press: fn(string) -> int ![] }
+
+let quiet = Control { label: "go", press: fn(text) => length(text) }       // accepted
+let loud = Control { label: "go", press: fn(text) => perform Alarm.ring() } // rejected
+```
+
 ## Handler-owned state
 
 `[EFFECTS-HANDLER-STATE]` Arms may capture mutable cells. Each captured cell has

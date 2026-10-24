@@ -266,6 +266,25 @@
     }
   },
   {
+    "type": "closed_effect_set",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "effect_list",
+          "named": true
+        },
+        {
+          "type": "effect_ref",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "doc_comment",
     "named": true,
     "fields": {}
@@ -689,6 +708,16 @@
     "type": "field_declaration",
     "named": true,
     "fields": {
+      "effects": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "closed_effect_set",
+            "named": true
+          }
+        ]
+      },
       "name": {
         "multiple": false,
         "required": true,

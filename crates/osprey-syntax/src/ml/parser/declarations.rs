@@ -163,15 +163,23 @@ impl Parser<'_> {
     }
 
     /// One `field : type` declaration, shared by the layout block and the
-    /// inline parenthesised payload so neither restates the rule.
+    /// inline parenthesised payload so neither restates the rule. A function
+    /// type may close with the effect row a call through the field performs
+    /// (`edit : (string) -> A ![]`) ([EFFECTS-FIELD-ROWS]).
     pub(in crate::ml) fn type_field(&mut self) -> Option<MlTypeField> {
         let name = self.ident()?;
         if !self.eat(&TokKind::Colon) {
             self.error("expected ':' in type field");
         }
+        let ty = self.ty();
+        let (effects, tail, present) = self.effect_row();
+        if tail.is_some() {
+            self.error("a field's effect row is closed; it cannot name a row variable");
+        }
         Some(MlTypeField {
             name,
-            ty: self.ty(),
+            ty,
+            effects: present.then_some(effects),
         })
     }
 
@@ -248,6 +256,7 @@ impl Parser<'_> {
             fields.push(MlTypeField {
                 name: osprey_ast::positional_field_name(fields.len()),
                 ty: self.ty_atom(),
+                effects: None,
             });
         }
         fields

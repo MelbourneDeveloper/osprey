@@ -37,6 +37,8 @@ mod effect_rows_exports_tests;
 #[cfg(test)]
 mod effect_rows_expr_tests;
 #[cfg(test)]
+mod effect_rows_field_tests;
+#[cfg(test)]
 mod effect_rows_tests;
 #[cfg(test)]
 mod effect_rows_transport_tests;

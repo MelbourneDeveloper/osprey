@@ -1,6 +1,9 @@
 /// A closure stored in a recursive union and recovered through `fold` and
 /// `listGet` keeps its effect provenance: the collected binding stays callable
-/// end to end (#275). Implements [EFFECTS-PROVENANCE].
+/// end to end (#275). A field that writes its effect row is trusted where the
+/// value's own provenance is not tracked, here once each `Control` has crossed
+/// `map`, `toList` and `mapList`. Implements [EFFECTS-PROVENANCE] and
+/// [EFFECTS-FIELD-ROWS].
 type Node<A> =
     Label { content: string }
     | Stack { children: List<Node<A>> }
@@ -44,4 +47,10 @@ fn dispatch(index, text) = match listGet(collect([], screen("")), index) {
     Error(_) => "rejected"
 }
 
-fn main() = print(dispatch(1, "codesign"))
+type Control = { label: string, press: fn(string) -> string ![] }
+
+fn controls() = range(0, 2) |> map(fn(n) => Control { label: "c${toString(n)}", press: fn(text) => text + "!" }) |> toList
+
+fn pressed() = join(mapList(controls(), fn(control) => control.press(control.label)), ",")
+
+print("${dispatch(1, "codesign")} ${pressed()}")

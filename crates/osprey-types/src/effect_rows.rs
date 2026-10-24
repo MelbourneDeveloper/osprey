@@ -13,6 +13,7 @@ mod call_values;
 mod calls;
 mod capabilities;
 mod environment;
+mod field_rows;
 mod handlers;
 #[cfg(test)]
 mod identity_tests;
@@ -100,6 +101,9 @@ pub(crate) struct Instances {
     pub(crate) handler_inference: RefCell<HandlerCandidates>,
     pub(crate) instantiations: HashMap<usize, HashMap<String, String>>,
     pub(crate) binders: HashMap<String, HashMap<String, String>>,
+    /// Constructions that store a function outside its field's written row
+    /// ([EFFECTS-FIELD-ROWS]).
+    pub(crate) field_row_violations: RefCell<field_rows::FieldRowViolations>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -254,7 +258,10 @@ struct Index<'a> {
     qualified: HashMap<String, usize>,
     bare: HashMap<String, Vec<usize>>,
     effects: HashMap<String, usize>,
+    /// Each declared effect's operation names, for a whole-effect row entry.
+    effect_operations: HashMap<String, Vec<String>>,
     constructors: HashMap<String, Vec<String>>,
+    field_rows: field_rows::FieldRows<'a>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]

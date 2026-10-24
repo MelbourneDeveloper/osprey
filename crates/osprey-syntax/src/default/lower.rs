@@ -414,6 +414,7 @@ impl<'a> Lowerer<'a> {
                 name: osprey_ast::positional_field_name(slot),
                 ty: self.text(ty),
                 constraint: None,
+                effects: None,
             })
             .collect()
     }
@@ -431,6 +432,10 @@ impl<'a> Lowerer<'a> {
                     .map(|n| self.text(n))
                     .unwrap_or_default(),
                 constraint: None,
+                // A field's row is always closed: the grammar admits no tail.
+                effects: fd.child_by_field_name("effects").map(|row| {
+                    self.lower_effect_refs(&self.descendants_of_kind(row, "effect_ref"))
+                }),
             });
         }
         out
@@ -546,8 +551,12 @@ impl<'a> Lowerer<'a> {
                 }
             }
         }
-        let labels = refs
-            .iter()
+        (self.lower_effect_refs(&refs), tail)
+    }
+
+    /// Lower each `effect_ref` of a row, with its type arguments.
+    fn lower_effect_refs(&self, refs: &[Node<'_>]) -> Vec<EffectRef> {
+        refs.iter()
             .map(|r| EffectRef {
                 name: self.field_text(*r, "name"),
                 type_args: self
@@ -557,8 +566,7 @@ impl<'a> Lowerer<'a> {
                     .unwrap_or_default(),
                 position: Some(self.pos(*r)),
             })
-            .collect();
-        (labels, tail)
+            .collect()
     }
 
     /// Lower a `_type` node (function/generic/array/identifier).

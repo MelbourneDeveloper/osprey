@@ -21,19 +21,16 @@ type Action =
     SetQuery
         text : string
 
-collect<A> : (List<Binding<A>>, Node<A>) -> List<Binding<A>>
 collect (found, node) = match node
     Label _ => found
     Stack children => range (0, length children) |> fold found (\(acc, index) => collectAt (acc, children, index))
     Button _ action => listAppend found (Tap(action = action))
     Field _ edit => listAppend found (Edit(apply = edit))
 
-collectAt<A> : (List<Binding<A>>, List<Node<A>>, int) -> List<Binding<A>>
 collectAt (found, children, index) = match listGet children index
     Success child => collect (found, child)
     Error _ => found
 
-resolve<A> : (Binding<A>, string) -> A
 resolve (binding, value) = match binding
     Tap action => action
     Edit apply => apply value
@@ -48,4 +45,12 @@ dispatch (index, value) = match listGet (collect ([], screen "")) index
     Success binding => describe (resolve (binding, value))
     Error _ => "rejected"
 
-main () = print (dispatch (1, "codesign"))
+type Control =
+    label : string
+    press : (string) -> string ![]
+
+controls () = range 0 2 |> map (\n => Control(label = "c${toString n}", press = \text => text + "!")) |> toList
+
+pressed () = join (mapList (controls ()) (\control => control.press control.label)) ","
+
+print "${dispatch (1, "codesign")} ${pressed ()}"

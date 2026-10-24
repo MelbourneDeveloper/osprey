@@ -1,9 +1,9 @@
-// Generic self-recursion through a fold lambda over a recursive generic
-// union. The `all` function recurses from inside the lambda passed to `fold`,
-// so its single emitted instantiation must keep the `List<Tree<T>>` field's
-// element owner tag. Losing it made `listGet` answer a bare `i64` storage
-// word and the `?:` default beside it disagreed on type (#279).
-// Implements [TYPE-UNION-REC], [BUILTIN-LIST-GET], [TYPE-GENERICS-FN].
+(** Generic self-recursion through a fold lambda over a recursive generic
+    union. The `all` function recurses from inside the lambda passed to `fold`,
+    so its single emitted instantiation must keep the `List<Tree<T>>` field's
+    element owner tag. Losing it made `listGet` answer a bare `i64` storage
+    word and the `?:` default beside it disagreed on type (#279).
+    Implements [TYPE-UNION-REC], [BUILTIN-LIST-GET], [TYPE-GENERICS-FN]. *)
 type Tree T =
     Leaf
         item : T

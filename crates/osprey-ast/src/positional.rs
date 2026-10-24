@@ -165,6 +165,7 @@ mod tests {
                     name: (*field).to_owned(),
                     ty: "int".to_owned(),
                     constraint: None,
+                    effects: None,
                 })
                 .collect(),
         }

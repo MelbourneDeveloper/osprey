@@ -374,6 +374,11 @@ pub struct TypeField {
     pub ty: String,
     /// An optional `where` validation expression over the field.
     pub constraint: Option<Box<Expr>>,
+    /// The closed effect row written on a function-typed field
+    /// (`edit: fn(string) -> A ![]`), or `None` when the row is left to
+    /// inference. A construction must satisfy it and a call through the field
+    /// trusts it. Implements [EFFECTS-FIELD-ROWS].
+    pub effects: Option<Vec<EffectRef>>,
 }
 
 /// An operation declared inside an `effect` block.

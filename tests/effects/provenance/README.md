@@ -12,7 +12,9 @@ proven; preserve the callable through a statically tracked value path
 ```
 
 Every closure stored in the tree is a non-escaping, effect-free constructor
-lambda. [EFFECTS-PROVENANCE] requires analysis of recursive aggregates to reach
+lambda. The twins also pin [EFFECTS-FIELD-ROWS]: a `Control` whose `press`
+field writes `![]` stays callable after crossing `map`, `toList` and `mapList`,
+where its own provenance is not tracked. [EFFECTS-PROVENANCE] requires analysis of recursive aggregates to reach
 a finite fixed point rather than discarding the callable's provenance.
 
 Run the twins with:

@@ -156,9 +156,11 @@ impl Analyzer<'_> {
                 }
                 out
             }
-            Expr::Object(fields)
-            | Expr::TypeConstructor { fields, .. }
-            | Expr::Update { fields, .. } => {
+            Expr::TypeConstructor { name, fields, .. } => {
+                self.check_field_rows(super::expression_site(expression), name, fields, scope, env);
+                self.union_over(fields.iter().map(|field| &field.value), scope, env)
+            }
+            Expr::Object(fields) | Expr::Update { fields, .. } => {
                 self.union_over(fields.iter().map(|field| &field.value), scope, env)
             }
             Expr::Binary { left, right, .. } => {

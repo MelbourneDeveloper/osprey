@@ -102,9 +102,12 @@ impl Analyzer<'_> {
                     },
                 ))))
             }
-            Expr::FieldAccess { target, field } => self
-                .value(target, scope, env)
-                .and_then(|value| project_field(value, field)),
+            Expr::FieldAccess { target, field } => {
+                let projected = self
+                    .value(target, scope, env)
+                    .and_then(|value| project_field(value, field));
+                self.index.field_value(field, projected)
+            }
             Expr::List(items, _) => {
                 let mut element = None;
                 for item in items {

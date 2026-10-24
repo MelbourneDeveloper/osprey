@@ -1,0 +1,14 @@
+// osprey: flavor=ml
+// [EFFECTS-FIELD-ROWS]: the ML twin of `field_row_violation.ospo`.
+effect Alarm
+    ring : Unit => int
+
+type Control =
+    label : string
+    press : (string) -> int ![]
+
+main () =
+    handle Alarm
+        ring => 7
+    control = Control(label = "go", press = \text => perform Alarm.ring ())
+    print (toString (control.press control.label))

@@ -295,6 +295,7 @@ module.exports = grammar({
         field('name', $.identifier),
         ':',
         field('type', $._type),
+        optional(field('effects', $.closed_effect_set)),
         optional(seq('where', $.call_expression)),
       ),
 
@@ -371,6 +372,10 @@ module.exports = grammar({
         seq('!', $.effect_ref),
         seq('!', '[', optional($.effect_list), optional(seq('|', field('tail', $.identifier))), ']'),
       ),
+    // A function-typed field's row names exactly what a call through the
+    // field may perform, so it has no open tail. Implements [EFFECTS-FIELD-ROWS].
+    closed_effect_set: ($) =>
+      choice(seq('!', $.effect_ref), seq('!', '[', optional($.effect_list), ']')),
     effect_list: ($) => sep1(',', $.effect_ref),
     effect_ref: ($) => seq(field('name', choice($.qualified_path, $.identifier)), optional($.type_arguments)),
 

@@ -60,12 +60,18 @@ impl<'a> Index<'a> {
                     self.bare.entry(name.clone()).or_default().push(id);
                 }
                 Stmt::Effect {
-                    name, type_params, ..
+                    name,
+                    type_params,
+                    operations,
+                    ..
                 } => {
                     let _ = self.effects.insert(name.clone(), type_params.len());
+                    let names = operations.iter().map(|op| op.name.clone()).collect();
+                    let _ = self.effect_operations.insert(name.clone(), names);
                 }
                 Stmt::Type { variants, .. } => {
                     for variant in variants {
+                        self.field_rows.collect(&variant.name, &variant.fields);
                         let _ = self.constructors.insert(
                             variant.name.clone(),
                             variant

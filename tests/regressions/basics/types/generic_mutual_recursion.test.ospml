@@ -1,6 +1,6 @@
-// Mutually recursive generic functions with declared signatures generalize
-// together, so one program can use the group at two types (#278).
-// Implements [TYPE-GENERICS-FN], [TYPE-UNION-REC], [BUILTIN-LIST-CONCAT].
+(** Mutually recursive generic functions with declared signatures generalize
+    together, so one program can use the group at two types (#278).
+    Implements [TYPE-GENERICS-FN], [TYPE-UNION-REC], [BUILTIN-LIST-CONCAT]. *)
 type Tree T =
     Leaf
         item : T
