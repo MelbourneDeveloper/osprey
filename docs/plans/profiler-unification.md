@@ -18,7 +18,7 @@ Osprey keeps its runtime and compiler layer: optimized native builds, DWARF symb
 
 ## Workspace integration
 
-Osprey builds the shared UI from its `lspkit` submodule (`file:../lspkit/packages/lsp-profiler-ui`; CI runs `make _profiler_ui` before `npm ci`, which installs a packed copy). The submodule pins `8a23f74` on lspkit's `feature/shared-profiler-ui` branch, which is pushed but not merged into lspkit `main`, and has no pull request. SharpLsp's own `lspkit` submodule pins the older `4566b47` on the same branch.
+Osprey builds the shared UI from its `lspkit` submodule (`file:../lspkit/packages/lsp-profiler-ui`; CI runs `make _profiler_ui` before `npm ci`, which installs a packed copy). The submodule pins a commit on lspkit's `feature/shared-profiler-ui` branch, which is pushed but not merged into lspkit `main`, and has no pull request. SharpLsp's own `lspkit` submodule pins the older `4566b47` on the same branch.
 
 ## Review of 2026-10-24
 
@@ -32,15 +32,16 @@ Fixed, each with a test written first where the defect was observable:
 - [x] No test pinned the live progress's top function or the hot-function tie order. The Rust tests `progress_names_the_function_with_the_most_self_samples`, `progress_breaks_equal_self_samples_by_name` and `hot_functions_break_equal_totals_by_self_samples_then_name` do now.
 - [x] The UI package's `npm run lint` ran ESLint with no config and always failed. It now type-checks with `tsc --noEmit`, as Osprey's extension does.
 - [x] Osprey's `flame-html`, `flame-script` and `flame-script-helpers` were one-line re-exports carrying a comment that did not describe them. They are deleted, and their importers use the package directly. `OSPREY_PALETTE` is typed as `ProfilerPalette`.
+- [x] Osprey's flame panel re-implemented lspkit's `SingletonWebviewPanel` and its message routing, with a dead `navigateToSource` rewrite and no `openFlamegraphSvg` route. Its untested copies dropped the extension's branch coverage under the 95% gate. The panel is now a `SingletonWebviewPanel` routed through lspkit's exported `handleFlamegraphMessage`, titled after the profiled program.
+- [x] A posted message that was not an object with a string `type` (or had a non-string `file` or non-numeric `line`) reached every profiler panel's handler, which threw on `msg.type`. The panel boundary now drops it (`webviewMessage`), pinned by a webview-contract test that runs in every host.
 - [x] Stale comments: fixed hex colours in the decoration headers, an orphaned `MAX_INLINE_SVG_BYTES` comment, the `tracksMemory` contract, and imports placed mid-file.
 
-Verification: lspkit `make lint` (clippy, spec citations, skill links), `cargo fmt --check`, the three new Rust tests and the UI package's 171 VS Code tests pass. Osprey's extension lints and compiles against the rebuilt package. Osprey's profiler, flame, debugger and palette suites (`OSPREY_TEST_GREP="[Pp]rofil|[Ff]lame|[Dd]ebug|[Pp]alette|[Ss]ampled"`) passed 269 of 272 in one seven-minute run. The three failures all passed when re-run on their own: two `runInTerminal` launcher timeouts in the Test Explorer debug suite, and `a debug-launched program is profiled over the wire`, whose process listing timed out.
+Verification: lspkit `make lint` (clippy, spec citations, skill links), `cargo fmt --check`, the three new Rust tests and the UI package's 172 VS Code tests pass. Osprey's extension lints and compiles against the rebuilt package. Osprey's profiler, flame, debugger and palette suites (`OSPREY_TEST_GREP="[Pp]rofil|[Ff]lame|[Dd]ebug|[Pp]alette|[Ss]ampled"`) passed 269 of 272 in one seven-minute run. The three failures all passed when re-run on their own: two `runInTerminal` launcher timeouts in the Test Explorer debug suite, and `a debug-launched program is profiled over the wire`, whose process listing timed out. After the panel was moved onto the shared code, the whole extension suite (518 tests, plus 166 against the installed VSIX) passed with branch coverage at 95.75%, over the 95% gate that the copies had dropped it under.
 
 ## Todo
 
 Delivery:
 
-- [ ] Commit the review fixes in lspkit, then in Osprey with the submodule bump. Awaiting the owner's go-ahead.
 - [ ] Open the lspkit pull request for `feature/shared-profiler-ui`, merge it into `main`, and repin Osprey's submodule to the merged commit.
 - [ ] Bump SharpLsp's `lspkit` submodule to the same commit and run its shared profiler, CPU and decoration suites. SharpLsp has not been run against these fixes.
 - [ ] Publish `@nimblesite/lsp-profiler-ui` so neither host depends on a `file:` path (lspkit plan, Phase 4).
