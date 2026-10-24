@@ -167,7 +167,10 @@ fn gen_result_ctor(cg: &mut Codegen, name: &str, fields: &[FieldAssignment]) -> 
     let fa = fields
         .first()
         .ok_or_else(|| CodegenError::invalid(format!("`{name}` needs one field")))?;
+    // The payload escapes into the Result's heap block like any constructor
+    // field, so a list literal takes the runtime layout before it is stored.
     let v = gen_expr(cg, &fa.value)?;
+    let v = crate::listlit::escaping(cg, v);
     let inner = v.ty;
     let is_error = name == "Error";
     let disc = if is_error { "1" } else { "0" };

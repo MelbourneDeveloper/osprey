@@ -1,0 +1,22 @@
+/// A `Result` whose payload is a list literal is a heap aggregate the literal
+/// escapes into, so `Success { value: [] }` stores the runtime list layout. A
+/// fold seeded with it and stepped by a named function used to read the flat
+/// literal as a runtime list and segfault. Implements [BUILTIN-LIST-FOLD] and
+/// [BUILTIN-LIST-APPEND].
+
+fn step(acc, line) = match acc {
+    Success { value } => match line == "" {
+        true => Error { message: "blank line" }
+        false => Success { value: listAppend(value, line) }
+    }
+    Error { message } => Error { message: message }
+}
+
+fn shown(parsed) = match parsed {
+    Success { value } => "${toString(length(value))}:${join(value, ",")}"
+    Error { message } => message
+}
+
+print(shown(foldList(["a", "b", "c"], Success { value: [] }, step)))
+print(shown(foldList(["x"], Success { value: ["seed"] }, step)))
+print(shown(foldList(["a", "", "c"], Success { value: [] }, step)))
