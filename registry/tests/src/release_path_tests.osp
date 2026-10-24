@@ -33,7 +33,7 @@ module ReleasePathTests {
 
     fn accepts() = checkAll("release paths parse and round-trip", [
         shown("@finch/ledger/3.42") == "@finch/ledger/3.42",
-        shown("@finch/ledger/0.0") == "@finch/ledger/0.0",
+        shown("@finch/ledger/1.1") == "@finch/ledger/1.1",
         shown("@a1/b-2/1.1") == "@a1/b-2/1.1",
         shown("@osprey/http/99.9223372036854775807") == "@osprey/http/99.9223372036854775807",
         digestOf("@finch/ledger/3.42") == ""

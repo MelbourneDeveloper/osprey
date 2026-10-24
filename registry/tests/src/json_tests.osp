@@ -173,6 +173,11 @@ module JsonTests {
         check("RFC 8785 Appendix B key ordering", expected, ser(Json::Obj { members: members }))
     }
 
+    fn refusesDuplicates(value) = match Canonical::serialize(value) {
+        Success => false
+        Error { message } => message == "canonical.duplicate-key"
+    }
+
     fn roundTrip() = {
         let text = "{ \"b\" : 1, \"a\" : [2, { \"d\" : null, \"c\" : true }] }"
         let once = canon(text)
@@ -180,14 +185,8 @@ module JsonTests {
             once == "{\"a\":[2,{\"c\":true,\"d\":null}],\"b\":1}",
             canon(once) == once,
             done(once) == once,
-            match ser(Json::Obj { members: dupMembers() }) {
-                Success => false
-                Error { message } => message == "canonical.duplicate-key"
-            },
-            match Canonical::serialize(Json::Arr { items: [Json::Obj { members: dupMembers() }] }) {
-                Success => false
-                Error { message } => message == "canonical.duplicate-key"
-            },
+            refusesDuplicates(Json::Obj { members: dupMembers() }),
+            refusesDuplicates(Json::Arr { items: [Json::Obj { members: dupMembers() }] }),
             done("01") == "json.non-integer at byte 0",
             done("{\"a\":1,\"a\":2}") == "json.duplicate-key at byte 7"
         ])

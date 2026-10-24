@@ -98,46 +98,46 @@ every item lands with tests.
 
 ### Phase F1 — Folder catalog and source bundles
 
-- [ ] Parse a release directory path `@scope/name/<epoch>.<ordinal>` into key,
+- [x] Parse a release directory path `@scope/name/<epoch>.<ordinal>` into key,
       epoch, and ordinal, rejecting every malformed segment with a stable code.
-- [ ] Walk the registry root through a `Host` directory effect. Until Osprey has
+- [x] Walk the registry root through a `Host` directory effect. Until Osprey has
       a directory builtin (`files.directory` blocker), the native handler lists
       files through the `Process` effect, and the blocker records it.
 - [ ] Validate each release with the shared source rules, compute its
       `SourceDigest`, and report every invalid release with its reason.
-- [ ] Encode and decode the canonical JSON source bundle, with round-trip,
+- [x] Encode and decode the canonical JSON source bundle, with round-trip,
       ordering, escaping, and tamper tests.
-- [ ] Build the catalog keyed by digest and by key, ordered by key, epoch,
+- [x] Build the catalog keyed by digest and by key, ordered by key, epoch,
       ordinal.
 
 ### Phase F2 — Osprey registry server
 
-- [ ] Serve `GET /v1/health`, `/v1/packages`, `/v1/packages/{scope}/{name}`,
+- [x] Serve `GET /v1/health`, `/v1/packages`, `/v1/packages/{scope}/{name}`,
       `/v1/releases/{digest}`, and `/v1/releases/{digest}/source` from
       `registry/api/`, with `ETag`s and `application/problem+json` errors.
-- [ ] Route through one pure function from request to response, tested for
+- [x] Route through one pure function from request to response, tested for
       every endpoint and every error without opening a socket.
-- [ ] Read root, bind address, and port from a JSON config file, because
+- [x] Read root, bind address, and port from a JSON config file, because
       Osprey has no argv or environment builtin yet.
-- [ ] Ship `registry/sample-registry/` with at least three real packages, one
+- [x] Ship `registry/sample-registry/` with at least three real packages, one
       depending on another, each compiling with the existing compiler.
 - [ ] End-to-end test: start the server on a loopback port, request every
       endpoint with the Osprey HTTP client, and assert the bodies byte for byte.
-- [ ] `make registry-serve` starts the server over the sample registry.
+- [x] `make registry-serve` starts the server over the sample registry.
 
 ### Phase F3 — Download client
 
-- [ ] `fetch @scope/name[@epoch]` and `fetch <digest>` download a bundle from
+- [x] `fetch @scope/name[@epoch]` and `fetch <digest>` download a bundle from
       the configured registry URL, verify its digest, and write
       `.osprey/packages/@scope/name/<digest>/`.
-- [ ] Reject a tampered bundle, a wrong key, a missing release, and an
+- [x] Reject a tampered bundle, a wrong key, a missing release, and an
       unreachable registry, each with a stable code and a test.
 - [ ] A consumer project builds against a fetched package: the end-to-end
       demo of the exit criterion, run on loopback by `make registry-test`.
 
 ### Phase F4 — Stand it up anywhere
 
-- [ ] Document running a registry on any host, port, and folder, and pointing
+- [x] Document running a registry on any host, port, and folder, and pointing
       a client at it, in `registry/README.md`.
 - [ ] Bind to a non-loopback address and serve a second machine on the same
       network; record the measured result.
